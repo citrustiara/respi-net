@@ -1,0 +1,44 @@
+# environments
+.venv
+.env
+venv/
+env/
+
+# python / bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# caches / tests
+.pytest_cache/
+.coverage
+htmlcov/
+.nox/
+.tox/
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# data files
+*.csv
+*.log
+*.sqlite
+*.db
+
+# generated files / logs
+schematics/
+*.kicad_sch
+*.kicad_pcb
+kicad_error.txt
+kicad_log.txt
+
+# tests / scratch scripts
+test_example.py
+example.py
+test_pca.py
+accelerometer_test.ino
+.agents/

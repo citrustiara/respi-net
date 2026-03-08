@@ -1,0 +1,2 @@
+source C:/Users/macie/PyCharmMiscProject/esp32_imu_stream/build/bootloader/gdbinit/symbols
+source C:/Users/macie/PyCharmMiscProject/esp32_imu_stream/build/bootloader/gdbinit/connect
