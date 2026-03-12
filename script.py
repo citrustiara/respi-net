@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import time
 import threading
-from scipy.signal import find_peaks, butter, sosfiltfilt
+from scipy.signal import butter, sosfiltfilt
 from scipy.integrate import cumulative_trapezoid
 import numpy as np
 
@@ -102,9 +102,10 @@ class BreathCapture:
             return butter(order, [f_low, f_high], btype='band', fs=fs_val, output='sos')
 
         def apply_sos(data, sos):
-            win = max(3, int(fs / 50))
-            smoothed = pd.Series(data).rolling(window=win, center=True, min_periods=1).mean().fillna(0).to_numpy()
-            return sosfiltfilt(sos, smoothed)
+            # W prawidłowej obróbce sygnałów nie powinniśmy stosować na początku 
+            # średniej kroczącej (rolling average), która zniekształca pasmo i fazę.
+            # Zostawiamy wyłącznie profesjonalny filtr dwukierunkowy (zerofazowy) Butterwortha.
+            return sosfiltfilt(sos, data)
 
         sos_resp = get_sos_filter(0.1, 0.6, fs)
         
@@ -159,11 +160,12 @@ class BreathCapture:
         angle_centered = angle_raw_proj - angle_raw_proj.mean()
 
         # 4. Tętno (Serce) - PCA w paśmie kardiologicznym
-        sos_heart = get_sos_filter(0.75, 3.0, fs)
+        sos_heart = get_sos_filter(0.65, 4.0, fs)
         
         # Filtrowanie przyspieszenia (G) w paśmie serca
         h_filt_g = np.column_stack((apply_sos(ax, sos_heart), apply_sos(ay, sos_heart), apply_sos(az, sos_heart)))
-        df['Heart_G'], _ = pca_project(h_filt_g, a_raw)
+        df['Heart_G'], heart_g_raw = pca_project(h_filt_g, a_raw)
+        heart_g_centered = heart_g_raw - heart_g_raw.mean()
         
         # Filtrowanie kąta (Tilt) w paśmie serca
         h_filt_angle = np.column_stack((apply_sos(g_cf[:,0], sos_heart), apply_sos(g_cf[:,1], sos_heart), apply_sos(g_cf[:,2], sos_heart)))
@@ -175,29 +177,39 @@ class BreathCapture:
         df['Resp_Disp'] = cumulative_trapezoid(df['Resp_G'], t, initial=0)
         df['Heart_Disp'] = cumulative_trapezoid(df['Heart_G'], t, initial=0)
 
-        # --- DETEKCJA PEAKÓW ---
-        # ODDECH: Teraz brany z PRZEMIESZCZENIA (Resp_Disp)
-        dist_resp = int(1.5 * fs)
-        resp_peaks, _ = find_peaks(df['Resp_Disp'], distance=dist_resp, prominence=0.0005)
+        # --- FFT (WIDMO SUROWEGO SYGNAŁU) ---
+        N = len(df)
         
-        # TĘTNO: Wykrywanie peaków (wyłączone do dalszych poprawek)
-        # dist_heart = int(0.4 * fs)
-        # initial_heart_peaks, _ = find_peaks(df['Heart_G'], distance=dist_heart, prominence=0.003)
-        # ... logic commented out ...
-        heart_peaks = []
+        # Oddech (Liczymy z surowego g_centered)
+        resp_fft = np.abs(np.fft.rfft(g_centered))
+        resp_freqs = np.fft.rfftfreq(N, d=1.0/fs)
+        
+        valid_resp_idx = (resp_freqs >= 0.1) & (resp_freqs <= 0.6)
+        if np.any(valid_resp_idx):
+            best_resp_freq = resp_freqs[valid_resp_idx][np.argmax(resp_fft[valid_resp_idx])]
+            self.resp_bpm = best_resp_freq * 60.0
+        else:
+            self.resp_bpm = 0.0
+            best_resp_freq = 0.0
 
-        duration_min = df['Time_s'].iloc[-1] / 60.0
+        # Tętno (Liczymy z surowego heart_g_centered)
+        heart_fft = np.abs(np.fft.rfft(heart_g_centered))
+        heart_freqs = np.fft.rfftfreq(N, d=1.0/fs)
+        
+        valid_heart_idx = (heart_freqs >= 0.65) & (heart_freqs <= 4.0)
+        if np.any(valid_heart_idx):
+            best_heart_freq = heart_freqs[valid_heart_idx][np.argmax(heart_fft[valid_heart_idx])]
+            self.heart_bpm = best_heart_freq * 60.0
+        else:
+            self.heart_bpm = 0.0
+            best_heart_freq = 0.0
+
         self.fs = fs
-        self.resp_bpm = len(resp_peaks) / duration_min if duration_min > 0 else 0
-        self.heart_bpm = 0 # len(heart_peaks) / duration_min if duration_min > 0 else 0
-
-        # print(f"Analiza zakończona. Oddech: {self.resp_bpm:.1f} BPM, Tętno: {self.heart_bpm:.1f} BPM.")
-        print(f"Analiza zakończona. Oddech: {self.resp_bpm:.1f} BPM.")
+        print(f"Analiza zakończona. Oddech: {self.resp_bpm:.1f} BPM, Tętno: {self.heart_bpm:.1f} BPM.")
 
         # --- WYKRESY ---
-        fig, axes = plt.subplots(3, 2, figsize=(16, 12), sharex=True)
-        # fig.suptitle(f"Analiza oddechu: {self.resp_bpm:.1f} BPM | Tętno: {self.heart_bpm:.1f} BPM", fontsize=16, fontweight='bold')
-        fig.suptitle(f"Analiza oddechu: {self.resp_bpm:.1f} BPM | Sygnał serca", fontsize=16, fontweight='bold')
+        fig, axes = plt.subplots(4, 2, figsize=(16, 16))
+        fig.suptitle(f"Analiza oddechu: {self.resp_bpm:.1f} BPM ({best_resp_freq:.2f} Hz) | Tętno: {self.heart_bpm:.1f} BPM ({best_heart_freq:.2f} Hz)", fontsize=16, fontweight='bold')
 
         # KOLUMNA 1: ODDECH
         axes[0,0].plot(t, angle_centered, color='blue', alpha=0.15, label='Kąt 3D (Raw)')
@@ -221,15 +233,13 @@ class BreathCapture:
         axes[1,0].legend()
 
         axes[2,0].plot(t, df['Resp_Disp'], color='green', linewidth=2)
-        axes[2,0].plot(t[resp_peaks], df['Resp_Disp'].iloc[resp_peaks], "ro", label='Peak Oddechu')
         axes[2,0].fill_between(t, df['Resp_Disp'], alpha=0.2, color='green')
-        axes[2,0].set_title("Oddech: Przemieszczenie (∫G) - Detekcja BPM", fontsize=12)
+        axes[2,0].set_title("Oddech: Przemieszczenie (∫G)", fontsize=12)
         axes[2,0].set_xlabel("Czas [s]")
         axes[2,0].grid(True, alpha=0.3)
-        axes[2,0].legend()
 
         # KOLUMNA 2: TĘTNO
-        axes[0,1].plot(t, df['Heart_Angle'], color='crimson', linewidth=1.5, label='Filtr 0.8-5Hz')
+        axes[0,1].plot(t, df['Heart_Angle'], color='crimson', linewidth=1.5, label='Filtr 0.65-4Hz')
         axes[0,1].set_title("Serce: Zmiana Orientacji (°) - Wypadkowa", fontsize=12)
         axes[0,1].set_ylabel("Stopnie")
         y_min, y_max = df['Heart_Angle'].min(), df['Heart_Angle'].max()
@@ -239,7 +249,6 @@ class BreathCapture:
         axes[0,1].legend()
 
         axes[1,1].plot(t, df['Heart_G'], color='crimson', linewidth=1.5, alpha=0.8)
-        # axes[1,1].plot(t[heart_peaks], df['Heart_G'].iloc[heart_peaks], "kx", markersize=6, label='Skurcz')
         axes[1,1].set_title("Serce: Zgęstki G (Wypadkowa 3-osiowa)", fontsize=12)
         axes[1,1].set_ylabel("G")
         y_min, y_max = df['Heart_G'].min(), df['Heart_G'].max()
@@ -254,6 +263,32 @@ class BreathCapture:
         axes[2,1].set_ylabel("j.u.")
         axes[2,1].set_xlabel("Czas [s]")
         axes[2,1].grid(True, alpha=0.3)
+
+        # KOLUMNA 1: FFT ODDECH
+        plot_idx_resp = (resp_freqs >= 0.01) & (resp_freqs <= 5.0)
+        axes[3,0].plot(resp_freqs[plot_idx_resp], resp_fft[plot_idx_resp], color='blue', linewidth=1.5)
+        if np.any(valid_resp_idx):
+            axes[3,0].plot(best_resp_freq, np.max(resp_fft[valid_resp_idx]), "ro", label=f'Szczyt: {best_resp_freq:.2f} Hz')
+        axes[3,0].axvspan(0.1, 0.6, color='blue', alpha=0.1, label='Pasmo detekcji (0.1-0.6 Hz)')
+        axes[3,0].set_title("Oddech: Widmo częstotliwości z surowego sygnału", fontsize=12)
+        axes[3,0].set_xlabel("Częstotliwość [Hz]")
+        axes[3,0].set_ylabel("Amplituda")
+        axes[3,0].grid(True, alpha=0.3)
+        axes[3,0].set_xlim(0, 5.0)
+        axes[3,0].legend()
+
+        # KOLUMNA 2: FFT TĘTNO
+        plot_idx_heart = (heart_freqs >= 0.01) & (heart_freqs <= 5.0)
+        axes[3,1].plot(heart_freqs[plot_idx_heart], heart_fft[plot_idx_heart], color='crimson', linewidth=1.5)
+        if np.any(valid_heart_idx):
+            axes[3,1].plot(best_heart_freq, np.max(heart_fft[valid_heart_idx]), "ro", label=f'Szczyt: {best_heart_freq:.2f} Hz')
+        axes[3,1].axvspan(0.65, 4.0, color='crimson', alpha=0.1, label='Pasmo detekcji (0.65-4 Hz)')
+        axes[3,1].set_title("Serce: Widmo częstotliwości z surowego sygnału", fontsize=12)
+        axes[3,1].set_xlabel("Częstotliwość [Hz]")
+        axes[3,1].set_ylabel("Amplituda")
+        axes[3,1].grid(True, alpha=0.3)
+        axes[3,1].set_xlim(0, 5.0)
+        axes[3,1].legend()
 
         plt.tight_layout()
         plt.show()

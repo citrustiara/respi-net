@@ -34,5 +34,5 @@ def test_stop_and_graph(csv_path):
     assert app.fs > 100
     # Sprawdzamy czy wartości są w sensownych zakresach (oddech może być bardzo wolny)
     assert 0 <= app.resp_bpm <= 50
-    # Heart BPM temporarily disabled per user request
-    assert app.heart_bpm == 0
+    # Sprawdzamy czy tętno wyliczone z FFT również wpada w prawidłowy przedział
+    assert 40 <= app.heart_bpm <= 240
