@@ -1,0 +1,394 @@
+(kicad_sch
+	(version 20250114)
+	(generator "eeschema")
+	(generator_version "9.0")
+	(uuid "b1ff8910-2723-46ef-b4ad-08e0e32babeb")
+	(paper "A4")
+	(title_block
+		(title "ESP32_IMU_Connection")
+	)
+	(lib_symbols
+		(symbol "Connector_Generic:Conn_01x04"
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "J"
+				(at 0 5.08 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Conn_01x04"
+				(at 0 -7.62 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" "~"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_keywords" "connector"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "ki_fp_filters" "Connector*:*_1x??_*"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "Conn_01x04_1_1"
+				(rectangle
+					(start -1.27 3.81)
+					(end 1.27 -6.35)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(rectangle
+					(start -1.27 2.667)
+					(end 0 2.413)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 0.127)
+					(end 0 -0.127)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -2.413)
+					(end 0 -2.667)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -4.953)
+					(end 0 -5.207)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -5.08 2.54 0)
+					(length 3.81)
+					(name "Pin_1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 0 0)
+					(length 3.81)
+					(name "Pin_2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -2.54 0)
+					(length 3.81)
+					(name "Pin_3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -5.08 0)
+					(length 3.81)
+					(name "Pin_4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x04")
+		(at 25.4 25.4 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced no)
+		(uuid "e8a530c3-357e-405e-a182-4b47ecd2e60f")
+		(property "Reference" "J1"
+			(at 20 14 0.0000)
+			(effects
+				(font
+					(size 1.5 1.5)
+				)
+			)
+		)
+		(property "Value" "ESP32_LilyGO"
+			(at 20 12 0.0000)
+			(effects
+				(font
+					(size 1.5 1.5)
+					(bold yes)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "5b39a0ad-e6cc-428b-abbe-0b86b7547d39")
+		)
+		(pin "2"
+			(uuid "a080172b-ffb8-4f1b-a36f-f1a807725ca8")
+		)
+		(pin "3"
+			(uuid "f049478c-015a-4139-961f-457c6dd55ab6")
+		)
+		(pin "4"
+			(uuid "baa033a4-0629-43ad-8c40-1607b0a5723c")
+		)
+		(instances
+			(project "ESP32_IMU_Connection"
+				(path "/b1ff8910-2723-46ef-b4ad-08e0e32babeb"
+					(reference "J1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x04")
+		(at 63.5 25.4 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced no)
+		(uuid "d0e7805b-fec5-4dfa-92a8-869b49327e5d")
+		(property "Reference" "J2"
+			(at 50 14 0.0000)
+			(effects
+				(font
+					(size 1.5 1.5)
+				)
+			)
+		)
+		(property "Value" "LSM6DS3_IMU"
+			(at 50 12 0.0000)
+			(effects
+				(font
+					(size 1.5 1.5)
+					(bold yes)
+				)
+			)
+		)
+		(pin "1"
+			(uuid "514ee32a-d289-48da-9e41-cbb3e0762681")
+		)
+		(pin "2"
+			(uuid "e789dda4-dfba-4774-9ec6-cf177d1bb7d4")
+		)
+		(pin "3"
+			(uuid "68401d5c-b731-45df-91d3-987f62c217d8")
+		)
+		(pin "4"
+			(uuid "4343d986-3eec-4cd4-8dec-8810489d4109")
+		)
+		(instances
+			(project "ESP32_IMU_Connection"
+				(path "/b1ff8910-2723-46ef-b4ad-08e0e32babeb"
+					(reference "J2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(wire
+		(pts
+			(xy 20.32 22.86) (xy 58.42 22.86)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2769af41-c931-4c7c-b32e-aa22a997d26f")
+	)
+	(wire
+		(pts
+			(xy 20.32 25.4) (xy 58.42 25.4)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "21fe6216-f5c7-435f-a396-c49024e89a33")
+	)
+	(wire
+		(pts
+			(xy 20.32 27.94) (xy 58.42 27.94)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "36771a66-5674-45aa-9d97-72f44fd8dcc0")
+	)
+	(wire
+		(pts
+			(xy 20.32 30.48) (xy 58.42 30.48)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c3f950e5-0fc1-472d-976a-1a449403d361")
+	)
+	(label "3V3"
+		(at 38.5064 29.0322 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "55531167-7c9e-4f84-8ad6-1e5871348113")
+	)
+	(label "GND"
+		(at 38.5064 32.258 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "e62aaf67-6085-4855-b373-d86a30c698d1")
+	)
+	(label "SCL"
+		(at 38.5064 35.4838 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "4ec7c933-9a96-4308-8f9c-380dd644c2f7")
+	)
+	(label "SDA"
+		(at 38.5064 38.7096 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "b20ec093-a395-42e4-9aee-68b55358c05d")
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+	(embedded_fonts no)
+)

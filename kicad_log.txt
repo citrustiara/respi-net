@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:\Users\macie\PyCharmMiscProject\draw_kicad.py", line 51, in generate_kicad_schematic
+    sch.auto_route_pins("J1", "1", "J2", "1", routing_mode="direct")
+TypeError: Schematic.auto_route_pins() got an unexpected keyword argument 'routing_mode'
+
+Caught Exception: Schematic.auto_route_pins() got an unexpected keyword argument 'routing_mode'

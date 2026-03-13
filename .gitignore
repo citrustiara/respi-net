@@ -1,44 +1,28 @@
-# environments
-.venv
-.env
-venv/
-env/
+# ESP-IDF
+build/
+sdkconfig.old
+sdkconfig.defaults
+managed_components/
+dependencies.lock
 
-# python / bytecode
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
 
-# caches / tests
-.pytest_cache/
-.coverage
-htmlcov/
-.nox/
-.tox/
-
-# IDE / editor
-.idea/
-*.iml
-.vscode/
-.DS_Store
-
-# data files
-*.csv
+# Project Specific
+radar_raw_*.csv
+build_log.txt
 *.log
-*.sqlite
-*.db
 
-# generated files / logs
-schematics/
-*.kicad_sch
-*.kicad_pcb
-kicad_error.txt
-kicad_log.txt
-
-# tests / scratch scripts
-test_example.py
-example.py
-test_pca.py
-accelerometer_test.ino
-.agents/
+# IDEs
+.vscode/
+.idea/
+.project
+.settings/
+*.swp
+*.swo
