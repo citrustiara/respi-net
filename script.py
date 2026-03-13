@@ -208,89 +208,108 @@ class BreathCapture:
         print(f"Analiza zakończona. Oddech: {self.resp_bpm:.1f} BPM, Tętno: {self.heart_bpm:.1f} BPM.")
 
         # --- WYKRESY ---
-        fig, axes = plt.subplots(4, 2, figsize=(16, 16))
-        fig.suptitle(f"Analiza oddechu: {self.resp_bpm:.1f} BPM ({best_resp_freq:.2f} Hz) | Tętno: {self.heart_bpm:.1f} BPM ({best_heart_freq:.2f} Hz)", fontsize=16, fontweight='bold')
+        fig, axes = plt.subplots(5, 2, figsize=(16, 22))
+        fig.suptitle(f"Analiza oddechu: {self.resp_bpm:.1f} BPM ({best_resp_freq:.2f} Hz) | Tętno: {self.heart_bpm:.1f} BPM ({best_heart_freq:.2f} Hz)", fontsize=18, fontweight='bold', y=0.98)
 
-        # KOLUMNA 1: ODDECH
-        axes[0,0].plot(t, angle_centered, color='blue', alpha=0.15, label='Kąt 3D (Raw)')
-        axes[0,0].plot(t, df['Resp_Angle'], color='blue', linewidth=2, label='Filtr 0.1-0.6Hz')
-        axes[0,0].set_title("Oddech: Zmiana Orientacji (°) - Wypadkowa", fontsize=12)
-        axes[0,0].set_ylabel("Stopnie")
-        y_min, y_max = df['Resp_Angle'].min(), df['Resp_Angle'].max()
-        margin = (y_max - y_min) * 0.3 if y_max != y_min else 1.0
-        axes[0,0].set_ylim(y_min - margin, y_max + margin)
+        # KOLUMNA 1: RAW ACCELEROMETER
+        axes[0,0].plot(t, ax, label='ax', alpha=0.7)
+        axes[0,0].plot(t, ay, label='ay', alpha=0.7)
+        axes[0,0].plot(t, az, label='az', alpha=0.7)
+        axes[0,0].set_title("Raw Accelerometer [G]", fontsize=12)
         axes[0,0].grid(True, alpha=0.3)
         axes[0,0].legend()
 
-        axes[1,0].plot(t, g_centered, color='green', alpha=0.15, label='G Wypadkowa (Raw)')
-        axes[1,0].plot(t, df['Resp_G'], color='green', linewidth=2, label='Filtr 0.1-0.6Hz')
-        axes[1,0].set_title("Oddech: Zgęstki G (Wypadkowa 3-osiowa)", fontsize=12)
-        axes[1,0].set_ylabel("G")
-        y_min, y_max = df['Resp_G'].min(), df['Resp_G'].max()
-        margin = (y_max - y_min) * 0.3 if y_max != y_min else 0.05
+        # KOLUMNA 2: RAW GYROSCOPE
+        axes[0,1].plot(t, gx, label='gx', alpha=0.7)
+        axes[0,1].plot(t, gy, label='gy', alpha=0.7)
+        axes[0,1].plot(t, gz, label='gz', alpha=0.7)
+        axes[0,1].set_title("Raw Gyroscope [°/s]", fontsize=12)
+        axes[0,1].grid(True, alpha=0.3)
+        axes[0,1].legend()
+
+        # KOLUMNA 1: ODDECH (Rząd 2-4)
+        axes[1,0].plot(t, angle_centered, color='blue', alpha=0.15, label='Kąt 3D (Raw)')
+        axes[1,0].plot(t, df['Resp_Angle'], color='blue', linewidth=2, label='Filtr 0.1-0.6Hz')
+        axes[1,0].set_title("Oddech: Zmiana Orientacji (°) - Wypadkowa", fontsize=12)
+        axes[1,0].set_ylabel("Stopnie")
+        y_min, y_max = df['Resp_Angle'].min(), df['Resp_Angle'].max()
+        margin = (y_max - y_min) * 0.3 if y_max != y_min else 1.0
         axes[1,0].set_ylim(y_min - margin, y_max + margin)
         axes[1,0].grid(True, alpha=0.3)
         axes[1,0].legend()
 
-        axes[2,0].plot(t, df['Resp_Disp'], color='green', linewidth=2)
-        axes[2,0].fill_between(t, df['Resp_Disp'], alpha=0.2, color='green')
-        axes[2,0].set_title("Oddech: Przemieszczenie (∫G)", fontsize=12)
-        axes[2,0].set_xlabel("Czas [s]")
+        axes[2,0].plot(t, g_centered, color='green', alpha=0.15, label='Wypadkowa (Raw)')
+        axes[2,0].plot(t, df['Resp_G'], color='green', linewidth=2, label='Filtr 0.1-0.6Hz')
+        axes[2,0].set_title("Oddech: Przyspieszenie - Wypadkowa (G)", fontsize=12)
+        axes[2,0].set_ylabel("G")
+        y_min, y_max = df['Resp_G'].min(), df['Resp_G'].max()
+        margin = (y_max - y_min) * 0.3 if y_max != y_min else 0.05
+        axes[2,0].set_ylim(y_min - margin, y_max + margin)
         axes[2,0].grid(True, alpha=0.3)
+        axes[2,0].legend()
 
-        # KOLUMNA 2: TĘTNO
-        axes[0,1].plot(t, df['Heart_Angle'], color='crimson', linewidth=1.5, label='Filtr 0.65-4Hz')
-        axes[0,1].set_title("Serce: Zmiana Orientacji (°) - Wypadkowa", fontsize=12)
-        axes[0,1].set_ylabel("Stopnie")
+        axes[3,0].plot(t, df['Resp_Disp'], color='green', linewidth=2)
+        axes[3,0].fill_between(t, df['Resp_Disp'], alpha=0.2, color='green')
+        axes[3,0].set_title("Oddech: Przemieszczenie (∫G)", fontsize=12)
+        axes[3,0].set_xlabel("Czas [s]")
+        axes[3,0].grid(True, alpha=0.3)
+
+        # KOLUMNA 2: TĘTNO (Rząd 2-4)
+        axes[1,1].plot(t, df['Heart_Angle'], color='crimson', linewidth=1.5, label='Filtr 0.65-4Hz')
+        axes[1,1].set_title("Serce: Zmiana Orientacji (°) - Wypadkowa", fontsize=12)
+        axes[1,1].set_ylabel("Stopnie")
         y_min, y_max = df['Heart_Angle'].min(), df['Heart_Angle'].max()
-        margin = (y_max - y_min) * 0.2 if y_max != y_min else 0.005
-        axes[0,1].set_ylim(y_min - margin, y_max + margin)
-        axes[0,1].grid(True, alpha=0.3)
-        axes[0,1].legend()
-
-        axes[1,1].plot(t, df['Heart_G'], color='crimson', linewidth=1.5, alpha=0.8)
-        axes[1,1].set_title("Serce: Zgęstki G (Wypadkowa 3-osiowa)", fontsize=12)
-        axes[1,1].set_ylabel("G")
-        y_min, y_max = df['Heart_G'].min(), df['Heart_G'].max()
         margin = (y_max - y_min) * 0.2 if y_max != y_min else 0.005
         axes[1,1].set_ylim(y_min - margin, y_max + margin)
         axes[1,1].grid(True, alpha=0.3)
         axes[1,1].legend()
 
-        axes[2,1].plot(t, df['Heart_Disp'], color='purple', linewidth=1.5)
-        axes[2,1].fill_between(t, df['Heart_Disp'], alpha=0.2, color='purple')
-        axes[2,1].set_title("Tętno: Mikroruchy (∫G_cardio)", fontsize=12)
-        axes[2,1].set_ylabel("j.u.")
-        axes[2,1].set_xlabel("Czas [s]")
+        axes[2,1].plot(t, df['Heart_G'], color='crimson', linewidth=1.5, alpha=0.8)
+        axes[2,1].set_title("Serce: Przyspieszenie - Wypadkowa (G)", fontsize=12)
+        axes[2,1].set_ylabel("G")
+        y_min, y_max = df['Heart_G'].min(), df['Heart_G'].max()
+        margin = (y_max - y_min) * 0.2 if y_max != y_min else 0.005
+        axes[2,1].set_ylim(y_min - margin, y_max + margin)
         axes[2,1].grid(True, alpha=0.3)
+        # axes[2,1].legend()
 
-        # KOLUMNA 1: FFT ODDECH
-        plot_idx_resp = (resp_freqs >= 0.01) & (resp_freqs <= 5.0)
-        axes[3,0].plot(resp_freqs[plot_idx_resp], resp_fft[plot_idx_resp], color='blue', linewidth=1.5)
-        if np.any(valid_resp_idx):
-            axes[3,0].plot(best_resp_freq, np.max(resp_fft[valid_resp_idx]), "ro", label=f'Szczyt: {best_resp_freq:.2f} Hz')
-        axes[3,0].axvspan(0.1, 0.6, color='blue', alpha=0.1, label='Pasmo detekcji (0.1-0.6 Hz)')
-        axes[3,0].set_title("Oddech: Widmo częstotliwości z surowego sygnału", fontsize=12)
-        axes[3,0].set_xlabel("Częstotliwość [Hz]")
-        axes[3,0].set_ylabel("Amplituda")
-        axes[3,0].grid(True, alpha=0.3)
-        axes[3,0].set_xlim(0, 5.0)
-        axes[3,0].legend()
-
-        # KOLUMNA 2: FFT TĘTNO
-        plot_idx_heart = (heart_freqs >= 0.01) & (heart_freqs <= 5.0)
-        axes[3,1].plot(heart_freqs[plot_idx_heart], heart_fft[plot_idx_heart], color='crimson', linewidth=1.5)
-        if np.any(valid_heart_idx):
-            axes[3,1].plot(best_heart_freq, np.max(heart_fft[valid_heart_idx]), "ro", label=f'Szczyt: {best_heart_freq:.2f} Hz')
-        axes[3,1].axvspan(0.65, 4.0, color='crimson', alpha=0.1, label='Pasmo detekcji (0.65-4 Hz)')
-        axes[3,1].set_title("Serce: Widmo częstotliwości z surowego sygnału", fontsize=12)
-        axes[3,1].set_xlabel("Częstotliwość [Hz]")
-        axes[3,1].set_ylabel("Amplituda")
+        axes[3,1].plot(t, df['Heart_Disp'], color='purple', linewidth=1.5)
+        axes[3,1].fill_between(t, df['Heart_Disp'], alpha=0.2, color='purple')
+        axes[3,1].set_title("Tętno: Mikroruchy (∫G_cardio)", fontsize=12)
+        axes[3,1].set_ylabel("j.u.")
+        axes[3,1].set_xlabel("Czas [s]")
         axes[3,1].grid(True, alpha=0.3)
-        axes[3,1].set_xlim(0, 5.0)
-        axes[3,1].legend()
 
-        plt.tight_layout()
+        # KOLUMNA 1: FFT ODDECH (Rząd 5)
+        # Zoom do 0.01 - 1.0 Hz dla oddechu
+        plot_idx_resp = (resp_freqs >= 0.01) & (resp_freqs <= 1.0)
+        axes[4,0].plot(resp_freqs[plot_idx_resp], resp_fft[plot_idx_resp], color='blue', linewidth=1.5)
+        if np.any(valid_resp_idx):
+            axes[4,0].plot(best_resp_freq, np.max(resp_fft[valid_resp_idx]), "ro", label=f'Szczyt: {best_resp_freq:.2f} Hz')
+        axes[4,0].axvspan(0.1, 0.6, color='blue', alpha=0.1, label='Pasmo detekcji (0.1-0.6 Hz)')
+        axes[4,0].set_title("Oddech: Spectrum (Band 0.1-0.6 Hz)", fontsize=12)
+        axes[4,0].set_xlabel("Częstotliwość [Hz]")
+        axes[4,0].set_ylabel("Amplituda")
+        axes[4,0].grid(True, alpha=0.3)
+        axes[4,0].set_xlim(0.1, 0.6)
+        axes[4,0].legend()
+
+        # KOLUMNA 2: FFT TĘTNO (Rząd 5)
+        # Zoom do 0.5 - 5.0 Hz dla tętna
+        plot_idx_heart = (heart_freqs >= 0.5) & (heart_freqs <= 5.0)
+        axes[4,1].plot(heart_freqs[plot_idx_heart], heart_fft[plot_idx_heart], color='crimson', linewidth=1.5)
+        if np.any(valid_heart_idx):
+            axes[4,1].plot(best_heart_freq, np.max(heart_fft[valid_heart_idx]), "ro", label=f'Szczyt: {best_heart_freq:.2f} Hz')
+        axes[4,1].axvspan(0.65, 4.0, color='crimson', alpha=0.1, label='Pasmo detekcji (0.65-4 Hz)')
+        axes[4,1].set_title("Serce: Spectrum (Band 0.65-4 Hz)", fontsize=12)
+        axes[4,1].set_xlabel("Częstotliwość [Hz]")
+        axes[4,1].set_ylabel("Amplituda")
+        axes[4,1].grid(True, alpha=0.3)
+        axes[4,1].set_xlim(0.65, 4.0)
+        axes[4,1].legend()
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+        plt.subplots_adjust(hspace=0.5, wspace=0.25)
         plt.show()
 
 # --- URUCHOMIENIE ---
