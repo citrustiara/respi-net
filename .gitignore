@@ -16,8 +16,12 @@ ENV/
 
 # Project Specific
 radar_raw_*.csv
+respiratory_*.csv
 build_log.txt
 *.log
+kicad_error.txt
+*~
+*.bak
 
 # IDEs
 .vscode/

@@ -7,6 +7,7 @@ import time
 import threading
 import numpy as np
 from scipy.signal import butter, sosfiltfilt
+from collections import deque
 
 class RadarCapture:
     def __init__(self, baud=115200):
@@ -14,6 +15,7 @@ class RadarCapture:
         self.serial_port = None
         self.running = False
         self.data_storage = []
+        self.live_buffer = deque(maxlen=1000)  # For live plotting
         self.read_thread = None
 
     def list_ports(self):
@@ -64,6 +66,7 @@ class RadarCapture:
             parts = [float(x) for x in line.split(',')]
             if len(parts) == 3:
                 self.data_storage.append(parts)
+                self.live_buffer.append(parts)
         except ValueError:
             pass
 
@@ -88,7 +91,7 @@ class RadarCapture:
         df.to_csv(filename, index=False)
         print(f"Dane zapisane do {filename}")
 
-        # --- SIGNAL PROCESSING ---
+        # --- SIGNAL PROCESSING (Commented out) ---
         # 1. Time normalization
         df['Time_s'] = (df['Timestamp_ms'] - df['Timestamp_ms'].min()) / 1000.0
         
@@ -97,6 +100,7 @@ class RadarCapture:
         fs = 1.0 / time_diffs.mean() if not time_diffs.empty else 500.0
         print(f"Wyliczona częstotliwość próbkowania: {fs:.2f} Hz")
 
+        """
         # 3. Butterworth Filter functions
         def get_sos_filter(f_low, f_high, fs_val, order=4):
             # Clip high frequency to Nyquist limit if necessary
@@ -109,8 +113,8 @@ class RadarCapture:
 
         # 4. Apply Filters
         try:
-            # Respiratory: 0.1 - 0.5 Hz (6-30 breaths/min)
-            sos_resp = get_sos_filter(0.1, 0.5, fs)
+            # Respiratory: 0.05 - 0.5 Hz (3-30 breaths/min)
+            sos_resp = get_sos_filter(0.05, 0.5, fs)
             df['Respiratory'] = apply_sos(df['Voltage_mV'], sos_resp)
 
             # Cardiac: 0.8 - 4.0 Hz (48-240 BPM)
@@ -121,34 +125,48 @@ class RadarCapture:
             df['Respiratory'] = 0
             df['Cardiac'] = 0
 
-        # 5. Denoised trend for Top Plot (Moving Average)
-        df['Smooth_Trend'] = df['Voltage_mV'].rolling(window=int(fs*0.1), center=True, min_periods=1).mean()
-
-        # --- PLOTTING (3 Subplots) ---
-        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15, 12), sharex=True)
+        # 5. FFT Analysis (BPM Calculation)
+        N = len(df)
+        v_centered = df['Voltage_mV'] - df['Voltage_mV'].mean()
         
-        # TOP: Raw vs Smooth
-        ax1.scatter(df['Time_s'], df['Voltage_mV'], s=1, color='lightskyblue', alpha=0.05, label='Raw Voltage')
-        ax1.plot(df['Time_s'], df['Smooth_Trend'], color='blue', linewidth=1, label='Trend (0.1s MA)')
-        ax1.set_title(f"HB100 Radar - Signal Decomposition ({timestamp_str})")
-        ax1.set_ylabel("Voltage [mV]")
-        ax1.grid(True, alpha=0.3)
-        ax1.legend(loc='upper right')
+        # Respiratory FFT
+        resp_fft = np.abs(np.fft.rfft(v_centered))
+        resp_freqs = np.fft.rfftfreq(N, d=1.0/fs)
+        
+        # Band: 0.05 - 0.5 Hz (3 - 30 BPM)
+        valid_resp_idx = (resp_freqs >= 0.05) & (resp_freqs <= 0.5)
+        if np.any(valid_resp_idx):
+            best_resp_freq = resp_freqs[valid_resp_idx][np.argmax(resp_fft[valid_resp_idx])]
+            resp_bpm = best_resp_freq * 60.0
+        else:
+            resp_bpm = 0.0
+            best_resp_freq = 0.0
 
-        # MIDDLE: Respiratory Signal
-        ax2.plot(df['Time_s'], df['Respiratory'], color='green', linewidth=1.5, label='Respiratory (0.1-0.5 Hz)')
-        ax2.fill_between(df['Time_s'], df['Respiratory'], color='green', alpha=0.1)
-        ax2.set_ylabel("Resp Ampl")
-        ax2.grid(True, alpha=0.3)
-        ax2.legend(loc='upper right')
+        # Cardiac FFT
+        # Use a narrower band for cleaner cardiac peak detection
+        valid_heart_idx = (resp_freqs >= 0.8) & (resp_freqs <= 3.0) # 48 - 180 BPM
+        if np.any(valid_heart_idx):
+            best_heart_freq = resp_freqs[valid_heart_idx][np.argmax(resp_fft[valid_heart_idx])]
+            heart_bpm = best_heart_freq * 60.0
+        else:
+            heart_bpm = 0.0
+            best_heart_freq = 0.0
+        """
 
-        # BOTTOM: Cardiac Signal
-        ax3.plot(df['Time_s'], df['Cardiac'], color='red', linewidth=1, label='Cardiac (0.8-4.0 Hz)')
-        ax3.set_xlabel("Time [s]")
-        ax3.set_ylabel("Heart Ampl")
-        ax3.grid(True, alpha=0.3)
-        ax3.legend(loc='upper right')
+        # --- DEBUG PRINTOUT (Simplified) ---
+        print(f"Statystyki sygnału (Voltage_mV):")
+        print(f"  Min/Max: {df['Voltage_mV'].min():.2f} / {df['Voltage_mV'].max():.2f} mV")
+        print(f"  STD: {df['Voltage_mV'].std():.2f} mV")
+        # ----------------------
 
+        # --- PLOTTING (Only Raw Voltage) ---
+        plt.figure(figsize=(15, 6))
+        plt.plot(df['Time_s'], df['Voltage_mV'], color='blue', linewidth=0.5, label='Raw Signal')
+        plt.title(f"HB100 Radar - Raw Voltage Signal ({timestamp_str})")
+        plt.xlabel("Time [s]")
+        plt.ylabel("Voltage [mV]")
+        plt.grid(True, alpha=0.3)
+        plt.legend(loc='upper right')
         plt.tight_layout()
         plt.show()
 
@@ -174,19 +192,69 @@ if __name__ == "__main__":
 
     if success:
         try:
-            print(f"Nagrywanie przez {RECORD_TIME} sekund...")
-            start_time = time.time()
-            while time.time() - start_time < RECORD_TIME:
-                remaining = int(RECORD_TIME - (time.time() - start_time))
-                print(f"Pozostało: {remaining}s    ", end="\r", flush=True)
+            # 15s sleep before starting measurement
+            PRE_SLEEP_TIME = 15
+            print(f"Waiting {PRE_SLEEP_TIME} seconds before starting measurement...")
+            for i in range(PRE_SLEEP_TIME, 0, -1):
+                print(f"Starting in: {i}s    ", end="\r", flush=True)
                 time.sleep(1)
             
+            # Clear data collected during sleep
+            app.data_storage.clear()
+            app.live_buffer.clear()
+            print("\nStarting measurement now!")
+
+            # --- LIVE PLOT SETUP ---
+            plt.ion()
+            fig_live, ax_live = plt.subplots(figsize=(10, 5))
+            line_live, = ax_live.plot([], [], color='blue', linewidth=1)
+            ax_live.set_title("Live Voltage Signal")
+            ax_live.set_xlabel("Samples")
+            ax_live.set_ylabel("Voltage [mV]")
+            ax_live.grid(True, alpha=0.3)
+            # -----------------------
+
+            print(f"Nagrywanie przez {RECORD_TIME} sekund...")
+            start_time = time.time()
+            last_plot_time = 0
+            
+            while time.time() - start_time < RECORD_TIME:
+                current_time = time.time()
+                elapsed = current_time - start_time
+                remaining = int(RECORD_TIME - elapsed)
+                
+                # Update live plot every 50ms
+                if current_time - last_plot_time > 0.05:
+                    if app.live_buffer:
+                        data = list(app.live_buffer)
+                        voltages = [x[2] for x in data]
+                        
+                        line_live.set_data(range(len(voltages)), voltages)
+                        ax_live.set_xlim(0, len(voltages))
+                        
+                        # Dynamic scaling for Y axis
+                        if len(voltages) > 0:
+                            v_min, v_max = min(voltages), max(voltages)
+                            margin = (v_max - v_min) * 0.1 + 10
+                            ax_live.set_ylim(v_min - margin, v_max + margin)
+                        
+                        plt.pause(0.01)
+                    
+                    last_plot_time = current_time
+                
+                print(f"Pozostało: {remaining}s    ", end="\r", flush=True)
+                time.sleep(0.01) # Faster loop for smoother UI
+            
             print("\nKoniec nagrywania. Wyświetlanie wykresu...")
+            plt.close(fig_live)
+            plt.ioff()
             app.stop_and_graph()
             
         except KeyboardInterrupt:
             print("\nPrzerwano.")
+            plt.close('all')
             app.stop_and_graph()
         except Exception as e:
             print(f"\nBłąd: {e}")
+            plt.close('all')
             app.stop_and_graph()
