@@ -163,7 +163,7 @@ def run_radar_viewer():
     # Modern Dark UI
     plt.style.use('dark_background')
     fig, (ax_time, ax_freq) = plt.subplots(2, 1, figsize=(12, 8))
-    fig.canvas.manager.set_window_title('Antigravity Radar Viewer')
+    fig.canvas.manager.set_window_title('Radar Viewer')
     
     line_time, = ax_time.plot([], [], color='#00ffcc', linewidth=1, label='Raw ADC')
     ax_time.set_title("Live Radar Signal (Voltage)", fontsize=12)
