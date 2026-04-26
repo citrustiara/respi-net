@@ -16,7 +16,6 @@ class BreathCapture:
         self.running = False
         self.data_storage = []
         self.read_thread = None
-        # Wyniki analizy (dla testów)
         self.fs = 0
         self.resp_bpm = 0
         self.heart_bpm = 0
@@ -24,24 +23,32 @@ class BreathCapture:
     def list_ports(self):
         return [port.device for port in serial.tools.list_ports.comports()]
 
-    def connect(self):
+    def connect(self, port_name=None):
         ports = self.list_ports()
         if not ports:
             print("Nie znaleziono portów szeregowych.")
             return False
             
         print(f"Dostępne porty: {ports}")
-        for port in ports:
+        target_ports = []
+        if port_name and port_name in ports:
+            target_ports.append(port_name)
+        for p in reversed(ports):
+            if p not in target_ports:
+                target_ports.append(p)
+
+        for port in target_ports:
             try:
                 print(f"Próba połączenia z {port} (Baud: {self.baud})...")
-                self.serial_port = serial.Serial(port, self.baud, timeout=1)
+                self.serial_port = serial.Serial(port, self.baud, timeout=0.1)
                 self.running = True
-                self.read_thread = threading.Thread(target=self._read_loop)
+                self.data_storage = []
+                self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
                 self.read_thread.start()
-                print("Połączono. Zbieranie danych...")
+                print(f"Połączono z {port}. Zbieranie danych...")
                 return True
             except (serial.SerialException, PermissionError) as e:
-                print(f"Błąd połączenia: {e}")
+                print(f"Błąd połączenia z {port}: {e}")
         return False
 
     def _read_loop(self):
@@ -57,7 +64,7 @@ class BreathCapture:
                         if line:
                             self._process_line(line)
                 else:
-                    time.sleep(0.001)
+                    time.sleep(0.0001)
             except Exception as e:
                 print(f"Błąd w pętli odczytu: {e}")
                 self.running = False
@@ -66,7 +73,7 @@ class BreathCapture:
         try:
             parts = [float(x) for x in line.split(',')]
             if len(parts) == 6:
-                # Otrzymujemy raw [ax, ay, az, gx, gy, gz]
+                # Format: ax, ay, az, gx, gy, gz
                 now_ms = time.time() * 1000.0
                 self.data_storage.append([now_ms] + parts)
         except ValueError:
@@ -74,113 +81,62 @@ class BreathCapture:
 
     def stop_and_graph(self):
         self.running = False
-        if self.read_thread:
-            self.read_thread.join()
         if self.serial_port:
-            self.serial_port.close()
+            try:
+                self.serial_port.close()
+            except:
+                pass
 
         if len(self.data_storage) < 100:
             print("Za mało danych do analizy.")
             return
 
+        print("\nPrzetwarzanie danych...")
         # --- PRZYGOTOWANIE DANYCH ---
         df = pd.DataFrame(self.data_storage, columns=['Time_ms', 'ax', 'ay', 'az', 'gx', 'gy', 'gz'])
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        df.to_csv(f"respiratory_6axis_raw_{timestamp}.csv", index=False)
+        filename = f"respiratory_6axis_raw_{timestamp}.csv"
+        df.to_csv(filename, index=False)
+        print(f"Dane zapisane do {filename}")
         
         df['Time_s'] = (df['Time_ms'] - df['Time_ms'].iloc[0]) / 1000.0
         dt = df['Time_s'].diff().fillna(df['Time_s'].diff().mean())
         fs = 1.0 / dt.mean()
-        print(f"\nWykryta częstotliwość próbkowania: {fs:.1f} Hz")
+        print(f"Wykryta częstotliwość próbkowania: {fs:.1f} Hz")
 
-        # --- ANALIZA PCA (OPTYMALNA, NIEZALEŻNA OD ORIENTACJI) ---
+        # --- ANALIZA PCA i FILTROWANIE ---
         ax, ay, az = df['ax'].to_numpy(), df['ay'].to_numpy(), df['az'].to_numpy()
         gx, gy, gz = df['gx'].to_numpy(), df['gy'].to_numpy(), df['gz'].to_numpy()
 
-        # 1. Filtry SOS
         def get_sos_filter(f_low, f_high, fs_val, order=4):
             return butter(order, [f_low, f_high], btype='band', fs=fs_val, output='sos')
 
         def apply_sos(data, sos):
-            # W prawidłowej obróbce sygnałów nie powinniśmy stosować na początku 
-            # średniej kroczącej (rolling average), która zniekształca pasmo i fazę.
-            # Zostawiamy wyłącznie profesjonalny filtr dwukierunkowy (zerofazowy) Butterwortha.
             return sosfiltfilt(sos, data)
 
+        # Pasmo oddechowe: 0.1 - 0.6 Hz
         sos_resp = get_sos_filter(0.1, 0.6, fs)
-        
-        # Filtrujemy przyspieszenie
         a_filt = np.column_stack((apply_sos(ax, sos_resp), apply_sos(ay, sos_resp), apply_sos(az, sos_resp)))
 
-        # 2. Filtr komplementarny 3D 
-        alpha = 0.98 
-        g_cf = np.zeros((len(df), 3))
-        g_init = np.array([ax[0], ay[0], az[0]])
-        g_init /= np.linalg.norm(g_init)
-        g_cf[0] = g_init
-        
-        for i in range(1, len(df)):
-            w = np.array([np.radians(gx[i]), np.radians(gy[i]), np.radians(gz[i])])
-            g_old = g_cf[i-1]
-            cx = w[1]*g_old[2] - w[2]*g_old[1]
-            cy = w[2]*g_old[0] - w[0]*g_old[2]
-            cz = w[0]*g_old[1] - w[1]*g_old[0]
-            g_pred = g_old - np.array([cx, cy, cz]) * dt[i]
-            
-            norm_pred = np.linalg.norm(g_pred)
-            if norm_pred > 0: g_pred /= norm_pred
-            
-            a_meas = np.array([ax[i], ay[i], az[i]])
-            a_norm = np.linalg.norm(a_meas)
-            if a_norm > 0: a_meas /= a_norm
-            else: a_meas = g_pred
-            
-            g_cf_i = alpha * g_pred + (1 - alpha) * a_meas
-            g_cf_i /= np.linalg.norm(g_cf_i)
-            g_cf[i] = g_cf_i
-
-        g_cf_filt = np.column_stack((apply_sos(g_cf[:,0], sos_resp), apply_sos(g_cf[:,1], sos_resp), apply_sos(g_cf[:,2], sos_resp)))
-
-        # 3. Rzutowanie PCA (znalezienie optymalnej osi ruchu)
+        # Rzutowanie PCA
         def pca_project(data_filt, data_raw):
             cov = np.cov(data_filt, rowvar=False)
             evals, evecs = np.linalg.eigh(cov)
-            v = evecs[:, np.argmax(evals)]  # Główna oś
+            v = evecs[:, np.argmax(evals)]
             return data_filt.dot(v), data_raw.dot(v)
 
         a_raw = np.column_stack((ax, ay, az))
         df['Resp_G'], g_raw_proj = pca_project(a_filt, a_raw)
-        
-        df['Resp_Angle'], angle_raw_proj = pca_project(g_cf_filt, g_cf)
-        df['Resp_Angle'] *= (180.0 / np.pi)
-        angle_raw_proj *= (180.0 / np.pi)
-
-        # Centrowanie raw pod wykres
         g_centered = g_raw_proj - g_raw_proj.mean()
-        angle_centered = angle_raw_proj - angle_raw_proj.mean()
 
-        # 4. Tętno (Serce) - PCA w paśmie kardiologicznym
+        # Pasmo serca: 0.65 - 4.0 Hz
         sos_heart = get_sos_filter(0.65, 4.0, fs)
-        
-        # Filtrowanie przyspieszenia (G) w paśmie serca
         h_filt_g = np.column_stack((apply_sos(ax, sos_heart), apply_sos(ay, sos_heart), apply_sos(az, sos_heart)))
         df['Heart_G'], heart_g_raw = pca_project(h_filt_g, a_raw)
         heart_g_centered = heart_g_raw - heart_g_raw.mean()
-        
-        # Filtrowanie kąta (Tilt) w paśmie serca
-        h_filt_angle = np.column_stack((apply_sos(g_cf[:,0], sos_heart), apply_sos(g_cf[:,1], sos_heart), apply_sos(g_cf[:,2], sos_heart)))
-        df['Heart_Angle'], _ = pca_project(h_filt_angle, g_cf)
-        df['Heart_Angle'] *= (180.0 / np.pi)
 
-        # --- PRZEMIESZCZENIE ---
-        t = df['Time_s'].to_numpy()
-        df['Resp_Disp'] = cumulative_trapezoid(df['Resp_G'], t, initial=0)
-        df['Heart_Disp'] = cumulative_trapezoid(df['Heart_G'], t, initial=0)
-
-        # --- FFT (WIDMO SUROWEGO SYGNAŁU) ---
+        # FFT
         N = len(df)
-        
-        # Oddech (Liczymy z surowego g_centered)
         resp_fft = np.abs(np.fft.rfft(g_centered))
         resp_freqs = np.fft.rfftfreq(N, d=1.0/fs)
         
@@ -192,10 +148,8 @@ class BreathCapture:
             self.resp_bpm = 0.0
             best_resp_freq = 0.0
 
-        # Tętno (Liczymy z surowego heart_g_centered)
         heart_fft = np.abs(np.fft.rfft(heart_g_centered))
         heart_freqs = np.fft.rfftfreq(N, d=1.0/fs)
-        
         valid_heart_idx = (heart_freqs >= 0.65) & (heart_freqs <= 4.0)
         if np.any(valid_heart_idx):
             best_heart_freq = heart_freqs[valid_heart_idx][np.argmax(heart_fft[valid_heart_idx])]
@@ -204,143 +158,96 @@ class BreathCapture:
             self.heart_bpm = 0.0
             best_heart_freq = 0.0
 
-        self.fs = fs
-        print(f"Analiza zakończona. Oddech: {self.resp_bpm:.1f} BPM, Tętno: {self.heart_bpm:.1f} BPM.")
+        # --- WYKRESY KOŃCOWE ---
+        plt.style.use('default')
+        fig, axes = plt.subplots(3, 2, figsize=(15, 12))
+        fig.suptitle(f"Analiza IMU: Oddech {self.resp_bpm:.1f} BPM | Tętno {self.heart_bpm:.1f} BPM", fontsize=16)
 
-        # --- WYKRESY ---
-        fig, axes = plt.subplots(5, 2, figsize=(16, 22))
-        fig.suptitle(f"Analiza oddechu: {self.resp_bpm:.1f} BPM ({best_resp_freq:.2f} Hz) | Tętno: {self.heart_bpm:.1f} BPM ({best_heart_freq:.2f} Hz)", fontsize=18, fontweight='bold', y=0.98)
-
-        # KOLUMNA 1: RAW ACCELEROMETER
+        t = df['Time_s'].to_numpy()
         axes[0,0].plot(t, ax, label='ax', alpha=0.7)
         axes[0,0].plot(t, ay, label='ay', alpha=0.7)
         axes[0,0].plot(t, az, label='az', alpha=0.7)
-        axes[0,0].set_title("Raw Accelerometer [G]", fontsize=12)
-        axes[0,0].grid(True, alpha=0.3)
+        axes[0,0].set_title("Raw Accelerometer")
         axes[0,0].legend()
 
-        # KOLUMNA 2: RAW GYROSCOPE
         axes[0,1].plot(t, gx, label='gx', alpha=0.7)
         axes[0,1].plot(t, gy, label='gy', alpha=0.7)
         axes[0,1].plot(t, gz, label='gz', alpha=0.7)
-        axes[0,1].set_title("Raw Gyroscope [°/s]", fontsize=12)
-        axes[0,1].grid(True, alpha=0.3)
+        axes[0,1].set_title("Raw Gyroscope")
         axes[0,1].legend()
 
-        # KOLUMNA 1: ODDECH (Rząd 2-4)
-        axes[1,0].plot(t, angle_centered, color='blue', alpha=0.15, label='Kąt 3D (Raw)')
-        axes[1,0].plot(t, df['Resp_Angle'], color='blue', linewidth=2, label='Filtr 0.1-0.6Hz')
-        axes[1,0].set_title("Oddech: Zmiana Orientacji (°) - Wypadkowa", fontsize=12)
-        axes[1,0].set_ylabel("Stopnie")
-        y_min, y_max = df['Resp_Angle'].min(), df['Resp_Angle'].max()
-        margin = (y_max - y_min) * 0.3 if y_max != y_min else 1.0
-        axes[1,0].set_ylim(y_min - margin, y_max + margin)
-        axes[1,0].grid(True, alpha=0.3)
-        axes[1,0].legend()
+        axes[1,0].plot(t, df['Resp_G'], color='green')
+        axes[1,0].set_title("Respiratory Signal (PCA Projected & Filtered)")
+        axes[1,0].set_ylabel("G")
 
-        axes[2,0].plot(t, g_centered, color='green', alpha=0.15, label='Wypadkowa (Raw)')
-        axes[2,0].plot(t, df['Resp_G'], color='green', linewidth=2, label='Filtr 0.1-0.6Hz')
-        axes[2,0].set_title("Oddech: Przyspieszenie - Wypadkowa (G)", fontsize=12)
-        axes[2,0].set_ylabel("G")
-        y_min, y_max = df['Resp_G'].min(), df['Resp_G'].max()
-        margin = (y_max - y_min) * 0.3 if y_max != y_min else 0.05
-        axes[2,0].set_ylim(y_min - margin, y_max + margin)
-        axes[2,0].grid(True, alpha=0.3)
-        axes[2,0].legend()
+        axes[1,1].plot(t, df['Heart_G'], color='crimson')
+        axes[1,1].set_title("Cardiac Signal (PCA Projected & Filtered)")
+        axes[1,1].set_ylabel("G")
 
-        axes[3,0].plot(t, df['Resp_Disp'], color='green', linewidth=2)
-        axes[3,0].fill_between(t, df['Resp_Disp'], alpha=0.2, color='green')
-        axes[3,0].set_title("Oddech: Przemieszczenie (∫G)", fontsize=12)
-        axes[3,0].set_xlabel("Czas [s]")
-        axes[3,0].grid(True, alpha=0.3)
+        axes[2,0].plot(resp_freqs, resp_fft)
+        axes[2,0].set_xlim(0, 1.0)
+        axes[2,0].set_title("Respiratory Spectrum")
+        axes[2,0].set_xlabel("Hz")
 
-        # KOLUMNA 2: TĘTNO (Rząd 2-4)
-        axes[1,1].plot(t, df['Heart_Angle'], color='crimson', linewidth=1.5, label='Filtr 0.65-4Hz')
-        axes[1,1].set_title("Serce: Zmiana Orientacji (°) - Wypadkowa", fontsize=12)
-        axes[1,1].set_ylabel("Stopnie")
-        y_min, y_max = df['Heart_Angle'].min(), df['Heart_Angle'].max()
-        margin = (y_max - y_min) * 0.2 if y_max != y_min else 0.005
-        axes[1,1].set_ylim(y_min - margin, y_max + margin)
-        axes[1,1].grid(True, alpha=0.3)
-        axes[1,1].legend()
+        axes[2,1].plot(heart_freqs, heart_fft)
+        axes[2,1].set_xlim(0, 5.0)
+        axes[2,1].set_title("Cardiac Spectrum")
+        axes[2,1].set_xlabel("Hz")
 
-        axes[2,1].plot(t, df['Heart_G'], color='crimson', linewidth=1.5, alpha=0.8)
-        axes[2,1].set_title("Serce: Przyspieszenie - Wypadkowa (G)", fontsize=12)
-        axes[2,1].set_ylabel("G")
-        y_min, y_max = df['Heart_G'].min(), df['Heart_G'].max()
-        margin = (y_max - y_min) * 0.2 if y_max != y_min else 0.005
-        axes[2,1].set_ylim(y_min - margin, y_max + margin)
-        axes[2,1].grid(True, alpha=0.3)
-        # axes[2,1].legend()
-
-        axes[3,1].plot(t, df['Heart_Disp'], color='purple', linewidth=1.5)
-        axes[3,1].fill_between(t, df['Heart_Disp'], alpha=0.2, color='purple')
-        axes[3,1].set_title("Tętno: Mikroruchy (∫G_cardio)", fontsize=12)
-        axes[3,1].set_ylabel("j.u.")
-        axes[3,1].set_xlabel("Czas [s]")
-        axes[3,1].grid(True, alpha=0.3)
-
-        # KOLUMNA 1: FFT ODDECH (Rząd 5)
-        # Zoom do 0.01 - 1.0 Hz dla oddechu
-        plot_idx_resp = (resp_freqs >= 0.01) & (resp_freqs <= 1.0)
-        axes[4,0].plot(resp_freqs[plot_idx_resp], resp_fft[plot_idx_resp], color='blue', linewidth=1.5)
-        if np.any(valid_resp_idx):
-            axes[4,0].plot(best_resp_freq, np.max(resp_fft[valid_resp_idx]), "ro", label=f'Szczyt: {best_resp_freq:.2f} Hz')
-        axes[4,0].axvspan(0.1, 0.6, color='blue', alpha=0.1, label='Pasmo detekcji (0.1-0.6 Hz)')
-        axes[4,0].set_title("Oddech: Spectrum (Band 0.1-0.6 Hz)", fontsize=12)
-        axes[4,0].set_xlabel("Częstotliwość [Hz]")
-        axes[4,0].set_ylabel("Amplituda")
-        axes[4,0].grid(True, alpha=0.3)
-        axes[4,0].set_xlim(0.1, 0.6)
-        axes[4,0].legend()
-
-        # KOLUMNA 2: FFT TĘTNO (Rząd 5)
-        # Zoom do 0.5 - 5.0 Hz dla tętna
-        plot_idx_heart = (heart_freqs >= 0.5) & (heart_freqs <= 5.0)
-        axes[4,1].plot(heart_freqs[plot_idx_heart], heart_fft[plot_idx_heart], color='crimson', linewidth=1.5)
-        if np.any(valid_heart_idx):
-            axes[4,1].plot(best_heart_freq, np.max(heart_fft[valid_heart_idx]), "ro", label=f'Szczyt: {best_heart_freq:.2f} Hz')
-        axes[4,1].axvspan(0.65, 4.0, color='crimson', alpha=0.1, label='Pasmo detekcji (0.65-4 Hz)')
-        axes[4,1].set_title("Serce: Spectrum (Band 0.65-4 Hz)", fontsize=12)
-        axes[4,1].set_xlabel("Częstotliwość [Hz]")
-        axes[4,1].set_ylabel("Amplituda")
-        axes[4,1].grid(True, alpha=0.3)
-        axes[4,1].set_xlim(0.65, 4.0)
-        axes[4,1].legend()
-
-        plt.tight_layout(rect=[0, 0.03, 1, 0.96])
-        plt.subplots_adjust(hspace=0.5, wspace=0.25)
+        plt.tight_layout()
         plt.show()
 
-# --- URUCHOMIENIE ---
-if __name__ == "__main__":
-    WAIT_TIME = 15
-    RECORD_TIME = 45
-
+def run_breath_capture():
     app = BreathCapture(baud=921600)
-    if app.connect():
-        try:
-            print(f"\n--- STABILIZACJA: Oczekiwanie {WAIT_TIME} sekund przed startem... ---")
-            for i in range(WAIT_TIME, 0, -1):
-                print(f"Start za: {i}s   ", end="\r", flush=True)
-                time.sleep(1)
+    if not app.connect():
+        return
+
+    # Live Plot Setup
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(10, 5))
+    fig.canvas.manager.set_window_title('Real-time IMU Viewer')
+    
+    # Plot only first 3 axes (accel) for clarity in live view
+    lines = [ax.plot([], [], label=l)[0] for l in ['ax', 'ay', 'az']]
+    ax.set_title("Live Accelerometer Data")
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
+
+    is_running = [True]
+    def on_stop(event):
+        is_running[0] = False
+        app.running = False
+    
+    fig.canvas.mpl_connect('close_event', on_stop)
+    fig.canvas.mpl_connect('key_press_event', on_stop)
+
+    print("\n" + "="*50)
+    print("Naciśnij DOWOLNY KLAWISZ aby zakończyć pomiar i wyświetlić analizę.")
+    print("="*50 + "\n")
+
+    try:
+        while is_running[0] and app.running:
+            if len(app.data_storage) > 10:
+                data = np.array(app.data_storage[-500:]) # Show last 500 samples
+                t_rel = np.arange(len(data))
+                
+                for i in range(3): # ax, ay, az
+                    lines[i].set_data(t_rel, data[:, i+1])
+                
+                ax.set_xlim(0, len(data))
+                v_min, v_max = np.min(data[:, 1:4]), np.max(data[:, 1:4])
+                margin = (v_max - v_min) * 0.1 + 0.1
+                ax.set_ylim(v_min - margin, v_max + margin)
             
-            app.data_storage = []
-            
-            print(f"\n--- START POMIARU: Nagrywanie przez {RECORD_TIME} sekund... ---")
-            for i in range(RECORD_TIME, 0, -1):
-                print(f"Pozostało: {i}s    ", end="\r", flush=True)
-                time.sleep(1)
-            
-            print("\n--- KONIEC: Przetwarzanie danych... ---")
-            app.stop_and_graph()
-            
-        except KeyboardInterrupt:
-            print("\nPrzerwano ręcznie.")
-            plt.close('all')
-            app.running = False
-            if app.serial_port:
-                app.serial_port.close()
-        except Exception as e:
-            print(f"\nWystąpił błąd: {e}")
-            app.stop_and_graph()
+            plt.pause(0.01)
+            if not plt.fignum_exists(fig.number):
+                break
+    except KeyboardInterrupt:
+        print("\nPrzerwano.")
+    finally:
+        app.running = False
+        plt.close(fig)
+        app.stop_and_graph()
+
+if __name__ == "__main__":
+    run_breath_capture()
