@@ -270,5 +270,56 @@ def run_radar_viewer():
         plt.close('all')
         app.save_and_plot_final()
 
+def process_radar_csv(filename, output_dir="plots_radar"):
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    df = pd.read_csv(filename)
+    if 'Timestamp_ms' not in df.columns or len(df) < 10:
+        return
+    
+    df['Time_s'] = (df['Timestamp_ms'] - df['Timestamp_ms'].min()) / 1000.0
+    time_diffs = df['Time_s'].diff().dropna()
+    fs = 1.0 / time_diffs.mean() if not time_diffs.empty else 500.0
+
+    v = df['Voltage_mV'].values
+    v_detrended = v - np.mean(v)
+    nperseg = min(len(v), 4096)
+    freqs, psd = welch(v_detrended, fs, nperseg=nperseg)
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 10))
+    ax1.plot(df['Time_s'], df['Voltage_mV'], color='#1f77b4', linewidth=0.5)
+    ax1.set_title(f"HB100 Radar - Time Domain Signal ({os.path.basename(filename)})", fontsize=14)
+    ax1.set_xlabel("Time [s]")
+    ax1.set_ylabel("Voltage [mV]")
+    ax1.grid(True, alpha=0.3)
+
+    ax2.semilogy(freqs, psd, color='#ff7f0e', linewidth=1)
+    ax2.set_title("HB100 Radar - Power Spectral Density (Welch)", fontsize=14)
+    ax2.set_xlabel("Frequency [Hz]")
+    ax2.set_ylabel("Power/Frequency [V^2/Hz]")
+    ax2.grid(True, alpha=0.3, which='both')
+    
+    ax2_speed = ax2.twiny()
+    ax2_speed.set_xlim(ax2.get_xlim())
+    xticks = ax2.get_xticks()
+    ax2_speed.set_xticks(xticks)
+    ax2_speed.set_xticklabels([f"{x/70.16:.1f}" for x in xticks])
+    ax2_speed.set_xlabel("Estimated Speed [m/s] (Doppler shift)")
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, os.path.basename(filename).replace('.csv', '.png')))
+    plt.close()
+
 if __name__ == "__main__":
-    run_radar_viewer()
+    import sys
+    import glob
+    if len(sys.argv) > 1 and sys.argv[1] == '--batch':
+        csv_files = glob.glob("radar_raw_*.csv")
+        for f in csv_files:
+            print(f"Processing {f}...")
+            try:
+                process_radar_csv(f)
+            except Exception as e:
+                print(f"Error processing {f}: {e}")
+    else:
+        run_radar_viewer()
