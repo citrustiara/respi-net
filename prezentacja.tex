@@ -36,10 +36,11 @@
     Zgodnie z wymaganiami, praca składa się z części implementacyjnej oraz pisemnej i dzieli się na 3 główne obszary:
     \begin{enumerate}
         \item \textbf{State of the Art:} Przegląd aktualnych rozwiązań i metod pomiaru parametrów witalnych.
-        \item \textbf{Implementacja (Co zostało zrobione):} 
+        \item \textbf{Implementacja:} 
         \begin{itemize}
             \item Budowa i testy hardware'u (kondycjonowanie radaru, integracja IMU).
             \item Narzędzia do akwizycji danych na mikrokontrolerze ESP32 i obróbki na PC.
+            \item Przetestowanie precyzyjnego radaru Acconeer A121.
         \end{itemize}
         \item \textbf{Część eksperymentalna i sieci neuronowe:} 
         \begin{itemize}
@@ -89,7 +90,7 @@
 \begin{frame}{Stanowisko pomiarowe -- IMU}
     \begin{figure}
         \centering
-        \includegraphics[width=0.75\textwidth,keepaspectratio]{plots_imu/imu_.png}
+        \includegraphics[width=0.5\textwidth,keepaspectratio]{plots_imu/imu_.png}
         \caption{Moduł IMU LSM6DS3 połączony z mikrokontrolerem ESP32.}
     \end{figure}
 \end{frame}
@@ -104,7 +105,7 @@
         \end{itemize}
         \item \textbf{Wyniki i analiza (zmiany napięcia):}
         \begin{itemize}
-            \item Wyraźny sygnał oddechu z odległości ok. 60 cm od klatki piersiowej.
+            \item Wyraźny sygnał oddechu z odległości ok. 50 cm od klatki piersiowej.
             \item Wstrzymanie oddechu odsłania oscylacje odpowiadające pracy serca (tętno jest detekowalne).
         \end{itemize}
         \item \textbf{Oprogramowanie:} Stworzono moduł w Pythonie (\texttt{radar\_viewer.py}) z szybkim odczytem (921600 baud) z ESP32 do analizy i rysowania wykresów FFT na żywo.

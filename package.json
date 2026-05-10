@@ -1,0 +1,24 @@
+{
+  "name": "pycharmmiscproject",
+  "version": "1.0.0",
+  "description": "This repository contains the source code for my Bachelor's Thesis (Praca Inżynierska). The project explores using Neural Networks and IMU sensors (accelerometer and gyroscope) to detect and analyze respiratory patterns in real-time.",
+  "main": "generator.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/citrustiara/respi-net.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/citrustiara/respi-net/issues"
+  },
+  "homepage": "https://github.com/citrustiara/respi-net#readme",
+  "dependencies": {
+    "docx": "^9.6.1"
+  }
+}

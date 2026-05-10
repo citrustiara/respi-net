@@ -30,3 +30,4 @@ kicad_error.txt
 .settings/
 *.swp
 *.swo
+node_modules/
