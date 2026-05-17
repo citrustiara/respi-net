@@ -1,0 +1,3 @@
+cache-dir = ".uv-cache"
+python-downloads = "never"
+python-preference = "only-system"

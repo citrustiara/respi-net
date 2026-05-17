@@ -10,13 +10,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+.uv-cache/
+.venv_legacy_broken/
 env/
 venv/
 ENV/
 
 # Project Specific
-#radar_raw_*.csv
-#respiratory_*.csv
 build_log.txt
 *.log
 kicad_error.txt

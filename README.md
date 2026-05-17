@@ -11,7 +11,7 @@ Current Progress:
 - Reliable streaming of 6-axis raw data (accelerometer and gyroscope).
 - Advanced signal processing implemented, including PCA (Principal Component Analysis) to ensure measurements are orientation-independent.
 - **HB100 Analog Radar integrated** with custom amplification and filtering.
-- **`radar_viewer.py` developed** for live raw voltage visualization and high-speed data recording (921,600 baud).
+- Click CLI developed for live capture, batch processing, and chart generation.
 - Basic peak detection successfully counts breaths.
 - Heart rate signal is visible and somewhat reliable depending on placement.
 - Hardware schematics in progress
@@ -48,13 +48,49 @@ The project uses two primary data paths:
 - Real-time Visualization: Live plotting of raw voltage for signal quality monitoring.
 - Post-Processing: FFT-based analysis and bandpass filtering (0.05 - 4.0 Hz) for BPM estimation.
 
+## Usage
+
+This project uses `uv` for Python dependency and command management.
+
+```powershell
+uv sync
+uv run respi --help
+```
+
+Generate a chart from one file:
+
+```powershell
+uv run respi plot-imu data\raw\imu\respiratory_6axis_raw_2026-03-08_02-37-19.csv
+uv run respi plot-radar data\raw\radar\radar_raw_2026-03-13_18-30-09.csv
+```
+
+Batch-generate all charts:
+
+```powershell
+uv run respi batch-imu
+uv run respi batch-radar
+```
+
+Capture from serial:
+
+```powershell
+uv run respi ports
+uv run respi capture-imu --port COM6
+uv run respi live-radar --port COM6
+```
+
 ## Repository Structure
 
-- `script.py` - Python script for IMU data acquisition and PCA processing.
-- `radar_viewer.py` - Real-time visualization and recording tool for HB100 radar.
-- `esp32_imu_stream/` - ESP32 firmware for IMU streaming.
-- `esp32_radar_adc/` - ESP32 firmware for high-speed radar data acquisition.
-- `schematics/` - KiCad hardware design files including the radar amplifier.
+- `src/respi_net/` - Python package for capture, analysis, plotting, and CLI commands.
+- `data/raw/imu/` - IMU CSV recordings.
+- `data/raw/radar/` - Radar CSV recordings.
+- `outputs/plots/imu/` - Generated IMU charts.
+- `outputs/plots/radar/` - Generated radar charts.
+- `firmware/esp32_imu_stream/` - ESP32 firmware for IMU streaming.
+- `firmware/esp32_radar_adc/` - ESP32 firmware for high-speed radar data acquisition.
+- `hardware/` - KiCad hardware design files including the radar amplifier.
+- `docs/` - Reports, notes, and logs.
+- `tools/docx_generator/` - Legacy Node-based report generator.
 
 ## Future Plans
 
