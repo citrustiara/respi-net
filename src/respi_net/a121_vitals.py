@@ -405,8 +405,8 @@ class HeartRateKalmanTracker:
         h = self.current_hz
         if h is None:
             return self.band_hz
-        half = max(0.18, 3.0 * self.current_std_hz)
-        return _clamp_band((h - half, h + half), self.band_hz, min_width=0.35)
+        half = max(0.40, 3.0 * self.current_std_hz)
+        return _clamp_band((h - half, h + half), self.band_hz, min_width=0.80)
 
     def update(self, measurement_hz: float, dt_s: float, *, confidence: float = 0.0, quality: float = 0.0) -> float:
         low, high = self.band_hz
@@ -447,7 +447,7 @@ class HeartRateKalmanTracker:
         else:
             self.missed += 1
 
-        if self.missed >= 24:
+        if self.missed >= 12:
             self.reset()
             return 0.0
         return float(self.x[0]) if self.locked else 0.0
@@ -606,8 +606,11 @@ def estimate_band_peak(
     for rejected in reject_hz:
         if rejected <= 0:
             continue
-        width = max(0.035, rejected * 0.025)
-        score *= 1.0 - 0.92 * np.exp(-0.5 * ((f - rejected) / width) ** 2)
+        # Narrow, shallow notch: only suppress bins very close to the harmonic.
+        # The old wide/deep notch removed the true heart rate when it was near
+        # a respiratory harmonic (very common at typical breathing rates).
+        width = max(0.020, rejected * 0.015)
+        score *= 1.0 - 0.50 * np.exp(-0.5 * ((f - rejected) / width) ** 2)
     idx = int(np.argmax(score))
     peak_hz = float(f[idx])
     if 0 < idx < len(f) - 1 and len(f) > 2:
@@ -939,8 +942,8 @@ def _clamp_band(band: tuple[float, float], limits: tuple[float, float], min_widt
 def _heart_search_band(heart_prior_hz: float | None, heart_prior_std_hz: float | None) -> tuple[float, float]:
     if heart_prior_hz is None or not np.isfinite(heart_prior_hz) or heart_prior_hz <= 0:
         return HEART_BAND_HZ
-    half = max(0.18, 3.0 * float(heart_prior_std_hz if heart_prior_std_hz is not None else 0.12))
-    return _clamp_band((float(heart_prior_hz) - half, float(heart_prior_hz) + half), HEART_BAND_HZ, min_width=0.35)
+    half = max(0.40, 3.0 * float(heart_prior_std_hz if heart_prior_std_hz is not None else 0.12))
+    return _clamp_band((float(heart_prior_hz) - half, float(heart_prior_hz) + half), HEART_BAND_HZ, min_width=0.80)
 
 
 def _valid_band_for_fs(band_hz: tuple[float, float], fs: float, *, min_width: float = 0.02) -> tuple[float, float] | None:
@@ -1417,8 +1420,11 @@ def analyze_a121_vitals(
                 harmonic_rejects = ()
 
             heart_source = _aligned_weighted_average(angle_unwrapped[:, candidate_idx], weights, ref_col)
-            heart_source = _subtract_resp_harmonics(heart_source, fs, resp_hz_for_harmonics, max_order=7)
-            heart_signal = _bandpass_matrix(heart_source, fs, HEART_BAND_HZ, order=3, zero_phase=False).ravel()
+            # NOTE: _subtract_resp_harmonics was removed here. It fits sinusoids at
+            # respiratory harmonic frequencies and subtracts them, but at typical breathing
+            # rates (12-18 BPM) harmonics 4-8 land directly on common heart rates (48-144 BPM)
+            # and the subtraction removes the real cardiac signal.
+            heart_signal = _bandpass_matrix(heart_source, fs, HEART_BAND_HZ, order=3, zero_phase=True).ravel()
             heart_band = _heart_search_band(heart_prior_hz, heart_prior_std_hz)
             heart_hz, heart_confidence = estimate_band_peak_fused(
                 heart_signal,
@@ -1426,9 +1432,10 @@ def analyze_a121_vitals(
                 heart_band,
                 reject_hz=harmonic_rejects,
             )
-            if _near_resp_harmonic(heart_hz, resp_hz_for_harmonics):
-                heart_hz = 0.0
-                heart_confidence = 0.0
+            # NOTE: _near_resp_harmonic post-check was removed. It zeroed out valid heart
+            # rate estimates when they happened to be near a respiratory harmonic, which is
+            # extremely common. The narrowed FFT notch above provides sufficient suppression
+            # for true harmonic artifacts without blanking the real heart rate.
             if len(heart_signal) / max(fs, 1e-9) < 10.0:
                 heart_hz = 0.0
                 heart_confidence = 0.0
