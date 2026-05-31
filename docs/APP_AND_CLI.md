@@ -112,8 +112,9 @@ A121-specific controls:
 
 - `A121 start` - start distance in meters, e.g. `0.20 m`
 - `A121 end` - end distance in meters, e.g. `1.50 m`
-- `A121 profile` - Acconeer profile `1..5`; profile 3 is a good general default
+- `A121 profile` - Acconeer profile `1..5`; profile 3 is the default breathing-reference profile
 - `A121 HWAAS` - hardware averaging; higher values reduce noise but reduce update rate
+- `A121 sweeps` / `A121 fps` - defaults are 16 sweeps at 20 Hz to avoid UART backlog and GUI lag
 
 ### App graphs
 
@@ -126,7 +127,7 @@ Graphs are rendered with `pyqtgraph` and are interactive:
 Live graph behavior:
 
 - HB100: voltage over time + FFT
-- A121: latest amplitude vs distance + peak distance over time
+- A121: latest amplitude vs distance plus selectable filtered vitals, rate FFT, or raw IQ/phase view. The live time-domain A121 traces use stateful causal filters, so previous samples are not recomputed as new frames arrive.
 - IMU: accelerometer axes + gyroscope axes
 
 ### Live stats
@@ -141,10 +142,10 @@ The stats panel shows sensor-dependent metrics:
 - A121:
   - frame rate
   - peak distance/amplitude and range gate
-  - multi-scattering-point (MSP) bin count and signal-quality index
-  - circle-centered respiration-band estimate
-  - harmonic-suppressed raw heart estimate
-  - Kalman-gated tracked heart estimate
+  - compact range-bin count and signal-quality index
+  - conservative Acconeer-style respiration-band estimate
+  - heart candidate confidence
+  - Kalman-gated tracked heart estimate, shown as `acquiring` until stable enough
 - IMU:
   - sample rate
   - respiration-band estimate
@@ -192,13 +193,13 @@ uv run respi app --sensor imu --port COM6
 Test the A121 without opening the UI:
 
 ```powershell
-uv run respi test-a121 --port COM3 --frames 20 --start-m 0.2 --end-m 1.0 --profile 2 --hwaas 64 --sweeps-per-frame 12 --frame-rate-hz 50
+uv run respi test-a121 --port COM3 --frames 20 --start-m 0.2 --end-m 1.0 --profile 3 --hwaas 32 --sweeps-per-frame 16 --frame-rate-hz 20
 ```
 
 Expected output looks like:
 
 ```text
-A121 session started: 0.200-1.501 m, 521 points, profile 2, HWAAS 64.
+A121 session started: 0.200-1.010 m, 55 points, profile 3, HWAAS 32.
 Frame 000 | peak=0.458 m | amp=192.3 | phase=2.10 rad
 ```
 
@@ -267,7 +268,7 @@ For every frame:
 - strongest amplitude bin becomes `PeakDistance_m`
 - full arrays are saved as JSON strings in CSV/SQLite
 
-For vital signs, the analyzer then applies algebraic IQ circle centering, MSP multi-bin coherent combining inside the selected gate, respiration harmonic subtraction, and an optional live Kalman prior for the cardiac search band. The A121 result buffer is limited to about `num_points * sweeps_per_frame <= 4095`; the app automatically reduces sweeps/frame when a requested range would exceed that limit.
+For vital signs, the analyzer applies Acconeer-style static-clutter subtraction, inter-frame phase unwrapping, compact range-bin weighting around a locked target, conservative confidence gates, respiration harmonic subtraction, and an optional live Kalman prior for the cardiac search band. The A121 result buffer is limited to about `num_points * sweeps_per_frame <= 4095`; the app automatically reduces sweeps/frame or increases step length when a requested range would exceed sensor/serial limits.
 
 ## Troubleshooting
 

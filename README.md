@@ -59,9 +59,9 @@ Optional IMU connections:
 - Uses `acconeer-exptool` Low-Level Client API over the CH342 Interface A serial port.
 - Captures Sparse IQ frames, storing per-frame distance bins, amplitude, phase, real, and imaginary arrays.
 - UI controls distance focus (`start_m`, `end_m`), profile, HWAAS, sweeps/frame, and frame rate.
-- Defaults are tuned for vital signs (profile 2, HWAAS 64, 12 sweeps/frame, 50 Hz) and auto-clamp sweeps/frame to the A121 4095-sample buffer limit for wide ranges.
-- Live visualization plots latest amplitude vs distance, MSP target gate, respiration band, and heart band.
-- A121 vital extraction now uses circle-centered IQ demodulation, multi-bin coherent combining, respiratory harmonic suppression, and Kalman-gated heart-rate tracking.
+- Defaults follow Acconeer's breathing reference app for stable live operation (profile 3, HWAAS 32, 16 sweeps/frame, 20 Hz) and auto-clamp sweeps/frame to the A121 4095-sample buffer/serial limits for wide ranges.
+- Live visualization plots latest amplitude vs distance, optional target gate, respiration band, heart band, rate FFTs, and raw IQ. Live time-domain traces are append-only causal filters so old samples do not change shape while the plot scrolls.
+- A121 vital extraction uses Acconeer-style static-clutter subtraction, inter-frame phase unwrapping, compact locked range-bin analysis, conservative rate validation, respiratory harmonic suppression, and Kalman-gated heart-rate tracking.
 
 ### IMU Pipeline (Secondary)
 

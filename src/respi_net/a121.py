@@ -37,13 +37,13 @@ APPROX_BASE_STEP_LENGTH_M = 2.5e-3
 class A121Config:
     start_m: float = 0.2
     end_m: float = 1.5
-    # Cardiac extraction benefits from shorter pulses, more coherent averaging,
-    # and a higher frame rate than the original breathing-only defaults.
-    profile: int = 2
-    hwaas: int = 64
+    # Defaults follow Acconeer's breathing reference app; 20 Hz is still enough for the
+    # configured heart band while keeping UART/GUI latency manageable.
+    profile: int = 3
+    hwaas: int = 32
     # A121 session buffer is limited; for long ranges this is auto-clamped in connect().
-    sweeps_per_frame: int = 12
-    frame_rate_hz: float = 50.0
+    sweeps_per_frame: int = 16
+    frame_rate_hz: float = 20.0
     step_length: int = 1
 
 
@@ -103,13 +103,16 @@ class A121Capture:
         self.distances_m: np.ndarray = np.asarray([], dtype=float)
         self.running = False
         self.data_storage: list[list[Any]] = []
+        self.data_lock = threading.Lock()
         # Live rows keep NumPy arrays instead of JSON strings so the UI can plot/analyze
         # without repeatedly decoding large arrays. data_storage remains CSV/SQLite-ready.
-        # Enough for the UI's full 120 s window at 50 Hz.  These rows hold NumPy
+        # Enough for a long live window even when users raise FPS. These rows hold NumPy
         # arrays for fast live plotting, so avoid making this unbounded.
         self.live_buffer: deque[list[Any]] = deque(maxlen=6000)
         self.read_thread: threading.Thread | None = None
         self.frame_index = 0
+        self.session_start_wall_ms: float = 0.0
+        self.session_start_tick_s: float | None = None
 
     def connect(self, port_name: str | None = None) -> bool:
         try:
@@ -187,9 +190,12 @@ class A121Capture:
             self.distances_m = get_distances_m(self.sensor_config, self.metadata)
             self.client.start_session()
             self.running = True
-            self.data_storage = []
-            self.live_buffer.clear()
-            self.frame_index = 0
+            with self.data_lock:
+                self.data_storage = []
+                self.live_buffer.clear()
+                self.frame_index = 0
+                self.session_start_tick_s = None
+            self.session_start_wall_ms = time.time() * 1000.0
             self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
             self.read_thread.start()
             safe_echo(
@@ -228,8 +234,20 @@ class A121Capture:
         distances = self.distances_m
         if len(distances) != len(amplitude):
             distances = np.arange(len(amplitude), dtype=float)
-        timestamp_ms = time.time() * 1000.0
-        frame_index = self.frame_index
+        with self.data_lock:
+            frame_index = self.frame_index
+            self.frame_index += 1
+        tick_time_s = getattr(result, "tick_time", None)
+        if tick_time_s is not None and np.isfinite(float(tick_time_s)):
+            tick_time_s = float(tick_time_s)
+            with self.data_lock:
+                if self.session_start_tick_s is None:
+                    self.session_start_tick_s = tick_time_s
+                start_tick_s = self.session_start_tick_s
+            timestamp_ms = self.session_start_wall_ms + (tick_time_s - start_tick_s) * 1000.0
+        else:
+            frame_rate = max(float(self.config.frame_rate_hz), 1.0)
+            timestamp_ms = self.session_start_wall_ms + frame_index * 1000.0 / frame_rate
         peak_distance = float(distances[peak_idx])
         peak_amplitude = float(amplitude[peak_idx])
         peak_phase = float(phase[peak_idx])
@@ -260,9 +278,25 @@ class A121Capture:
             _json_array(real),
             _json_array(imag),
         ]
-        self.frame_index += 1
-        self.data_storage.append(storage_row)
-        self.live_buffer.append(live_row)
+        with self.data_lock:
+            self.data_storage.append(storage_row)
+            self.live_buffer.append(live_row)
+
+    def snapshot_data_storage(self) -> list[list[Any]]:
+        with self.data_lock:
+            return list(self.data_storage)
+
+    def snapshot_data_since(self, index: int) -> list[list[Any]]:
+        with self.data_lock:
+            return list(self.data_storage[index:])
+
+    def snapshot_live_buffer(self) -> list[list[Any]]:
+        with self.data_lock:
+            return list(self.live_buffer)
+
+    def data_count(self) -> int:
+        with self.data_lock:
+            return len(self.data_storage)
 
     def stop(self) -> None:
         self.running = False
@@ -281,11 +315,12 @@ class A121Capture:
         self.client = None
 
     def save(self) -> Path:
-        if len(self.data_storage) < 1:
+        rows = self.snapshot_data_storage()
+        if len(rows) < 1:
             raise ValueError("No A121 data to save.")
         self.output_dir.mkdir(parents=True, exist_ok=True)
         path = self.output_dir / f"a121_sparse_iq_{datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
-        pd.DataFrame(self.data_storage, columns=A121_COLUMNS).to_csv(path, index=False)
+        pd.DataFrame(rows, columns=A121_COLUMNS).to_csv(path, index=False)
         return path
 
 
