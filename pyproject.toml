@@ -1,7 +1,7 @@
 [project]
 name = "respi-net"
 version = "0.1.0"
-description = "Respiratory signal capture and analysis tools for IMU and HB100 radar data."
+description = "Respiratory signal capture and analysis tools for IMU, HB100 radar, and Acconeer A121 data."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -9,8 +9,12 @@ dependencies = [
     "matplotlib>=3.8",
     "numpy>=1.26",
     "pandas>=2.2",
+    "pyqtgraph>=0.13.7",
+    "PySide6>=6.7",
     "pyserial>=3.5",
     "scipy>=1.12",
+    "schemdraw>=0.23",
+    "acconeer-exptool[app]>=7.18.1",
 ]
 
 [project.scripts]

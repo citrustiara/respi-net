@@ -19,6 +19,10 @@ ENV/
 # Project Specific
 build_log.txt
 *.log
+data/respi_recordings.sqlite3
+# Generated CSV recordings/results
+data/**/*.csv
+outputs/**/*.csv
 kicad_error.txt
 *~
 *.bak

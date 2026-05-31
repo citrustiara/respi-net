@@ -4,11 +4,9 @@ from pathlib import Path
 import time
 
 import click
-import matplotlib.pyplot as plt
-import numpy as np
 
 from .imu import BreathCapture, analyze_imu_csv
-from .paths import IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_IMU_DIR, RAW_RADAR_DIR
+from .paths import IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR
 from .radar import RadarCapture, analyze_radar_csv
 from .serial_utils import list_serial_ports
 
@@ -27,6 +25,17 @@ def ports() -> None:
         return
     for port in available_ports:
         click.echo(port)
+
+
+@cli.command("app")
+@click.option("--sensor", type=click.Choice(["radar", "a121", "imu"], case_sensitive=False), default="radar", show_default=True)
+@click.option("-p", "--port", help="Preferred serial port, for example COM6.")
+@click.option("-b", "--baud", default=921600, show_default=True)
+def app(sensor: str, port: str | None, baud: int) -> None:
+    """Open the unified radar/IMU desktop app."""
+    from .app import launch_app
+
+    raise SystemExit(launch_app(default_sensor=sensor.lower(), default_port=port, default_baud=baud))
 
 
 @cli.command("plot-imu")
@@ -111,6 +120,58 @@ def capture_imu(port: str | None, baud: int, output_dir: Path, plot: bool) -> No
         click.echo(f"Plot: {result.plot_path}")
 
 
+@cli.command("test-a121")
+@click.option("-p", "--port", help="A121 CH342 Interface A serial port, for example COM5.")
+@click.option("--start-m", default=0.2, show_default=True, type=float)
+@click.option("--end-m", default=1.5, show_default=True, type=float)
+@click.option("--profile", default=2, show_default=True, type=click.IntRange(1, 5))
+@click.option("--hwaas", default=64, show_default=True, type=int)
+@click.option("--sweeps-per-frame", default=12, show_default=True, type=int)
+@click.option("--frame-rate-hz", default=50.0, show_default=True, type=float)
+@click.option("--frames", default=20, show_default=True, type=int)
+def test_a121(
+    port: str | None,
+    start_m: float,
+    end_m: float,
+    profile: int,
+    hwaas: int,
+    sweeps_per_frame: int,
+    frame_rate_hz: float,
+    frames: int,
+) -> None:
+    """Connect to an Acconeer A121 and print Sparse IQ peak data."""
+    from .a121 import A121Config, A121Capture, find_a121_serial_ports
+
+    if port is None:
+        candidates = find_a121_serial_ports()
+        if candidates:
+            port = candidates[0]
+            click.echo(f"Auto-selected likely A121 Interface A port: {port}")
+    capture = A121Capture(
+        output_dir=RAW_A121_DIR,
+        config=A121Config(
+            start_m=start_m,
+            end_m=end_m,
+            profile=profile,
+            hwaas=hwaas,
+            sweeps_per_frame=sweeps_per_frame,
+            frame_rate_hz=frame_rate_hz,
+        ),
+    )
+    if not capture.connect(port):
+        raise click.ClickException("Could not connect to the A121. Select the CH342 Interface A port with --port.")
+    try:
+        while len(capture.data_storage) < frames and capture.running:
+            time.sleep(0.05)
+        for row in capture.data_storage[:frames]:
+            click.echo(
+                f"Frame {int(row[1]):03d} | peak={row[2]:.3f} m | "
+                f"amp={row[3]:.1f} | phase={row[4]:.2f} rad"
+            )
+    finally:
+        capture.stop()
+
+
 @cli.command("capture-radar")
 @click.option("-p", "--port", help="Preferred serial port, for example COM6.")
 @click.option("-b", "--baud", default=921600, show_default=True)
@@ -141,76 +202,12 @@ def capture_radar(port: str | None, baud: int, output_dir: Path, plot: bool) -> 
 @click.option("-b", "--baud", default=921600, show_default=True)
 @click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=RAW_RADAR_DIR, show_default=True)
 def live_radar(port: str, baud: int, output_dir: Path) -> None:
-    """Open a live radar plot, then save and chart the recording when closed."""
-    capture = RadarCapture(baud=baud, output_dir=output_dir)
-    if not capture.connect(port):
-        raise click.ClickException("Could not connect to a radar serial port.")
+    """Deprecated alias for the unified desktop app in Radar mode."""
+    _ = output_dir
+    click.echo("live-radar now opens the unified RespiNet app. Use `respi app --sensor radar` directly.")
+    from .app import launch_app
 
-    plt.style.use("dark_background")
-    fig, (ax_time, ax_freq) = plt.subplots(2, 1, figsize=(12, 8))
-    fig.canvas.manager.set_window_title("Radar Viewer")
-    line_time, = ax_time.plot([], [], color="#00ffcc", linewidth=1, label="Raw ADC")
-    line_freq, = ax_freq.plot([], [], color="#ff3399", linewidth=1.5, label="Spectrum")
-    info_text = ax_time.text(0.02, 0.95, "", transform=ax_time.transAxes, va="top", color="white")
-    ax_time.set_title("Live Radar Signal (Voltage)")
-    ax_time.set_ylabel("mV")
-    ax_time.grid(True, color="#333333", alpha=0.5)
-    ax_freq.set_title("Live Frequency Spectrum (FFT)")
-    ax_freq.set_xlabel("Frequency [Hz]")
-    ax_freq.set_ylabel("Magnitude")
-    ax_freq.grid(True, color="#333333", alpha=0.5)
-
-    running = [True]
-
-    def stop(_event: object) -> None:
-        running[0] = False
-        capture.running = False
-
-    fig.canvas.mpl_connect("close_event", stop)
-    fig.canvas.mpl_connect("key_press_event", stop)
-    last_fs = 500.0
-    try:
-        while running[0] and capture.running:
-            if len(capture.live_buffer) > 64:
-                data = list(capture.live_buffer)
-                voltages = np.array([row[2] for row in data])
-                timestamps = np.array([row[0] for row in data])
-                dt_avg = np.mean(np.diff(timestamps)) / 1000.0 if len(timestamps) > 1 else 0
-                if dt_avg > 0:
-                    last_fs = 1.0 / dt_avg
-
-                display_len = min(len(voltages), 1000)
-                v_disp = voltages[-display_len:]
-                line_time.set_data(range(display_len), v_disp)
-                ax_time.set_xlim(0, display_len)
-                margin = max((np.max(v_disp) - np.min(v_disp)) * 0.1, 50)
-                ax_time.set_ylim(np.min(v_disp) - margin, np.max(v_disp) + margin)
-
-                v_fft = voltages[-1024:] if len(voltages) >= 1024 else voltages
-                v_win = (v_fft - np.mean(v_fft)) * np.hanning(len(v_fft))
-                fft_vals = np.abs(np.fft.rfft(v_win)) / (len(v_fft) / 2)
-                fft_freqs = np.fft.rfftfreq(len(v_fft), d=1.0 / last_fs)
-                line_freq.set_data(fft_freqs, fft_vals)
-                ax_freq.set_xlim(0, min(last_fs / 2, 250))
-                ax_freq.set_ylim(0, np.max(fft_vals[1:]) * 1.2 + 0.1)
-                if len(fft_vals) > 5:
-                    peak_idx = int(np.argmax(fft_vals[5:]) + 5)
-                    peak_freq = fft_freqs[peak_idx]
-                    info_text.set_text(f"Peak: {peak_freq:.1f} Hz | Speed: {peak_freq / 70.16:.2f} m/s")
-
-            plt.pause(0.01)
-            if not plt.fignum_exists(fig.number):
-                running[0] = False
-    except KeyboardInterrupt:
-        pass
-    finally:
-        capture.stop()
-        plt.close("all")
-
-    csv_path = capture.save()
-    click.echo(f"Saved: {csv_path}")
-    result = analyze_radar_csv(csv_path)
-    click.echo(f"Plot: {result.plot_path}")
+    raise SystemExit(launch_app(default_sensor="radar", default_port=port, default_baud=baud))
 
 
 if __name__ == "__main__":
