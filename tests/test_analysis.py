@@ -359,6 +359,43 @@ def test_a121_static_clutter_does_not_report_vital_rates() -> None:
     assert analysis.heart_bpm == 0.0
 
 
+def test_a121_live_trace_wide_gate_keeps_compact_phase_segment() -> None:
+    fs = 20.0
+    t = np.arange(0, 30, 1 / fs)
+    distances = np.linspace(0.3, 0.7, 81)
+    target_idx = int(np.argmin(np.abs(distances - 0.50)))
+    rows = []
+    for frame, ts in enumerate(t):
+        phase_motion = 0.30 * np.sin(2 * np.pi * 0.25 * ts)
+        amp = 90 * np.ones(len(distances))
+        amp[target_idx - 1 : target_idx + 2] = [110, 130, 110]
+        phase = np.zeros(len(distances))
+        phase[target_idx - 1 : target_idx + 2] = phase_motion
+        iq = amp * np.exp(1j * phase)
+        rows.append(
+            [
+                ts * 1000,
+                frame,
+                float(distances[target_idx]),
+                float(np.max(amp)),
+                float(np.angle(iq[target_idx])),
+                float(np.mean(amp)),
+                "[" + ",".join(f"{x:.6f}" for x in distances) + "]",
+                "[" + ",".join(f"{x:.6f}" for x in np.abs(iq)) + "]",
+                "[" + ",".join(f"{x:.6f}" for x in np.angle(iq)) + "]",
+                "[" + ",".join(f"{x:.6f}" for x in np.real(iq)) + "]",
+                "[" + ",".join(f"{x:.6f}" for x in np.imag(iq)) + "]",
+            ]
+        )
+
+    processor = A121LiveTraceProcessor()
+    result = processor.process_rows(rows, target_distance_m=float(distances[target_idx]), use_gating=True, gate_half_width_m=0.10)
+
+    assert result is not None
+    tail = result.resp_signal[int(20 * fs) :]
+    assert np.std(tail) > 0.03
+
+
 def test_a121_live_trace_is_append_only_for_existing_samples() -> None:
     fs = 20.0
     t = np.arange(0, 12, 1 / fs)

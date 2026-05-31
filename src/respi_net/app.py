@@ -18,6 +18,7 @@ from scipy.signal import welch
 from .a121 import A121_COLUMNS, A121Config, A121Capture, parse_json_array
 from .a121_vitals import (
     A121_RATE_WINDOW_S,
+    A121_RESP_BAND_HZ,
     HEART_BAND_HZ,
     RESP_BAND_HZ,
     RESP_RATE_CONFIDENCE_MIN,
@@ -366,7 +367,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_a121_analysis_monotonic = 0.0
         self.cached_a121_analysis: Any | None = None
         self.a121_gate_center_m: float | None = None
-        self.last_a121_gate_update_monotonic = 0.0
         self.a121_heart_tracker = HeartRateKalmanTracker()
         self.a121_live_trace = A121LiveTraceProcessor()
         self.last_a121_tracker_update_monotonic = 0.0
@@ -377,7 +377,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.a121_resp_pending_hz = 0.0
         self.a121_resp_pending_count = 0
         self.a121_resp_missed_count = 0
-        self.a121_lock_bad_count = 0
 
         self._build_ui()
         self._build_menu()
@@ -446,19 +445,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.view_combo.currentTextChanged.connect(self._configure_live_plots)
         form.addRow("View", self.view_combo)
 
-        self.a121_use_gating_check = QtWidgets.QCheckBox("enable range gating")
-        self.a121_use_gating_check.setChecked(False)
+        self.a121_use_gating_check = QtWidgets.QCheckBox("use Acconeer presence-distance selection")
+        self.a121_use_gating_check.setChecked(True)
         self.a121_use_gating_check.toggled.connect(self._configure_gating_ui)
-        form.addRow("A121 range gating", self.a121_use_gating_check)
+        form.addRow("A121 target selection", self.a121_use_gating_check)
 
-        self.a121_show_gate_check = QtWidgets.QCheckBox("show gate/target on graph")
+        self.a121_show_gate_check = QtWidgets.QCheckBox("show selected range on graph")
         self.a121_show_gate_check.setChecked(False)
         form.addRow("A121 gate display", self.a121_show_gate_check)
 
-        self.a121_auto_gate_check = QtWidgets.QCheckBox("reacquire if peak leaves gate (≥10 s)")
-        self.a121_auto_gate_check.setChecked(False)
-        self.a121_auto_gate_check.toggled.connect(lambda _checked: self._invalidate_a121_analysis(reset_tracker=True))
-        form.addRow("A121 gate update", self.a121_auto_gate_check)
+        self.a121_auto_gate_check = QtWidgets.QCheckBox("Acconeer app-state reacquisition")
+        self.a121_auto_gate_check.setChecked(True)
+        self.a121_auto_gate_check.setEnabled(False)
+        form.addRow("A121 reacquire", self.a121_auto_gate_check)
 
         self.a121_gate_spin = QtWidgets.QDoubleSpinBox()
         self.a121_gate_spin.setRange(0.02, 1.00)
@@ -468,7 +467,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.a121_gate_spin.setSuffix(" m")
         self.a121_gate_spin.setMinimumWidth(220)
         self.a121_gate_spin.valueChanged.connect(lambda _value: self._invalidate_a121_analysis(reset_tracker=True))
-        form.addRow("A121 gate", self.a121_gate_spin)
+        form.addRow("Fallback gate", self.a121_gate_spin)
 
         self.a121_start_spin = QtWidgets.QDoubleSpinBox()
         self.a121_start_spin.setRange(0.03, 10.0)
@@ -642,7 +641,7 @@ class MainWindow(QtWidgets.QMainWindow):
         present = bool(getattr(analysis, "present", False))
         valid = bool(
             present
-            and RESP_BAND_HZ[0] <= measured_hz <= RESP_BAND_HZ[1]
+            and A121_RESP_BAND_HZ[0] * 0.90 <= measured_hz <= A121_RESP_BAND_HZ[1] * 1.05
             and confidence >= RESP_RATE_CONFIDENCE_MIN
             and quality >= 0.25
         )
@@ -691,14 +690,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.a121_heart_tracker.reset()
             self.a121_live_trace.reset()
             self._reset_a121_rate_display()
-            self.a121_lock_bad_count = 0
             self.last_a121_tracker_update_monotonic = 0.0
 
     def _configure_gating_ui(self) -> None:
         enabled = self.a121_use_gating_check.isChecked()
-        self.a121_gate_spin.setEnabled(enabled)
-        self.a121_auto_gate_check.setEnabled(enabled)
-        self.a121_show_gate_check.setEnabled(enabled)
+        # Acconeer's reference app decides when to reacquire and which compact range segment to
+        # analyze. The spinbox is only a fallback for CSV/history or if the private reference
+        # state machine is unavailable.
+        self.a121_gate_spin.setEnabled(not enabled)
+        self.a121_auto_gate_check.setEnabled(False)
+        self.a121_auto_gate_check.setChecked(enabled)
+        self.a121_show_gate_check.setEnabled(True)
         self._invalidate_a121_analysis(reset_tracker=True)
 
     def _configure_plot(self, plot: pg.PlotItem, title: str, left: str, bottom: str = "Time [s]") -> None:
@@ -754,7 +756,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     "heart_peak": self.live_plot_c.plot(pen=None, symbol="o", symbolBrush="#facc15", symbolSize=9, name="Heart peak"),
                 }
             else:
-                self._configure_plot(self.live_plot_b, "Respiration from A121 phase (0.10-0.70 Hz)", "Phase displacement [rad]")
+                self._configure_plot(self.live_plot_b, "Respiration from A121 phase (Acconeer 0.10-1.00 Hz)", "Phase displacement [rad]")
                 self._configure_plot(self.live_plot_c, "Heart motion from A121 phase (0.65-3.00 Hz)", "Phase displacement [rad]")
                 self.live_curves = {
                     "amplitude": self.live_plot_a.plot(pen=pg.mkPen("#22d3ee", width=1.5), name="Amplitude"),
@@ -857,11 +859,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.last_a121_analysis_monotonic = 0.0
         self.cached_a121_analysis = None
         self.a121_gate_center_m = None
-        self.last_a121_gate_update_monotonic = 0.0
         self.a121_heart_tracker.reset()
         self.a121_live_trace.reset()
         self._reset_a121_rate_display()
-        self.a121_lock_bad_count = 0
         self.last_a121_tracker_update_monotonic = 0.0
         self.a121_analysis_request_id += 1
         self.start_btn.setEnabled(False)
@@ -995,11 +995,38 @@ class MainWindow(QtWidgets.QMainWindow):
     def _a121_array_from_row(self, row: list[Any], column_index: int) -> np.ndarray:
         return parse_json_array(row[column_index])
 
+    def _a121_reference_selection(self) -> dict[str, Any]:
+        if self.capture is None or not hasattr(self.capture, "snapshot_acconeer_selection"):
+            return {}
+        try:
+            selection = self.capture.snapshot_acconeer_selection()
+            return selection if isinstance(selection, dict) else {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _a121_effective_gate_half_width(
+        selection: dict[str, Any],
+        target_distance_m: float | None,
+        fallback_m: float,
+    ) -> float:
+        half_width = float(fallback_m)
+        range_m = selection.get("range_m")
+        if target_distance_m is not None and range_m is not None:
+            try:
+                lo, hi = float(range_m[0]), float(range_m[1])
+                target = float(target_distance_m)
+                half_width = max(abs(target - lo), abs(hi - target), 0.0025)
+            except Exception:
+                pass
+        return half_width
+
     def _a121_plot_latest_profile(
         self,
         live_rows: list[list[Any]],
         analysis: Any | None,
         target_distance_m: float | None,
+        gate_half_width_m: float,
     ) -> tuple[np.ndarray, np.ndarray, float, int]:
         if live_rows:
             latest_distances = self._a121_array_from_row(live_rows[-1], 6)
@@ -1024,11 +1051,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 selected_idx = int(np.argmin(np.abs(latest_distances - target_m)))
             target_amp = float(latest_amplitude[selected_idx])
             self.live_curves["amplitude"].setData(latest_distances, latest_amplitude)
-            show_gate = self.a121_show_gate_check.isChecked() and self.a121_use_gating_check.isChecked()
+            show_gate = self.a121_show_gate_check.isChecked() and target_m > 0
             self.live_curves["target"].setVisible(show_gate)
             self.live_curves["gate"].setVisible(show_gate)
             if show_gate:
-                gate_half_width = float(self.a121_gate_spin.value())
+                gate_half_width = max(0.0, float(gate_half_width_m))
                 self.live_curves["target"].setData([target_m], [target_amp])
                 self.live_curves["gate"].setData(
                     [target_m - gate_half_width, target_m - gate_half_width, target_m + gate_half_width, target_m + gate_half_width],
@@ -1102,42 +1129,47 @@ class MainWindow(QtWidgets.QMainWindow):
     def _update_live_a121(self, storage_count: int, live_rows: list[list[Any]]) -> None:
         now = time.monotonic()
         window_s = float(self.window_spin.value())
-        gate_half_width = float(self.a121_gate_spin.value())
-        latest_peak_m = float(live_rows[-1][2]) if live_rows else self.a121_gate_center_m
+        fallback_gate_half_width = float(self.a121_gate_spin.value())
         previous_gate_center = self.a121_gate_center_m
         user_gate_enabled = self.a121_use_gating_check.isChecked()
+        selection = self._a121_reference_selection() if user_gate_enabled else {}
+        app_state = str(selection.get("app_state", ""))
+        reference_target_m = selection.get("target_distance_m") if app_state == "ESTIMATE_BREATHING_RATE" else None
+        if reference_target_m is not None:
+            reference_target_m = float(reference_target_m)
+            if not np.isfinite(reference_target_m) or reference_target_m <= 0:
+                reference_target_m = None
+        analysis_target_m = float(reference_target_m) if reference_target_m is not None else None
+        gate_half_width = self._a121_effective_gate_half_width(selection, analysis_target_m, fallback_gate_half_width)
 
-        # Do not continuously chase PeakDistance_m. It is just the strongest bin in the
-        # current frame and can jump to multipath/clutter, which made both the waveform and
-        # rates look random. If the user enables gating before the analyzer has locked a
-        # target, seed the gate once; otherwise the analyzer/live trace establish a stable
-        # Acconeer-style segment and hold it until explicit reacquisition.
-        if user_gate_enabled and latest_peak_m is not None and np.isfinite(latest_peak_m) and latest_peak_m >= 0.28:
-            if self.a121_gate_center_m is None:
-                self.a121_gate_center_m = latest_peak_m
-                self.last_a121_gate_update_monotonic = now
-            elif self.a121_auto_gate_check.isChecked():
-                peak_outside_gate = abs(latest_peak_m - self.a121_gate_center_m) > gate_half_width
-                update_allowed = now - self.last_a121_gate_update_monotonic >= 10.0
-                if peak_outside_gate and update_allowed:
-                    self.a121_gate_center_m = latest_peak_m
-                    self.last_a121_gate_update_monotonic = now
-
+        # Target acquisition/reacquisition is now Acconeer's reference app state machine:
+        # NO_PRESENCE/INTRA_PRESENCE clear the selection, DETERMINE_DISTANCE_ESTIMATE smooths
+        # presence distance, and ESTIMATE_BREATHING_RATE exposes the compact distance segment.
+        self.a121_gate_center_m = analysis_target_m
         gate_changed = previous_gate_center != self.a121_gate_center_m
         if gate_changed:
             self._invalidate_a121_analysis(reset_tracker=True)
 
         # The live trace is append-only and stateful, so historical samples do not change shape
-        # as new data arrives. It uses the locked center when available, even if the gate overlay
-        # is hidden.
+        # as new data arrives. It uses Acconeer's selected center when available, even if the
+        # range overlay is hidden.
+        trace_rows = live_rows
+        if live_rows and self.a121_live_trace.last_frame is None:
+            # After a lock/reacquisition reset, do not replay the entire rolling UART buffer:
+            # old targets from minutes ago can otherwise win the initial selection and make the
+            # freshly reset trace look flat until another reset.  Seed from the recent analysis
+            # horizon instead.
+            latest_ms_for_trace = float(live_rows[-1][0])
+            trace_seed_s = max(30.0, A121_RATE_WINDOW_S, window_s)
+            cutoff_trace_ms = latest_ms_for_trace - trace_seed_s * 1000.0
+            trace_rows = [row for row in live_rows if float(row[0]) >= cutoff_trace_ms]
         live_result = self.a121_live_trace.process_rows(
-            live_rows,
-            target_distance_m=self.a121_gate_center_m,
-            use_gating=self.a121_gate_center_m is not None,
+            trace_rows,
+            target_distance_m=analysis_target_m,
+            use_gating=analysis_target_m is not None,
             gate_half_width_m=gate_half_width,
         )
 
-        analysis_target_m = self.a121_gate_center_m
         analysis_use_gating = analysis_target_m is not None
         should_analyze = (
             self.cached_a121_analysis is None
@@ -1171,8 +1203,13 @@ class MainWindow(QtWidgets.QMainWindow):
         view_text = self.view_combo.currentText().lower()
         raw_view = view_text.startswith("raw")
         fft_view = view_text.startswith("rate")
-        profile_target = self.a121_gate_center_m or (live_result.target_distance_m if live_result is not None else None) or (analysis.target_distance_m if analysis is not None else None)
-        _, _, _direct_target_m, direct_selected_idx = self._a121_plot_latest_profile(live_rows, analysis, profile_target)
+        profile_target = (
+            analysis_target_m
+            or selection.get("presence_distance_m")
+            or (live_result.target_distance_m if live_result is not None else None)
+            or (analysis.target_distance_m if analysis is not None else None)
+        )
+        _, _, _direct_target_m, direct_selected_idx = self._a121_plot_latest_profile(live_rows, analysis, profile_target, gate_half_width)
 
         trace_times = live_result.times_s if live_result is not None else np.asarray([], dtype=float)
         trace_mask = trace_times >= (trace_times[-1] - window_s) if len(trace_times) else np.asarray([], dtype=bool)
@@ -1189,22 +1226,42 @@ class MainWindow(QtWidgets.QMainWindow):
             self._set_time_plot_range(self.live_plot_c, trace_plot_times, np.concatenate([plot_i, plot_q]), min_y_span=1.0)
         elif raw_view:
             self._plot_a121_raw_direct(live_rows, direct_selected_idx, window_s)
-        elif fft_view and analysis is not None:
-            resp_freqs, resp_power = self._band_spectrum(analysis.resp_signal, analysis.sample_rate_hz, RESP_BAND_HZ)
-            heart_freqs, heart_power = self._band_spectrum(analysis.heart_signal, analysis.sample_rate_hz, HEART_BAND_HZ)
+        elif fft_view:
+            if analysis is not None:
+                spectrum_fs = float(getattr(analysis, "sample_rate_hz", 0.0) or 0.0)
+            elif live_result is not None:
+                spectrum_fs = float(live_result.sample_rate_hz)
+            else:
+                spectrum_fs = 0.0
+            if analysis is not None and len(analysis.times_s):
+                # Plot the same analysis signals that produce the displayed rate markers.
+                resp_source = analysis.resp_signal
+                heart_source = analysis.heart_signal
+            elif live_result is not None and len(trace_times):
+                spectrum_window_s = max(30.0, A121_RATE_WINDOW_S, window_s)
+                spectrum_mask = trace_times >= (trace_times[-1] - spectrum_window_s)
+                resp_source = live_result.resp_signal[spectrum_mask]
+                heart_source = live_result.heart_signal[spectrum_mask]
+            else:
+                resp_source = np.asarray([], dtype=float)
+                heart_source = np.asarray([], dtype=float)
+            resp_freqs, resp_power = self._band_spectrum(resp_source, spectrum_fs, A121_RESP_BAND_HZ)
+            heart_freqs, heart_power = self._band_spectrum(heart_source, spectrum_fs, HEART_BAND_HZ)
             self.live_curves["resp_fft"].setData(resp_freqs, resp_power)
             self.live_curves["heart_fft"].setData(heart_freqs, heart_power)
-            if len(resp_freqs) and analysis.resp_hz > 0:
-                idx = int(np.argmin(np.abs(resp_freqs - analysis.resp_hz)))
+            resp_peak_hz = self.a121_resp_display_hz or float(getattr(analysis, "resp_hz", 0.0) or 0.0)
+            heart_peak_hz = (self.a121_heart_tracker.current_hz or 0.0) or float(getattr(analysis, "heart_hz", 0.0) or 0.0)
+            if len(resp_freqs) and resp_peak_hz > 0:
+                idx = int(np.argmin(np.abs(resp_freqs - resp_peak_hz)))
                 self.live_curves["resp_peak"].setData([resp_freqs[idx]], [resp_power[idx]])
             else:
                 self.live_curves["resp_peak"].setData([], [])
-            if len(heart_freqs) and analysis.heart_hz > 0:
-                idx = int(np.argmin(np.abs(heart_freqs - analysis.heart_hz)))
+            if len(heart_freqs) and heart_peak_hz > 0:
+                idx = int(np.argmin(np.abs(heart_freqs - heart_peak_hz)))
                 self.live_curves["heart_peak"].setData([heart_freqs[idx]], [heart_power[idx]])
             else:
                 self.live_curves["heart_peak"].setData([], [])
-            self.live_plot_b.setXRange(RESP_BAND_HZ[0], RESP_BAND_HZ[1], padding=0.0)
+            self.live_plot_b.setXRange(A121_RESP_BAND_HZ[0], A121_RESP_BAND_HZ[1], padding=0.0)
             self.live_plot_c.setXRange(HEART_BAND_HZ[0], HEART_BAND_HZ[1], padding=0.0)
             self.live_plot_b.setYRange(0.0, max(float(np.max(resp_power)) * 1.15 if len(resp_power) else 1.0, 1e-12), padding=0.0)
             self.live_plot_c.setYRange(0.0, max(float(np.max(heart_power)) * 1.15 if len(heart_power) else 1.0, 1e-12), padding=0.0)
@@ -1218,13 +1275,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if analysis is None:
             target_text = f"{profile_target:.3f} m" if profile_target is not None and np.isfinite(profile_target) else "acquiring"
-            self.stats_box.setText(f"Frames: {storage_count}\nA121 live trace: locked target {target_text}\nRates: acquiring {A121_RATE_WINDOW_S:.0f} s analysis window…")
+            state_text = app_state or "reference unavailable"
+            self.stats_box.setText(
+                f"Frames: {storage_count}\n"
+                f"A121 reference state: {state_text}\n"
+                f"Selected target: {target_text}\n"
+                f"Rates: acquiring {A121_RATE_WINDOW_S:.0f} s analysis window…"
+            )
             return
 
         displayed_resp_hz = self.a121_resp_display_hz
         tracked_heart_hz = self.a121_heart_tracker.current_hz or 0.0
         presence = "YES" if analysis.present else "no"
-        gate_mode = "shown/locked" if user_gate_enabled else "auto-locked" if self.a121_gate_center_m is not None else "acquiring"
+        gate_mode = (
+            f"Acconeer {app_state}"
+            if user_gate_enabled and app_state
+            else "fallback auto" if self.a121_gate_center_m is None else "fallback gated"
+        )
         resp_text = f"{displayed_resp_hz * 60.0:.1f} BPM ({displayed_resp_hz:.2f} Hz)" if displayed_resp_hz > 0 else "acquiring"
         tracked_text = f"{tracked_heart_hz * 60.0:.1f} BPM ({tracked_heart_hz:.2f} Hz)" if tracked_heart_hz > 0 else "acquiring"
         self.stats_box.setText(
@@ -1236,7 +1303,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Range bins: {analysis.candidate_bins}  SQI: {analysis.signal_quality:.2f}\n"
             f"Respiration: {resp_text}  conf {analysis.resp_confidence:.1f}\n"
             f"Heart: {tracked_text}  candidate conf {analysis.heart_confidence:.1f}\n"
-            f"Live plot: causal append-only filters; Rates: locked range + conservative validation"
+            f"Resp rate: Acconeer BreathingProcessor; heart: experimental candidate"
         )
 
     def _on_a121_analysis_completed(self, request_id: int, analysis: Any) -> None:
@@ -1244,23 +1311,6 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self.cached_a121_analysis = analysis
         now = time.monotonic()
-        if (
-            analysis.present
-            and self.a121_gate_center_m is None
-            and np.isfinite(analysis.target_distance_m)
-            and analysis.target_distance_m >= 0.28
-        ):
-            self.a121_gate_center_m = float(analysis.target_distance_m)
-            self.last_a121_gate_update_monotonic = now
-            self.a121_lock_bad_count = 0
-            self.a121_live_trace.reset()
-        if self.a121_gate_center_m is not None and not self.a121_use_gating_check.isChecked():
-            bad_lock = (not analysis.present) or (analysis.signal_quality < 0.30 and analysis.resp_hz <= 0 and analysis.heart_hz <= 0)
-            self.a121_lock_bad_count = self.a121_lock_bad_count + 1 if bad_lock else 0
-            if self.a121_lock_bad_count >= 5:
-                self.a121_gate_center_m = None
-                self._invalidate_a121_analysis(reset_tracker=True)
-                return
         self._update_a121_resp_display(analysis)
         if analysis.present:
             tracker_dt = now - self.last_a121_tracker_update_monotonic if self.last_a121_tracker_update_monotonic else 0.25

@@ -110,6 +110,9 @@ Common controls:
 
 A121-specific controls:
 
+- `A121 target selection` - uses Acconeer's breathing reference state machine/presence-distance selector by default
+- `A121 gate display` - overlays the currently selected compact range segment on the amplitude plot
+- `Fallback gate` - compact segment width used for CSV/history or if Acconeer reference selection is disabled/unavailable
 - `A121 start` - start distance in meters, e.g. `0.20 m`
 - `A121 end` - end distance in meters, e.g. `1.50 m`
 - `A121 profile` - Acconeer profile `1..5`; profile 3 is the default breathing-reference profile
@@ -143,7 +146,7 @@ The stats panel shows sensor-dependent metrics:
   - frame rate
   - peak distance/amplitude and range gate
   - compact range-bin count and signal-quality index
-  - conservative Acconeer-style respiration-band estimate
+  - Acconeer `BreathingProcessor` respiration-rate estimate
   - heart candidate confidence
   - Kalman-gated tracked heart estimate, shown as `acquiring` until stable enough
 - IMU:
@@ -268,7 +271,7 @@ For every frame:
 - strongest amplitude bin becomes `PeakDistance_m`
 - full arrays are saved as JSON strings in CSV/SQLite
 
-For vital signs, the analyzer applies Acconeer-style static-clutter subtraction, inter-frame phase unwrapping, compact range-bin weighting around a locked target, conservative confidence gates, respiration harmonic subtraction, and an optional live Kalman prior for the cardiac search band. The A121 result buffer is limited to about `num_points * sweeps_per_frame <= 4095`; the app automatically reduces sweeps/frame or increases step length when a requested range would exceed sensor/serial limits.
+For live A121 respiration, target acquisition/reacquisition follows Acconeer's breathing reference app state machine and presence-distance selection; the analyzer then runs Acconeer's `BreathingProcessor` on that compact selected range segment. CSV/history analysis does not contain full intra-frame sweeps, so it falls back to the stored mean-IQ target scoring. Heart-rate extraction is not provided by Acconeer here; the app treats it as an experimental, conservatively gated candidate. The A121 result buffer is limited to about `num_points * sweeps_per_frame <= 4095`; the app automatically reduces sweeps/frame or increases step length when a requested range would exceed sensor/serial limits.
 
 ## Troubleshooting
 

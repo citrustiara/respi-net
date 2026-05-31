@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -11,12 +12,14 @@ from scipy.signal import butter, detrend, sosfiltfilt, welch, lfilter
 from .a121 import parse_json_array
 
 RESP_BAND_HZ = (0.10, 0.70)
+# Acconeer's A121 breathing reference app defaults to 6-60 breaths/minute.
+A121_RESP_BAND_HZ = (0.10, 1.00)
 HEART_BAND_HZ = (0.65, 3.00)
 DEFAULT_GATE_HALF_WIDTH_M = 0.05
 A121_RATE_WINDOW_S = 20.0
 A121_MIN_TARGET_DISTANCE_M = 0.28
 RESP_RATE_CONFIDENCE_MIN = 4.0
-HEART_RATE_CONFIDENCE_MIN = 8.0
+HEART_RATE_CONFIDENCE_MIN = 14.0
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,12 @@ class A121LiveTraceProcessor:
         self.a_static: np.ndarray | None = None
         self.static_x: np.ndarray | None = None
         self.static_y: np.ndarray | None = None
+        # DC-blocking high-pass pre-filter: strips the massive cumulative drift from
+        # angle_unwrapped before feeding the bandpass, so the IIR state stays near zero.
+        self.b_dc: np.ndarray | None = None
+        self.a_dc: np.ndarray | None = None
+        self.dc_x: np.ndarray | None = None
+        self.dc_y: np.ndarray | None = None
         self.b_resp: np.ndarray | None = None
         self.a_resp: np.ndarray | None = None
         self.resp_x: np.ndarray | None = None
@@ -132,13 +141,25 @@ class A121LiveTraceProcessor:
         self.m = int(len(self.distances))
         self._resize_history()
 
-        static_band = _valid_band_for_fs((RESP_BAND_HZ[0], RESP_BAND_HZ[0] * 1.05), self.fs, min_width=1e-5)
-        static_cutoff = RESP_BAND_HZ[0] if static_band is None else static_band[0]
+        static_band = _valid_band_for_fs((A121_RESP_BAND_HZ[0], A121_RESP_BAND_HZ[0] * 1.05), self.fs, min_width=1e-5)
+        static_cutoff = A121_RESP_BAND_HZ[0] if static_band is None else static_band[0]
         self.b_static, self.a_static = butter(2, static_cutoff, btype="lowpass", fs=self.fs)
         self.static_x = np.zeros((len(self.b_static), self.m), dtype=np.complex128)
         self.static_y = np.zeros((len(self.a_static) - 1, self.m), dtype=np.complex128)
 
-        resp_band = _valid_band_for_fs(RESP_BAND_HZ, self.fs)
+        # DC-blocking high-pass: 1st-order Butterworth at 0.04 Hz removes the slow cumulative
+        # drift from angle_unwrapped.  The cutoff is well below the respiration band (0.10 Hz)
+        # so vital-sign energy is fully preserved, but the massive monotonic ramp that corrupts
+        # the downstream bandpass IIR state is eliminated.
+        dc_cutoff = min(0.04, self.fs * 0.45)
+        if dc_cutoff > 0 and dc_cutoff < self.fs * 0.5:
+            self.b_dc, self.a_dc = butter(1, dc_cutoff, btype="highpass", fs=self.fs)
+            self.dc_x = np.zeros((len(self.b_dc), self.m), dtype=float)
+            self.dc_y = np.zeros((len(self.a_dc) - 1, self.m), dtype=float)
+        else:
+            self.b_dc = self.a_dc = self.dc_x = self.dc_y = None
+
+        resp_band = _valid_band_for_fs(A121_RESP_BAND_HZ, self.fs)
         if resp_band is not None:
             self.b_resp, self.a_resp = butter(2, resp_band, btype="bandpass", fs=self.fs)
             self.resp_x = np.zeros((len(self.b_resp), self.m), dtype=float)
@@ -182,7 +203,7 @@ class A121LiveTraceProcessor:
             self.selected_index = idx
             self.target_distance_m = float(self.distances[idx])
             return idx
-        if self.selected_index is None or self.processed_count < max(5, int(round(self.fs * 3.0))):
+        if self.selected_index is None:
             search = self.distances >= A121_MIN_TARGET_DISTANCE_M if len(self.distances) == len(amplitude) else np.ones(len(amplitude), dtype=bool)
             if not np.any(search):
                 search = np.ones(len(amplitude), dtype=bool)
@@ -192,17 +213,31 @@ class A121LiveTraceProcessor:
             return idx
         return int(np.clip(self.selected_index, 0, self.m - 1))
 
-    def _candidate_indices(self, selected_idx: int, gate_half_width_m: float, use_gating: bool) -> np.ndarray:
+    def _candidate_indices(
+        self,
+        selected_idx: int,
+        gate_half_width_m: float,
+        use_gating: bool,
+        *,
+        max_bins: int = 3,
+    ) -> np.ndarray:
         if self.m <= 0:
             return np.asarray([], dtype=int)
         if use_gating:
             half = max(0.0, float(gate_half_width_m))
             idx = np.flatnonzero(np.abs(self.distances - self.distances[selected_idx]) <= half)
             if len(idx):
+                if len(idx) > max_bins:
+                    order = np.argsort(np.abs(idx - selected_idx), kind="stable")[:max_bins]
+                    idx = np.sort(idx[order])
                 return idx.astype(int)
         lo = max(0, selected_idx - 1)
         hi = min(self.m, selected_idx + 2)
-        return np.arange(lo, hi, dtype=int)
+        idx = np.arange(lo, hi, dtype=int)
+        if len(idx) > max_bins:
+            order = np.argsort(np.abs(idx - selected_idx), kind="stable")[:max_bins]
+            idx = np.sort(idx[order])
+        return idx
 
     def process_rows(
         self,
@@ -244,15 +279,19 @@ class A121LiveTraceProcessor:
             if len(real) < self.m or len(imag) < self.m:
                 continue
             z = real[: self.m] + 1j * imag[: self.m]
-            static = self._iir_step(z, self.b_static, self.a_static, self.static_x, self.static_y)
-            zm = z - static
-            amp = np.abs(zm)
+            # Keep the low-pass clutter estimate warm for diagnostics/future use, but do not
+            # take phase from z-static.  The residual vector frequently crosses the origin for
+            # normal sub-mm chest motion, which makes atan2 jump by pi and produces random flat
+            # segments after band-pass filtering.  Inter-frame phase from the raw complex return
+            # is much more stable for live traces.
+            self._iir_step(z, self.b_static, self.a_static, self.static_x, self.static_y)
+            amp = np.abs(z)
             if self.lp_filt_ampl is None:
                 self.lp_filt_ampl = amp.copy()
             else:
                 self.lp_filt_ampl = self.sf * self.lp_filt_ampl + (1.0 - self.sf) * amp
 
-            angle = np.angle(zm)
+            angle = np.angle(z)
             if self.prev_angle is None or self.angle_unwrapped is None:
                 self.prev_angle = angle.copy()
                 self.angle_unwrapped = np.zeros(self.m, dtype=float)
@@ -268,13 +307,30 @@ class A121LiveTraceProcessor:
             weights = self.lp_filt_ampl[candidate_idx] if self.lp_filt_ampl is not None and len(candidate_idx) else np.asarray([1.0])
             weights = np.maximum(weights.astype(float), 0.0)
             weights = weights / (float(np.sum(weights)) + 1e-12)
+            if len(candidate_idx) > 1:
+                selected_pos = np.flatnonzero(candidate_idx == selected_idx)
+                if len(selected_pos):
+                    # Live processing cannot retrospectively sign-align neighboring range bins
+                    # like the batch analyzer can. Keep the selected bin dominant so a nearby
+                    # multipath bin with opposite phase cannot cancel the trace into a flat line.
+                    weights *= 0.35
+                    weights[int(selected_pos[0])] += 0.65
+                    weights = weights / (float(np.sum(weights)) + 1e-12)
+
+            # DC-block the cumulative phase before bandpass filtering.  Without this the
+            # IIR bandpass state tracks the massive monotonic ramp (~1400+ rad) and produces
+            # random/flat output whenever the drift slope changes.
+            if self.b_dc is not None and self.a_dc is not None and self.dc_x is not None and self.dc_y is not None:
+                phase_ac = self._iir_step(self.angle_unwrapped, self.b_dc, self.a_dc, self.dc_x, self.dc_y)
+            else:
+                phase_ac = self.angle_unwrapped
 
             if self.b_resp is not None and self.a_resp is not None and self.resp_x is not None and self.resp_y is not None:
-                resp_all = self._iir_step(self.angle_unwrapped, self.b_resp, self.a_resp, self.resp_x, self.resp_y)
+                resp_all = self._iir_step(phase_ac, self.b_resp, self.a_resp, self.resp_x, self.resp_y)
             else:
-                resp_all = self.angle_unwrapped
+                resp_all = phase_ac
             if self.b_heart is not None and self.a_heart is not None and self.heart_x is not None and self.heart_y is not None:
-                heart_all = self._iir_step(self.angle_unwrapped, self.b_heart, self.a_heart, self.heart_x, self.heart_y)
+                heart_all = self._iir_step(phase_ac, self.b_heart, self.a_heart, self.heart_x, self.heart_y)
             else:
                 heart_all = np.zeros_like(self.angle_unwrapped)
 
@@ -291,8 +347,8 @@ class A121LiveTraceProcessor:
             self.processed_count += 1
             self.times.append(float(time_s))
             self.raw_phase.append(float(self.angle_unwrapped[selected_idx]))
-            self.raw_i.append(float(np.real(zm[selected_idx])))
-            self.raw_q.append(float(np.imag(zm[selected_idx])))
+            self.raw_i.append(float(np.real(z[selected_idx])))
+            self.raw_q.append(float(np.imag(z[selected_idx])))
             if len(candidate_idx):
                 self.resp_signal.append(float(np.sum(resp_all[candidate_idx] * weights)))
                 self.heart_signal.append(float(np.sum(heart_all[candidate_idx] * weights)))
@@ -740,7 +796,7 @@ def _band_energy_ratio(phase: np.ndarray, fs: float) -> np.ndarray:
     window = np.hanning(phase.shape[0])[:, None]
     spec = np.square(np.abs(np.fft.rfft(phase * window, axis=0)))
     freqs = np.fft.rfftfreq(phase.shape[0], d=1.0 / fs)
-    vital = (freqs >= RESP_BAND_HZ[0]) & (freqs <= min(HEART_BAND_HZ[1], fs * 0.46))
+    vital = (freqs >= A121_RESP_BAND_HZ[0]) & (freqs <= min(HEART_BAND_HZ[1], fs * 0.46))
     background = (freqs >= 0.03) & (freqs <= min(fs * 0.46, 5.0)) & ~vital
     if not np.any(vital) or not np.any(background):
         return np.ones(phase.shape[1], dtype=float)
@@ -1112,6 +1168,96 @@ def _weighted_fft_peak(
     return peak_hz, confidence, freqs, weighted
 
 
+def _acconeer_breathing_estimate(
+    complex_profile: np.ndarray,
+    fs: float,
+    candidate_idx: np.ndarray,
+) -> tuple[float, float, np.ndarray, np.ndarray, np.ndarray]:
+    """Run Acconeer's own A121 BreathingProcessor on a selected range segment.
+
+    The Exploration Tool processor first averages sweeps inside each frame. Our CSV/live rows
+    already store that mean complex sweep, so each row is supplied as a one-sweep frame. The rate
+    estimate, static-clutter IIR, phase unwrap, band-pass, Hamming window, FFT padding, and
+    quadratic peak interpolation are therefore Acconeer's implementation rather than our previous
+    reimplementation.
+    """
+    z = np.asarray(complex_profile, dtype=np.complex128)
+    indices = np.asarray(candidate_idx, dtype=int)
+    if z.ndim != 2 or z.shape[0] == 0 or z.shape[1] == 0 or len(indices) == 0 or fs <= 0:
+        return 0.0, 0.0, np.asarray([], dtype=float), np.asarray([], dtype=float), np.asarray([], dtype=float)
+    indices = indices[(0 <= indices) & (indices < z.shape[1])]
+    if len(indices) == 0:
+        return 0.0, 0.0, np.asarray([], dtype=float), np.asarray([], dtype=float), np.asarray([], dtype=float)
+
+    segment = z[:, indices]
+    try:
+        from acconeer.exptool import a121
+        from acconeer.exptool.a121.algo.breathing._processor import (
+            BreathingProcessor,
+            BreathingProcessorConfig,
+        )
+
+        processor = BreathingProcessor(
+            sensor_config=a121.SensorConfig(num_points=int(segment.shape[1]), frame_rate=float(fs)),
+            processor_config=BreathingProcessorConfig(
+                lowest_breathing_rate=float(A121_RESP_BAND_HZ[0] * 60.0),
+                highest_breathing_rate=float(A121_RESP_BAND_HZ[1] * 60.0),
+                time_series_length_s=float(A121_RATE_WINDOW_S),
+            ),
+        )
+        result = None
+        for mean_sweep in segment:
+            result = processor.process(SimpleNamespace(frame=mean_sweep[np.newaxis, :]))
+        if result is None:
+            return 0.0, 0.0, np.asarray([], dtype=float), np.asarray([], dtype=float), np.asarray([], dtype=float)
+
+        extra = result.extra_result
+        signal = np.asarray(extra.breathing_motion, dtype=float)
+        if len(signal):
+            signal = signal[-min(len(signal), segment.shape[0]) :]
+        freqs = np.asarray(extra.frequencies, dtype=float)
+        psd = np.asarray(extra.psd, dtype=float)
+        rate_bpm = result.breathing_rate
+        if rate_bpm is None or not np.isfinite(float(rate_bpm)):
+            return 0.0, 0.0, signal, freqs, psd
+
+        rate_hz = float(rate_bpm) / 60.0
+        # Acconeer's quadratic interpolation can land just outside the configured FFT band.
+        in_range = A121_RESP_BAND_HZ[0] * 0.90 <= rate_hz <= min(A121_RESP_BAND_HZ[1] * 1.05, fs * 0.46)
+        valid = (freqs >= A121_RESP_BAND_HZ[0]) & (freqs <= min(A121_RESP_BAND_HZ[1], fs * 0.46))
+        if in_range and np.any(valid) and len(psd) == len(freqs):
+            peak_idx = int(np.argmin(np.abs(freqs - rate_hz)))
+            confidence = float(psd[peak_idx] / (np.median(psd[valid]) + 1e-18))
+        else:
+            confidence = 0.0
+        return rate_hz, confidence, signal, freqs, psd
+    except Exception:
+        # Keep analysis functional if a future acconeer-exptool package moves the private class.
+        phase = _unwrap_phase_matrix(segment)
+        resp_matrix = _bandpass_matrix(phase, fs, A121_RESP_BAND_HZ, order=2, zero_phase=False)
+        weights = np.ones(resp_matrix.shape[1], dtype=float) / max(resp_matrix.shape[1], 1)
+        resp_signal = _aligned_weighted_average(resp_matrix, weights, 0)
+        resp_hz, confidence, freqs, psd = _weighted_fft_peak(
+            resp_matrix,
+            weights,
+            fs,
+            A121_RESP_BAND_HZ,
+            min_duration_s=A121_RATE_WINDOW_S,
+        )
+        return resp_hz, confidence, resp_signal, freqs, psd
+
+
+def _near_resp_harmonic(frequency_hz: float, resp_hz: float, max_order: int = 7) -> bool:
+    if frequency_hz <= 0 or resp_hz <= 0:
+        return False
+    for order in range(2, max_order + 1):
+        harmonic = resp_hz * order
+        if HEART_BAND_HZ[0] * 0.85 <= harmonic <= HEART_BAND_HZ[1] * 1.05:
+            if abs(frequency_hz - harmonic) <= max(0.030, harmonic * 0.020):
+                return True
+    return False
+
+
 def _empty_analysis(df: pd.DataFrame | None = None) -> A121VitalAnalysis:
     latest_peak = float(df["PeakDistance_m"].iloc[-1]) if df is not None and len(df) and "PeakDistance_m" in df else 0.0
     latest_amp = float(df["PeakAmplitude"].iloc[-1]) if df is not None and len(df) and "PeakAmplitude" in df else 0.0
@@ -1198,19 +1344,20 @@ def analyze_a121_vitals(
             latest_amplitude = latest_amplitude[:m] if len(latest_amplitude) >= m else np.hypot(real[-1], imag[-1])
             complex_profile = real + 1j * imag
 
-            # Acconeer-style clutter removal and inter-frame phase unwrapping.  This mirrors the
-            # A121 breathing reference processor much more closely than refitting absolute IQ
-            # circles on every GUI refresh.
-            static_cutoff = _valid_band_for_fs(RESP_BAND_HZ, fs)
+            # Use clutter removal for target/weight amplitudes. Respiration rate itself is
+            # estimated below by Acconeer's BreathingProcessor; this centered differential phase
+            # path remains for target scoring, plotting, and the experimental heart candidate.
+            static_cutoff = _valid_band_for_fs(A121_RESP_BAND_HZ, fs)
             zm_profile = complex_profile - _lowpass_static_complex(
                 complex_profile,
                 fs,
-                static_cutoff[0] if static_cutoff is not None else RESP_BAND_HZ[0],
+                static_cutoff[0] if static_cutoff is not None else A121_RESP_BAND_HZ[0],
             )
             zm_amplitude = np.abs(zm_profile)
             lp_filt_ampl = _smooth_amplitude(zm_amplitude, fs)
             median_amp = np.median(zm_amplitude, axis=0)
-            angle_unwrapped = _unwrap_phase_matrix(zm_profile)
+            centered_profile, _, _ = _center_complex_profile(real, imag)
+            angle_unwrapped = _differential_phase_matrix(centered_profile)
             phase_energy_ratio = _band_energy_ratio(angle_unwrapped, fs)
 
             half_width = max(0.01, float(gate_half_width_m))
@@ -1244,28 +1391,33 @@ def analyze_a121_vitals(
             raw_i = np.real(zm_profile[:, selected_idx])
             raw_q = np.imag(zm_profile[:, selected_idx])
 
-            resp_phase_matrix = _bandpass_matrix(angle_unwrapped[:, candidate_idx], fs, RESP_BAND_HZ, order=2, zero_phase=False)
-            resp_signal = _aligned_weighted_average(resp_phase_matrix, weights, ref_col)
-            resp_hz, resp_confidence, _, _ = _weighted_fft_peak(
-                resp_phase_matrix,
-                weights,
+            resp_hz_candidate, resp_confidence, resp_signal, _, _ = _acconeer_breathing_estimate(
+                complex_profile,
                 fs,
-                RESP_BAND_HZ,
-                min_duration_s=A121_RATE_WINDOW_S,
+                candidate_idx,
+            )
+            resp_hz = resp_hz_candidate
+            duration_s = len(raw_phase) / max(fs, 1e-9)
+            resp_hz_for_harmonics = (
+                resp_hz_candidate
+                if duration_s >= A121_RATE_WINDOW_S
+                and resp_confidence >= RESP_RATE_CONFIDENCE_MIN
+                and A121_RESP_BAND_HZ[0] * 0.90 <= resp_hz_candidate <= min(A121_RESP_BAND_HZ[1] * 1.05, fs * 0.46)
+                else 0.0
             )
 
             harmonic_rejects: tuple[float, ...]
-            if resp_hz > 0:
+            if resp_hz_for_harmonics > 0:
                 harmonic_rejects = tuple(
-                    resp_hz * order
-                    for order in range(2, 7)
-                    if HEART_BAND_HZ[0] * 0.85 <= resp_hz * order <= HEART_BAND_HZ[1] * 1.05
+                    resp_hz_for_harmonics * order
+                    for order in range(2, 8)
+                    if HEART_BAND_HZ[0] * 0.85 <= resp_hz_for_harmonics * order <= HEART_BAND_HZ[1] * 1.05
                 )
             else:
                 harmonic_rejects = ()
 
             heart_source = _aligned_weighted_average(angle_unwrapped[:, candidate_idx], weights, ref_col)
-            heart_source = _subtract_resp_harmonics(heart_source, fs, resp_hz, max_order=6)
+            heart_source = _subtract_resp_harmonics(heart_source, fs, resp_hz_for_harmonics, max_order=7)
             heart_signal = _bandpass_matrix(heart_source, fs, HEART_BAND_HZ, order=3, zero_phase=False).ravel()
             heart_band = _heart_search_band(heart_prior_hz, heart_prior_std_hz)
             heart_hz, heart_confidence = estimate_band_peak_fused(
@@ -1274,6 +1426,9 @@ def analyze_a121_vitals(
                 heart_band,
                 reject_hz=harmonic_rejects,
             )
+            if _near_resp_harmonic(heart_hz, resp_hz_for_harmonics):
+                heart_hz = 0.0
+                heart_confidence = 0.0
             if len(heart_signal) / max(fs, 1e-9) < 10.0:
                 heart_hz = 0.0
                 heart_confidence = 0.0
@@ -1295,7 +1450,6 @@ def analyze_a121_vitals(
             )
             present = bool(presence_score >= 20.0 and (amp_ratio >= 1.08 or phase_ratio >= 1.30))
 
-            duration_s = len(raw_phase) / max(fs, 1e-9)
             if duration_s < A121_RATE_WINDOW_S or resp_confidence < RESP_RATE_CONFIDENCE_MIN:
                 resp_hz = 0.0
             if heart_confidence < HEART_RATE_CONFIDENCE_MIN:
@@ -1318,6 +1472,16 @@ def analyze_a121_vitals(
                 )
             )
 
+            plot_len = min(len(times_s), len(resp_signal), len(heart_signal))
+            if plot_len > 0:
+                plot_times_s = times_s[-plot_len:]
+                resp_signal = resp_signal[-plot_len:]
+                heart_signal = heart_signal[-plot_len:]
+            else:
+                plot_times_s = np.asarray([], dtype=float)
+                resp_signal = np.asarray([], dtype=float)
+                heart_signal = np.asarray([], dtype=float)
+
             return A121VitalAnalysis(
                 sample_rate_hz=fs,
                 target_distance_m=target_distance,
@@ -1332,7 +1496,7 @@ def analyze_a121_vitals(
                 heart_bpm=float(heart_hz * 60.0),
                 resp_hz=float(resp_hz),
                 heart_hz=float(heart_hz),
-                times_s=times_s[-len(raw_phase) :],
+                times_s=plot_times_s,
                 raw_phase=raw_phase,
                 resp_signal=resp_signal,
                 heart_signal=heart_signal,
@@ -1354,8 +1518,8 @@ def analyze_a121_vitals(
     # enough history to resolve the vital bands, and never create invalid filters at low FPS.
     raw_phase = np.unwrap(work["PeakPhase_rad"].to_numpy(dtype=float))
     raw_phase = clean_signal(raw_phase)
-    resp_signal = _bandpass_matrix(raw_phase, fs, RESP_BAND_HZ, order=2, zero_phase=False).ravel()
-    resp_hz, resp_confidence, _, _ = _weighted_fft_peak(resp_signal, np.asarray([1.0]), fs, RESP_BAND_HZ, min_duration_s=A121_RATE_WINDOW_S)
+    resp_signal = _bandpass_matrix(raw_phase, fs, A121_RESP_BAND_HZ, order=2, zero_phase=False).ravel()
+    resp_hz, resp_confidence, _, _ = _weighted_fft_peak(resp_signal, np.asarray([1.0]), fs, A121_RESP_BAND_HZ, min_duration_s=A121_RATE_WINDOW_S)
     heart_source = _subtract_resp_harmonics(raw_phase, fs, resp_hz, max_order=6)
     heart_signal = _bandpass_matrix(heart_source, fs, HEART_BAND_HZ, order=3, zero_phase=False).ravel()
     heart_hz, heart_confidence = estimate_band_peak_fused(

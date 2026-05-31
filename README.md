@@ -60,8 +60,8 @@ Optional IMU connections:
 - Captures Sparse IQ frames, storing per-frame distance bins, amplitude, phase, real, and imaginary arrays.
 - UI controls distance focus (`start_m`, `end_m`), profile, HWAAS, sweeps/frame, and frame rate.
 - Defaults follow Acconeer's breathing reference app for stable live operation (profile 3, HWAAS 32, 16 sweeps/frame, 20 Hz) and auto-clamp sweeps/frame to the A121 4095-sample buffer/serial limits for wide ranges.
-- Live visualization plots latest amplitude vs distance, optional target gate, respiration band, heart band, rate FFTs, and raw IQ. Live time-domain traces are append-only causal filters so old samples do not change shape while the plot scrolls.
-- A121 vital extraction uses Acconeer-style static-clutter subtraction, inter-frame phase unwrapping, compact locked range-bin analysis, conservative rate validation, respiratory harmonic suppression, and Kalman-gated heart-rate tracking.
+- Live visualization plots latest amplitude vs distance, Acconeer-selected target range, respiration band, heart band, rate FFTs, and raw IQ. Live time-domain traces are append-only causal filters so old samples do not change shape while the plot scrolls.
+- A121 target acquisition now follows Acconeer's breathing reference app state machine/presence-distance selection, and respiratory-rate extraction runs Acconeer's own `BreathingProcessor` on that compact range segment; heart-rate display remains experimental and conservatively gated.
 
 ### IMU Pipeline (Secondary)
 

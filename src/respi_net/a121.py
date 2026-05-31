@@ -101,6 +101,13 @@ class A121Capture:
         self.metadata: Any | None = None
         self.sensor_config: Any | None = None
         self.distances_m: np.ndarray = np.asarray([], dtype=float)
+        self.acconeer_breathing_processor: Any | None = None
+        self.acconeer_app_state: str = "INIT_STATE"
+        self.acconeer_presence_detected: bool = False
+        self.acconeer_presence_distance_m: float | None = None
+        self.acconeer_selected_distance_m: float | None = None
+        self.acconeer_range_indices: tuple[int, int] | None = None
+        self.acconeer_breathing_rate_bpm: float | None = None
         self.running = False
         self.data_storage: list[list[Any]] = []
         self.data_lock = threading.Lock()
@@ -188,6 +195,30 @@ class A121Capture:
             )
             self.metadata = self.client.setup_session(self.sensor_config)
             self.distances_m = get_distances_m(self.sensor_config, self.metadata)
+            try:
+                from acconeer.exptool.a121.algo.breathing._processor import (
+                    BreathingProcessorConfig as AcconeerBreathingConfig,
+                    Processor as AcconeerBreathingProcessor,
+                    ProcessorConfig as AcconeerBreathingProcessorConfig,
+                    get_presence_config as get_acconeer_presence_config,
+                )
+
+                # This Exploration Tool release uses a mutable processor config whose fields are
+                # filled by RefApp after construction, so mirror that instead of passing kwargs.
+                processor_config = AcconeerBreathingProcessorConfig()
+                processor_config.use_presence_processor = True
+                processor_config.num_distances_to_analyze = 3
+                processor_config.distance_determination_duration = 5.0
+                processor_config.presence_config = get_acconeer_presence_config()
+                processor_config.breathing_config = AcconeerBreathingConfig()
+                self.acconeer_breathing_processor = AcconeerBreathingProcessor(
+                    sensor_config=self.sensor_config,
+                    metadata=self.metadata,
+                    processor_config=processor_config,
+                )
+            except Exception as exc:
+                safe_echo(f"Acconeer breathing reference state machine unavailable: {exc}")
+                self.acconeer_breathing_processor = None
             self.client.start_session()
             self.running = True
             with self.data_lock:
@@ -195,6 +226,7 @@ class A121Capture:
                 self.live_buffer.clear()
                 self.frame_index = 0
                 self.session_start_tick_s = None
+                self._reset_acconeer_selection_unlocked()
             self.session_start_wall_ms = time.time() * 1000.0
             self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
             self.read_thread.start()
@@ -219,6 +251,7 @@ class A121Capture:
                 self.running = False
 
     def _process_result(self, result: Any) -> None:
+        self._update_acconeer_selection(result)
         frame = result.subframes[0] if hasattr(result, "subframes") and result.subframes else result.frame
         frame_np = np.asarray(frame)
         if frame_np.ndim == 0:
@@ -282,6 +315,92 @@ class A121Capture:
             self.data_storage.append(storage_row)
             self.live_buffer.append(live_row)
 
+    def _reset_acconeer_selection_unlocked(self) -> None:
+        self.acconeer_app_state = "INIT_STATE"
+        self.acconeer_presence_detected = False
+        self.acconeer_presence_distance_m = None
+        self.acconeer_selected_distance_m = None
+        self.acconeer_range_indices = None
+        self.acconeer_breathing_rate_bpm = None
+
+    def _update_acconeer_selection(self, result: Any) -> None:
+        """Feed Acconeer's breathing reference state machine with the raw A121 frame.
+
+        The CSV/live rows intentionally store only the mean complex sweep. Presence-distance
+        selection in Acconeer's reference app depends on the full sweeps inside each frame, so it
+        must run here while the original ``a121.Result`` is still available.
+        """
+        processor = self.acconeer_breathing_processor
+        if processor is None or len(self.distances_m) == 0:
+            return
+        try:
+            ref_result = processor.process(result)
+            app_state = getattr(
+                getattr(ref_result, "app_state", None),
+                "name",
+                str(getattr(ref_result, "app_state", "")),
+            )
+            presence_result = getattr(ref_result, "presence_result", None)
+            presence_detected = bool(getattr(presence_result, "presence_detected", False))
+            presence_distance = getattr(presence_result, "presence_distance", None)
+            if presence_distance is not None and np.isfinite(float(presence_distance)) and float(presence_distance) > 0:
+                presence_distance_m: float | None = float(presence_distance)
+            else:
+                presence_distance_m = None
+
+            selected_distance_m = None
+            range_indices = getattr(ref_result, "distances_being_analyzed", None)
+            if range_indices is not None:
+                start_idx, end_idx = int(range_indices[0]), int(range_indices[1])
+                start_idx = int(np.clip(start_idx, 0, max(len(self.distances_m) - 1, 0)))
+                end_idx = int(np.clip(end_idx, start_idx + 1, len(self.distances_m)))
+                center_idx = int(np.clip((start_idx + end_idx - 1) // 2, 0, len(self.distances_m) - 1))
+                selected_distance_m = float(self.distances_m[center_idx])
+                stored_range_indices: tuple[int, int] | None = (start_idx, end_idx)
+            else:
+                stored_range_indices = None
+                if presence_distance_m is not None:
+                    center_idx = int(np.argmin(np.abs(self.distances_m - presence_distance_m)))
+                    selected_distance_m = float(self.distances_m[center_idx])
+
+            breathing_result = getattr(ref_result, "breathing_result", None)
+            breathing_rate = getattr(breathing_result, "breathing_rate", None) if breathing_result is not None else None
+            breathing_rate_bpm = (
+                float(breathing_rate)
+                if breathing_rate is not None and np.isfinite(float(breathing_rate))
+                else None
+            )
+
+            with self.data_lock:
+                self.acconeer_app_state = app_state
+                self.acconeer_presence_detected = presence_detected
+                self.acconeer_presence_distance_m = presence_distance_m
+                self.acconeer_selected_distance_m = selected_distance_m
+                self.acconeer_range_indices = stored_range_indices
+                self.acconeer_breathing_rate_bpm = breathing_rate_bpm
+        except Exception:
+            # Do not let optional reference-app state tracking stop raw capture.
+            return
+
+    def snapshot_acconeer_selection(self) -> dict[str, Any]:
+        with self.data_lock:
+            range_indices = self.acconeer_range_indices
+            range_m = None
+            if range_indices is not None and len(self.distances_m):
+                start_idx, end_idx = range_indices
+                start_idx = int(np.clip(start_idx, 0, len(self.distances_m) - 1))
+                last_idx = int(np.clip(end_idx - 1, start_idx, len(self.distances_m) - 1))
+                range_m = (float(self.distances_m[start_idx]), float(self.distances_m[last_idx]))
+            return {
+                "app_state": self.acconeer_app_state,
+                "presence_detected": self.acconeer_presence_detected,
+                "presence_distance_m": self.acconeer_presence_distance_m,
+                "target_distance_m": self.acconeer_selected_distance_m,
+                "range_indices": range_indices,
+                "range_m": range_m,
+                "breathing_rate_bpm": self.acconeer_breathing_rate_bpm,
+            }
+
     def snapshot_data_storage(self) -> list[list[Any]]:
         with self.data_lock:
             return list(self.data_storage)
@@ -310,9 +429,16 @@ class A121Capture:
                 self.client.close()
             except Exception:
                 pass
-        if self.read_thread is not None and self.read_thread.is_alive() and threading.current_thread() is not self.read_thread:
+        if (
+            self.read_thread is not None
+            and self.read_thread.is_alive()
+            and threading.current_thread() is not self.read_thread
+        ):
             self.read_thread.join(timeout=1.0)
         self.client = None
+        self.acconeer_breathing_processor = None
+        with self.data_lock:
+            self._reset_acconeer_selection_unlocked()
 
     def save(self) -> Path:
         rows = self.snapshot_data_storage()
