@@ -897,21 +897,21 @@ class MainWindow(QtWidgets.QMainWindow):
             or gate_changed
         )
         if should_analyze:
-            # Honor the live-window control by timestamp, not by requested frame rate.
-            # The A121 may deliver slower/faster than the configured frame_rate, so a
-            # frame-count slice made the graph appear stuck at the wrong duration.
+            # Analyze a wider buffer of history to hide filter initialization transients
+            # in the past and stabilize the zero-phase filtering output in the plotted window.
             latest_ms = float(live_rows[-1][0]) if live_rows else 0.0
-            cutoff_ms = latest_ms - window_s * 1000.0
-            window_rows = [row for row in live_rows if float(row[0]) >= cutoff_ms]
-            if not window_rows and live_rows:
-                window_rows = [live_rows[-1]]
-            df = pd.DataFrame(window_rows, columns=A121_COLUMNS)
+            analysis_s = max(window_s + 20.0, 30.0)
+            cutoff_analysis_ms = latest_ms - analysis_s * 1000.0
+            analysis_rows = [row for row in live_rows if float(row[0]) >= cutoff_analysis_ms]
+            if not analysis_rows and live_rows:
+                analysis_rows = [live_rows[-1]]
+            df = pd.DataFrame(analysis_rows, columns=A121_COLUMNS)
             heart_prior_hz = self.a121_heart_tracker.current_hz
             self.cached_a121_analysis = analyze_a121_vitals(
                 df,
                 auto_gate=False,
                 gate_half_width_m=gate_half_width,
-                max_frames=len(window_rows),
+                max_frames=len(analysis_rows),
                 target_distance_m=self.a121_gate_center_m,
                 heart_prior_hz=heart_prior_hz,
                 heart_prior_std_hz=self.a121_heart_tracker.current_std_hz if heart_prior_hz is not None else None,
@@ -921,7 +921,12 @@ class MainWindow(QtWidgets.QMainWindow):
         analysis = self.cached_a121_analysis
         if analysis is None:
             return
-        if should_analyze:
+
+        # Handle presence/loss of target
+        if not analysis.present:
+            self.a121_heart_tracker.reset()
+            tracked_heart_hz = 0.0
+        elif should_analyze:
             tracker_dt = now - self.last_a121_tracker_update_monotonic if self.last_a121_tracker_update_monotonic else 0.25
             tracked_heart_hz = self.a121_heart_tracker.update(
                 analysis.heart_hz,
@@ -950,16 +955,24 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.live_curves["gate"].setData([analysis.gate_min_m, analysis.gate_min_m, analysis.gate_max_m, analysis.gate_max_m], [0, target_amp, target_amp, 0])
             self.live_plot_a.setXRange(float(latest_distances[0]), float(latest_distances[-1]), padding=0.0)
             self.live_plot_a.setYRange(0.0, max(float(np.max(latest_amplitude)) * 1.12, target_amp * 1.25, 1.0), padding=0.0)
+
+        # Slice the visualization data to exactly the user-requested window_s
+        plot_mask = analysis.times_s >= (analysis.times_s[-1] - window_s) if len(analysis.times_s) else np.asarray([], dtype=bool)
+        plot_times = analysis.times_s[plot_mask]
+
         view_text = self.view_combo.currentText().lower()
         raw_view = view_text.startswith("raw")
         fft_view = view_text.startswith("rate")
         if raw_view:
-            self.live_curves["raw_phase"].setData(analysis.times_s, analysis.raw_phase)
-            self._set_time_plot_range(self.live_plot_b, analysis.times_s, analysis.raw_phase, min_y_span=0.05)
+            plot_phase = analysis.raw_phase[plot_mask]
+            self.live_curves["raw_phase"].setData(plot_times, plot_phase)
+            self._set_time_plot_range(self.live_plot_b, plot_times, plot_phase, min_y_span=0.05)
             if len(analysis.raw_i) == len(analysis.times_s):
-                self.live_curves["raw_i"].setData(analysis.times_s, analysis.raw_i)
-                self.live_curves["raw_q"].setData(analysis.times_s, analysis.raw_q)
-                self._set_time_plot_range(self.live_plot_c, analysis.times_s, np.concatenate([analysis.raw_i, analysis.raw_q]), min_y_span=1.0)
+                plot_i = analysis.raw_i[plot_mask]
+                plot_q = analysis.raw_q[plot_mask]
+                self.live_curves["raw_i"].setData(plot_times, plot_i)
+                self.live_curves["raw_q"].setData(plot_times, plot_q)
+                self._set_time_plot_range(self.live_plot_c, plot_times, np.concatenate([plot_i, plot_q]), min_y_span=1.0)
         elif fft_view:
             resp_freqs, resp_power = self._band_spectrum(analysis.resp_signal, analysis.sample_rate_hz, RESP_BAND_HZ)
             heart_freqs, heart_power = self._band_spectrum(analysis.heart_signal, analysis.sample_rate_hz, HEART_BAND_HZ)
@@ -980,10 +993,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.live_plot_b.setYRange(0.0, max(float(np.max(resp_power)) * 1.15 if len(resp_power) else 1.0, 1e-12), padding=0.0)
             self.live_plot_c.setYRange(0.0, max(float(np.max(heart_power)) * 1.15 if len(heart_power) else 1.0, 1e-12), padding=0.0)
         else:
-            self.live_curves["resp"].setData(analysis.times_s, analysis.resp_signal)
-            self.live_curves["heart"].setData(analysis.times_s, analysis.heart_signal)
-            self._set_time_plot_range(self.live_plot_b, analysis.times_s, analysis.resp_signal, min_y_span=0.05)
-            self._set_time_plot_range(self.live_plot_c, analysis.times_s, analysis.heart_signal, min_y_span=0.03)
+            plot_resp = analysis.resp_signal[plot_mask]
+            plot_heart = analysis.heart_signal[plot_mask]
+            self.live_curves["resp"].setData(plot_times, plot_resp)
+            self.live_curves["heart"].setData(plot_times, plot_heart)
+            self._set_time_plot_range(self.live_plot_b, plot_times, plot_resp, min_y_span=0.05)
+            self._set_time_plot_range(self.live_plot_c, plot_times, plot_heart, min_y_span=0.03)
         presence = "YES" if analysis.present else "no"
         gate_mode = "reacquire" if self.a121_auto_gate_check.isChecked() else "locked"
         tracked_text = f"{tracked_heart_hz * 60.0:.1f} BPM ({tracked_heart_hz:.2f} Hz)" if tracked_heart_hz > 0 else "acquiring"

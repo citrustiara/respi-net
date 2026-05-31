@@ -644,12 +644,20 @@ def analyze_a121_vitals(
             median_amp = np.median(amplitude, axis=0)
             # Determine gating first to restrict heavy calculations to the active zone
             half_width = max(0.01, float(gate_half_width_m))
+            # To prevent locking onto direct TX-RX antenna coupling leakage at the start of the range,
+            # we restrict the peak search to distances >= 0.28 m if available.
+            search_mask = (distances >= 0.28) if len(distances) else np.asarray([], dtype=bool)
+            if not np.any(search_mask):
+                search_mask = np.ones_like(distances, dtype=bool) if len(distances) else np.asarray([], dtype=bool)
+
             if latest_peak and len(distances):
                 latest_peak_idx = int(np.argmin(np.abs(distances - latest_peak)))
             elif len(latest_amplitude):
-                latest_peak_idx = int(np.argmax(latest_amplitude))
+                masked_amp = np.where(search_mask, latest_amplitude, -1e9)
+                latest_peak_idx = int(np.argmax(masked_amp))
             else:
-                latest_peak_idx = int(np.argmax(median_amp))
+                masked_med = np.where(search_mask, median_amp, -1e9)
+                latest_peak_idx = int(np.argmax(masked_med))
 
             if target_distance_m is not None and len(distances):
                 selected_idx = int(np.argmin(np.abs(distances - float(target_distance_m))))
@@ -658,7 +666,8 @@ def analyze_a121_vitals(
             elif latest_peak and len(distances):
                 selected_idx = latest_peak_idx
             else:
-                selected_idx = int(np.argmax(median_amp))
+                masked_med = np.where(search_mask, median_amp, -1e9)
+                selected_idx = int(np.argmax(masked_med))
 
             target_distance = float(distances[selected_idx]) if len(distances) else latest_peak
             if use_gating:
@@ -733,6 +742,11 @@ def analyze_a121_vitals(
             signal_quality = float(np.clip(0.35 * circle_quality_mean + 0.35 * (1.0 - entropy) + 0.30 * min(heart_conf / 8.0, 1.0), 0.0, 1.0))
             if heart_conf < 2.0 and signal_quality < 0.35:
                 heart_hz = 0.0
+
+            if not present:
+                resp_hz = 0.0
+                heart_hz = 0.0
+                signal_quality = 0.0
 
             return A121VitalAnalysis(
                 sample_rate_hz=fs,
