@@ -1,0 +1,987 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Lens design &#8212; Acconeer docs</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=384b581d" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=89fafbd8" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'integration/lens_design';</script>
+    <link rel="canonical" href="https://docs.acconeer.com/en/latest/integration/lens_design.html" />
+    <link rel="icon" href="../_static/favicon.png"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Radome and mechanical design" href="radome_and_mechanical_design.html" />
+    <link rel="prev" title="PCB guidelines" href="electromagnetic_pcb_design_guidelines.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+    <meta name="docbuild:last-update" content="2026-04-02"/>
+  <script async type="text/javascript" src="/_/static/javascript/readthedocs-addons.js"></script><meta name="readthedocs-project-slug" content="acconeer-acconeer-python-exploration" /><meta name="readthedocs-version-slug" content="latest" /><meta name="readthedocs-resolver-filename" content="/integration/lens_design.html" /><meta name="readthedocs-http-status" content="200" /></head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.svg" class="logo__image only-light" alt="Acconeer docs - Home"/>
+    <img src="../_static/logo.svg" class="logo__image only-dark pst-js-only" alt="Acconeer docs - Home"/>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/acconeer/acconeer-python-exploration" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://twitter.com/acconeer_ab" title="Twitter" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Twitter</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://instagram.com/acconeerab" title="Instagram" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-instagram fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Instagram</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://www.youtube.com/acconeer" title="YouTube" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fab fa-youtube fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">YouTube</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://www.acconeer.com/innovation-lab" title="Innovation Lab" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="far fa-lightbulb fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Innovation Lab</span></a>
+        </li>
+</ul></div>
+        <div class="sidebar-primary-item">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="../pcr_tech/index.html">Pulsed Coherent Radar</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../pcr_tech/overview.html">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../pcr_tech/radar_principles.html">Radar Principles</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../getting_started/index.html">Getting Started</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../getting_started/setting_up_and_running_et.html">Setting Up and Running Exploration Tool</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../getting_started/evk_setup/index.html">Setting Up Your EVK</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started/evk_setup/xc120_xe121.html">XC120 + XE121</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started/evk_setup/raspberry_a121_xe121.html">RPi + XE121</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started/evk_setup/xm125.html">XM125/XE125</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../getting_started/evk_setup/xm126.html">XB122 + XM126</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../radar_data_and_control/index.html">Radar Data and Control</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../radar_data_and_control/a121/index.html">A121</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../radar_data_and_control/a121/api_references.html">API References</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../radar_data_and_control/a121/differences_from_a111.html">Differences between A121 and A111</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../radar_data_and_control/a121/how_to_configure.html">How to configure</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../radar_data_and_control/a121/interpreting_radar_data.html">Interpreting radar data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../radar_data_and_control/a121/measurement_range.html">Measurement range</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../radar_data_and_control/a121/signal_strength.html">Signal strength</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../radar_data_and_control/a121/sweeps_and_frames.html">Frames, sweeps and subsweeps</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../radar_data_and_control/a121/timing.html">Timing</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../radar_data_and_control/a121/in_depth_topics/index.html">In-depth topics</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../radar_data_and_control/a121/in_depth_topics/control.html">Control</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../radar_data_and_control/a121/in_depth_topics/csm.html">Continuous sweep mode (CSM)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../radar_data_and_control/a121/in_depth_topics/loopback.html">Loopback</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../figure_of_merits/index.html">Figures of Merit</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../figure_of_merits/sparse_iq.html">Sparse IQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../figure_of_merits/a121.html">A121</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../use_cases/index.html">Use Cases</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/distance.html">Distance Measurement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/presence.html">Presence Detection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/speed.html">Speed Measurement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/parking.html">Parking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/tank_level.html">Tank Level Measurement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/touchless_button.html">Touchless Button</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/breathing.html">Breathing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/vibration.html">Vibration Measurement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/faucet.html">Hand Motion Detection for Faucets</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/surface_velocity.html">Surface Velocity Measurement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/waste_level.html">Waste Level Measurement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/small_movement_tracking.html">Small Movement Tracking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/obstacle.html">Obstacle Detection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/surface_classification.html">Surface Classification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../use_cases/gesture_control.html">Gesture Control</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../detectors/index.html">Detectors</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../detectors/a121/index.html">A121 Detectors</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../detectors/a121/distance_detector.html">Distance Detector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../detectors/a121/presence_detector.html">Presence Detector</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../detectors/a121/speed_detector.html">Speed Detector</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../ref_apps/index.html">Reference Applications</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../ref_apps/a121/index.html">A121 Reference Applications</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../ref_apps/a121/breathing.html">Breathing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../ref_apps/a121/parking.html">Parking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../ref_apps/a121/smart_presence.html">Smart Presence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../ref_apps/a121/tank_level.html">Tank Level</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../ref_apps/a121/touchless_button.html">Touchless Button</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../example_apps/index.html">Example Applications</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../example_apps/a121/index.html">A121 Example Applications</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../example_apps/a121/bilateration.html">Bilateration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example_apps/a121/cargo.html">Cargo</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example_apps/a121/hand_motion_detection.html">Hand Motion Detection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example_apps/a121/obstacle_detection.html">Obstacle Detection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example_apps/a121/phase_tracking.html">Phase Tracking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example_apps/a121/surface_velocity.html">Surface Velocity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example_apps/a121/vibration.html">Vibration Measurement</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../example_apps/a121/waste_level.html">Waste Level</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Integration</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="electrical_integration.html">Electrical integration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="electromagnetic_pcb_design_guidelines.html">PCB guidelines</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Lens design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="radome_and_mechanical_design.html">Radome and mechanical design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sw_integration.html">SW Integration for A121</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../exploration_tool/index.html">Exploration Tool</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/index.html">Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/app/index.html">App Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/app/examples-app-new-plugins-my_plugin.html">examples/app/new/plugins/my_plugin.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/bilateration/index.html">Bilateration Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/bilateration/examples-a121-algo-bilateration-bilaterator.html">examples/a121/algo/bilateration/bilaterator.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/breathing/index.html">Breathing Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/breathing/examples-a121-algo-breathing-breathing.html">examples/a121/algo/breathing/breathing.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/breathing/examples-a121-algo-breathing-breathing_with_gui.html">examples/a121/algo/breathing/breathing_with_gui.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/cargo/index.html">Cargo Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/cargo/examples-a121-algo-cargo-example_app.html">examples/a121/algo/cargo/example_app.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/distance/index.html">Distance Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/distance/examples-a121-algo-distance-detector.html">examples/a121/algo/distance/detector.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/distance/examples-a121-algo-distance-post_process_distance_result.html">examples/a121/algo/distance/post_process_distance_result.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/distance/examples-a121-algo-distance-processor.html">examples/a121/algo/distance/processor.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/hand_motion/index.html">Hand Motion Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/hand_motion/examples-a121-algo-hand_motion-hand_motion_example_app.html">examples/a121/algo/hand_motion/hand_motion_example_app.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/obstacle/index.html">Obstacle Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/obstacle/examples-a121-algo-obstacle-detector.html">examples/a121/algo/obstacle/detector.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/parking/index.html">Parking Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/parking/examples-a121-algo-parking-parking.html">examples/a121/algo/parking/parking.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/phase_tracking/index.html">Phase Tracking Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/phase_tracking/examples-a121-algo-phase_tracking-phase_tracking.html">examples/a121/algo/phase_tracking/phase_tracking.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/presence/index.html">Presence Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/presence/examples-a121-algo-presence-detector.html">examples/a121/algo/presence/detector.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/presence/examples-a121-algo-presence-processor.html">examples/a121/algo/presence/processor.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/index.html">Python API Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-basic.html">examples/a121/basic.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-extended_config.html">examples/a121/extended_config.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-load_record.html">examples/a121/load_record.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-plot.html">examples/a121/plot.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-post_process_sparse_iq.html">examples/a121/post_process_sparse_iq.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-record_data-barebones.html">examples/a121/record_data/barebones.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-record_data-with_cli.html">examples/a121/record_data/with_cli.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-reuse_calibration.html">examples/a121/reuse_calibration.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/python_api/examples-a121-subsweeps.html">examples/a121/subsweeps.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/smart_presence/index.html">Smart Presence Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/smart_presence/examples-a121-algo-smart_presence-processor.html">examples/a121/algo/smart_presence/processor.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/smart_presence/examples-a121-algo-smart_presence-ref_app.html">examples/a121/algo/smart_presence/ref_app.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/sparse_iq/index.html">Sparse Iq Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/sparse_iq/examples-a121-algo-sparse_iq-sparse_iq.html">examples/a121/algo/sparse_iq/sparse_iq.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/speed/index.html">Speed Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/speed/examples-a121-algo-speed-detector.html">examples/a121/algo/speed/detector.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/speed/examples-a121-algo-speed-processor.html">examples/a121/algo/speed/processor.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/surface_velocity/index.html">Surface Velocity Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/surface_velocity/examples-a121-algo-surface_velocity-example_app.html">examples/a121/algo/surface_velocity/example_app.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/surface_velocity/examples-a121-algo-surface_velocity-processor.html">examples/a121/algo/surface_velocity/processor.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/tank_level/index.html">Tank Level Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/tank_level/examples-a121-algo-tank_level-tank_level.html">examples/a121/algo/tank_level/tank_level.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/tank_level/examples-a121-algo-tank_level-tank_level_with_gui.html">examples/a121/algo/tank_level/tank_level_with_gui.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/touchless_button/index.html">Touchless Button Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/touchless_button/examples-a121-algo-touchless_button-processor.html">examples/a121/algo/touchless_button/processor.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/vibration/index.html">Vibration Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/vibration/examples-a121-algo-vibration-example_app.html">examples/a121/algo/vibration/example_app.py</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/vibration/examples-a121-algo-vibration-processor.html">examples/a121/algo/vibration/processor.py</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../exploration_tool/example_scripts/waste_level/index.html">Waste Level Example Scripts</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../exploration_tool/example_scripts/waste_level/examples-a121-algo-waste_level-processor.html">examples/a121/algo/waste_level/processor.py</a></li>
+</ul>
+</details></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../exploration_tool/api/index.html">API Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../exploration_tool/api/a121.html">A121</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../exploration_tool/file_format_ref/index.html">File Format Reference</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../exploration_tool/file_format_ref/a121.html">A121</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2"><a class="reference internal" href="../exploration_tool/adding_your_own_plugin.html">Adding your own plugin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../exploration_tool/changelog.html">Changelog</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../exploration_tool/faq.html">Common Issues</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1"><a class="reference internal" href="../resource_calc.html">Resource Calculator</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary.html">Glossary</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../a111/index.html">A111</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../a111/evk_setup/index.html">Setting up your EVK</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../a111/evk_setup/xm112.html">XM112</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/evk_setup/xm122.html">XM122</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/evk_setup/xm132.html">XM132</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/evk_setup/raspberry_a111.html">RPi + XC112/XR112</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../a111/radar_data_and_control/index.html">Radar Data and Control</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../a111/radar_data_and_control/profiles.html">Profiles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/radar_data_and_control/typical_ranges.html">Typical ranges for different objects</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/radar_data_and_control/config_overview.html">Configuration overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/radar_data_and_control/services_and_detectors_overview.html">Services and detectors overview</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../a111/radar_data_and_control/services/index.html">Services</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l4"><a class="reference internal" href="../a111/radar_data_and_control/services/pb.html">Power Bins</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../a111/radar_data_and_control/services/envelope.html">Envelope</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../a111/radar_data_and_control/services/iq.html">IQ</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../a111/radar_data_and_control/services/sparse.html">Sparse</a></li>
+</ul>
+</details></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/radar_data_and_control/detectors.html">Detectors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/radar_data_and_control/system_overview.html">System overview</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/radar_data_and_control/rspm.html">Performance metrics</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../a111/algo/index.html">Algorithms</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/button_press.html">Button press detection (envelope)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/button_press_sparse.html">Button press (sparse)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/distance_detector.html">Distance detector (envelope)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/obstacle.html">Obstacle detection</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/parking.html">Parking (envelope)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/phase_tracking.html">Phase tracking</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/presence_detect_human_only.html">Presence detection human only</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/presence_detection_sparse.html">Presence detection (sparse)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/sleep_breathing.html">Sleep breathing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/speed_sparse.html">Speed (sparse)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/tank_level_short.html">Tank level short (envelope)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../a111/algo/adding_your_own_algorithm_module/guide.html">Adding your own algorithm module</a></li>
+</ul>
+</details></li>
+<li class="toctree-l2"><a class="reference internal" href="../a111/python_api.html">API reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../a111/file_format_ref.html">File format reference</a></li>
+</ul>
+</details></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><label class="sidebar-toggle primary-toggle btn btn-sm" for="__primary" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</label></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../_sources/integration/lens_design.rst" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.rst</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button>
+
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+<label class="sidebar-toggle secondary-toggle btn btn-sm" for="__secondary"title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</label>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1>Lens design</h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#refracting-lenses">Refracting lenses</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#design-principles">Design Principles</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#convex-planar-lens-hyperboloidal-lens">Convex-planar lens (Hyperboloidal lens)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#plano-convex-lens">Plano-convex lens</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#lens-gain">Lens gain</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fresnel-zone-plate-fzp-lenses">Fresnel Zone Plate (FZP) lenses</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-fzp-lens-calculation">Example FZP lens calculation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#lens-thickness-comparison">Lens thickness comparison</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#lens-design-guidelines-and-prototyping">Lens design guidelines and prototyping</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#focal-distance-tuning">Focal distance tuning</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#customized-lenses">Customized lenses</a></li>
+</ul>
+</li>
+</ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="lens-design">
+<span id="integration-a121-lenses"></span><h1>Lens design<a class="headerlink" href="#lens-design" title="Link to this heading">#</a></h1>
+<p><a class="reference internal" href="../glossary.html#term-Dielectric"><span class="xref std std-term">Dielectric</span></a> lenses are a cost-effective way of shaping the radiation patterns, especially for mmWave applications where the size of the lens becomes small enough. Although it is most common to design lenses for increasing the gain and to narrow the beamwidth, lenses can also be used for increasing the beamwidth, produce tilted beams, or suppress side lobes to reject unwanted <a class="reference internal" href="../glossary.html#term-Reflection"><span class="xref std std-term">reflections</span></a>.</p>
+<p>Since many common thermoplastics used in the product design also have low <a class="reference internal" href="../glossary.html#term-Permittivity"><span class="xref std std-term">permittivity</span></a> and low loss, a lens can often be incorporated into the same encapsulation material with little additional cost. 3D printing technology allows for rapid prototyping and can often resemble the performance of the final product. <a class="reference internal" href="../glossary.html#term-Dielectric"><span class="xref std std-term">Dielectric</span></a> lenses are generally more compact and less expensive to fabricate than corresponding horn antennas and reflectors.</p>
+<p>To quickly get started using a lens, Acconeer provides two example lenses, one plano-convex and one FZP type lens, <a class="reference internal" href="#fig-module-plano-convex"><span class="std std-numref">Figure 45</span></a> and <a class="reference internal" href="#fig-module-fzp"><span class="std std-numref">Figure 46</span></a>. Both lenses can be used with all module evaluation kits. The FZP lens is similar to the example lens in <a class="reference internal" href="#integration-a121-lenses-example-fzp"><span class="std std-ref">Example FZP lens calculation</span></a>. The user guide and performance of these lenses can be found in <a class="reference external" href="https://developer.acconeer.com/download/Getting-Started-Guide-A121-Lenses">A121 Lenses Getting Started Guide</a>.</p>
+<div class="sd-container-fluid sd-sphinx-override sd-mb-4 docutils">
+<div class="sd-row sd-row-cols-2 sd-row-cols-xs-2 sd-row-cols-sm-2 sd-row-cols-md-2 sd-row-cols-lg-2 sd-g-2 sd-g-xs-2 sd-g-sm-2 sd-g-md-2 sd-g-lg-2 docutils">
+<div class="sd-col sd-d-flex-column docutils">
+<figure class="align-default" id="id3">
+<span id="fig-module-plano-convex"></span><a class="reference internal image-reference" href="../_images/module_plano_convex_lens.png"><img alt="Module plano-convex lens" src="../_images/module_plano_convex_lens.png" style="width: 150%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 45 </span><span class="caption-text">Plano-convex lens from Acconeer lens kit</span><a class="headerlink" href="#id3" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</div>
+<div class="sd-col sd-d-flex-column docutils">
+<figure class="align-default" id="id4">
+<span id="fig-module-fzp"></span><a class="reference internal image-reference" href="../_images/FZP_module_lens.png"><img alt="Module FZP Lens" src="../_images/FZP_module_lens.png" style="width: 65%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 46 </span><span class="caption-text">FZP lens from Acconeer lens kit</span><a class="headerlink" href="#id4" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<section id="refracting-lenses">
+<h2>Refracting lenses<a class="headerlink" href="#refracting-lenses" title="Link to this heading">#</a></h2>
+<section id="design-principles">
+<h3>Design Principles<a class="headerlink" href="#design-principles" title="Link to this heading">#</a></h3>
+<p><a class="reference internal" href="#fig-hyperbolic-efield"><span class="std std-numref">Figure 47</span></a> shows a spherical wavefront from the A121 sensor feeding a converging lens of refractive index <span class="math notranslate nohighlight">\(n = \sqrt{\varepsilon_r}\)</span>. The lens <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refracts</span></a> the spherical waves to produce parallel waves for increasing the directivity. <a class="reference internal" href="#fig-hyperbolic-ray-model"><span class="std std-numref">Figure 48</span></a> shows the corresponding ray optics model where rays propagate from the source as diverging straight lines until hitting the first surface and <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refracting</span></a> into parallel rays. Ray optics does not account for interference, <a class="reference internal" href="../glossary.html#term-Diffraction"><span class="xref std std-term">diffraction</span></a>, and polarization but it provides a basic understanding of <a class="reference internal" href="../glossary.html#term-Dielectric"><span class="xref std std-term">dielectric</span></a> lenses, and most importantly, allows us to quickly construct analytical lens shapes for many applications.</p>
+<p>In the following we assume that all lens profiles are axisymmetric, although asymmetrical lenses can be designed for customized radiation patterns. For a converging lens, two criteria need to be fulfilled:</p>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">Refraction</span></a> at one or both surfaces to produce parallel rays at the output.</p></li>
+<li><p>The rays just outside the outer surface have to be coherent (in-phase).</p></li>
+</ol>
+<p>One of the lens surfaces can be chosen arbitrarily, for example planar or spherical. Next, we will provide design equations for constructing converging lenses fulfilling these criteria.</p>
+<div class="sd-container-fluid sd-sphinx-override sd-mb-4 docutils">
+<div class="sd-row sd-row-cols-2 sd-row-cols-xs-2 sd-row-cols-sm-2 sd-row-cols-md-2 sd-row-cols-lg-2 sd-g-2 sd-g-xs-2 sd-g-sm-2 sd-g-md-2 sd-g-lg-2 docutils">
+<div class="sd-col sd-d-flex-column docutils">
+<figure class="align-default" id="id5">
+<span id="fig-hyperbolic-efield"></span><a class="reference internal image-reference" href="../_images/hyperbolic_efield.png"><img alt="Hyperbolic E-field" src="../_images/hyperbolic_efield.png" style="width: 68%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 47 </span><span class="caption-text">Hyperbolic lens with spherical E-field source</span><a class="headerlink" href="#id5" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</div>
+<div class="sd-col sd-d-flex-column docutils">
+<figure class="align-default" id="id6">
+<span id="fig-hyperbolic-ray-model"></span><a class="reference internal image-reference" href="../_images/hyperbolic_ray_model.svg"><img alt="Hyperbolic ray model" src="../_images/hyperbolic_ray_model.svg" style="width: 100%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 48 </span><span class="caption-text">Hyperbolic lens ray model</span><a class="headerlink" href="#id6" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="convex-planar-lens-hyperboloidal-lens">
+<h3>Convex-planar lens (Hyperboloidal lens)<a class="headerlink" href="#convex-planar-lens-hyperboloidal-lens" title="Link to this heading">#</a></h3>
+<p>By constraining the outer surface to planar we have <span class="math notranslate nohighlight">\(x_{2} = F + T\)</span>, <a class="reference internal" href="#fig-hyperbolic-ray-model"><span class="std std-numref">Figure 48</span></a>. Equating the optical path through a point (<span class="math notranslate nohighlight">\(x_{1},y_{1}\)</span>) with the central path yields</p>
+<div class="math notranslate nohighlight" id="equation-eq-hyperbolic-1">
+<span class="eqno">(18)<a class="headerlink" href="#equation-eq-hyperbolic-1" title="Link to this equation">#</a></span>\[\sqrt{x_{1}^{2} + y_{1}^{2}} = nx_{1} + (1- n)F\]</div>
+<p><a class="reference internal" href="#equation-eq-hyperbolic-1">Eq. 18</a> can be written as</p>
+<div class="math notranslate nohighlight" id="equation-eq-hyperbolic-2">
+<span class="eqno">(19)<a class="headerlink" href="#equation-eq-hyperbolic-2" title="Link to this equation">#</a></span>\[\left(\frac{x_{1}-x_{0}}{a}\right)^{2} - \left(\frac{y_{1}}{b}\right)^{2} = 1\]</div>
+<p>where the coefficients are given by</p>
+<div class="math notranslate nohighlight" id="equation-eq-hyperbolic-3">
+<span class="eqno">(20)<a class="headerlink" href="#equation-eq-hyperbolic-3" title="Link to this equation">#</a></span>\[a = \frac{F}{n+1}, b = \sqrt{\frac{n-1}{n+1}}F, x_{0} = \frac{nF}{n+1}\]</div>
+<p>Observe that we have <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refraction</span></a> only at the inner surface, that is, this is a single <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refracting</span></a> lens. We recognize <a class="reference internal" href="#equation-eq-hyperbolic-3">Eq. 20</a> as a hyperbolic function shifted in the <span class="math notranslate nohighlight">\(x\)</span> direction by <span class="math notranslate nohighlight">\(x_{0}\)</span>, hence the name hyperbolic (2D) or hyperboloidal (3D) lens.</p>
+<p>The central thickness of the lens can be shown to be</p>
+<div class="math notranslate nohighlight" id="equation-eq-hyperbolic-4">
+<span class="eqno">(21)<a class="headerlink" href="#equation-eq-hyperbolic-4" title="Link to this equation">#</a></span>\[T = \frac{1}{n+1}\left( \sqrt{F^{2} + \frac{(n+1)D^{2}}{4(n-1)}} -F \right)\]</div>
+<p>To generate a lens profile, we first choose a material <span class="math notranslate nohighlight">\(n = \sqrt{\varepsilon_r}\)</span>. After this the diameter <span class="math notranslate nohighlight">\(D\)</span> and the focal distance <span class="math notranslate nohighlight">\(F\)</span> is chosen to fulfill some maximum thickness requirement in <a class="reference internal" href="#equation-eq-hyperbolic-4">Eq. 21</a>. The lens profile is then given by <a class="reference internal" href="#equation-eq-hyperbolic-2">Eq. 19</a> by solving for <span class="math notranslate nohighlight">\(y_{1} = y_{1}(x_{1}), x_{1}\in [F, F+T]\)</span>. A parametrization <span class="math notranslate nohighlight">\((x_{1}(t),y_{1}(t))\)</span> may be required for generating the lens profile in CAD software. One such parametrization is</p>
+<div class="math notranslate nohighlight" id="equation-eq-hyperbolic-parametric">
+<span class="eqno">(22)<a class="headerlink" href="#equation-eq-hyperbolic-parametric" title="Link to this equation">#</a></span>\[\begin{split}\begin{cases}
+x_{1} = x_{0}+a \sqrt{1 + \left( \frac{t}{b}\right)^{2}}\\
+y_{1} = t
+\end{cases}
+, t \in \left[-\frac{D}{2}, \frac{D}{2} \right]\end{split}\]</div>
+</section>
+<section id="plano-convex-lens">
+<h3>Plano-convex lens<a class="headerlink" href="#plano-convex-lens" title="Link to this heading">#</a></h3>
+<p>Constraining the inner surface to planar results in a plano-convex lens, see <a class="reference internal" href="#fig-plano-convex-ray-model"><span class="std std-numref">Figure 49</span></a>. We then have <span class="math notranslate nohighlight">\(x_{1} = F\)</span> and carrying out the algebra results in the following parametric solution for the outer surface:</p>
+<div class="math notranslate nohighlight" id="equation-eq-planoconvex-1">
+<span class="eqno">(23)<a class="headerlink" href="#equation-eq-planoconvex-1" title="Link to this equation">#</a></span>\[\begin{split}\begin{cases}
+x_{2} = \frac{\left((n-1)T-\sqrt{F^{2}+y_{1}^{2}}\right) \sqrt{(n^{2}-1)y_{1}^2 + n^{2}F^{2}} + n^{2}F\sqrt{F^{2}+y_{1}^{2}}}{n^{2}\sqrt{F^{2}+y_{1}^{2}} - \sqrt{(n^{2} - 1)y_{1}^{2} + n^{2}F^{2}}} \\
+y_{2} = y_{1}\left(1+\frac{x_{2}-F}{\sqrt{(n^{2} - 1)y_{1}^{2} + n^{2}F^{2}}} \right)
+\end{cases}\end{split}\]</div>
+<figure class="align-center" id="id7">
+<span id="fig-plano-convex-ray-model"></span><a class="reference internal image-reference" href="../_images/plano-convex_ray_model.svg"><img alt="../_images/plano-convex_ray_model.svg" src="../_images/plano-convex_ray_model.svg" style="width: 95%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 49 </span><span class="caption-text">Plano-convex lens ray model.</span><a class="headerlink" href="#id7" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+<p>The central thickness is given by</p>
+<div class="math notranslate nohighlight" id="equation-eq-planoconvex-2">
+<span class="eqno">(24)<a class="headerlink" href="#equation-eq-planoconvex-2" title="Link to this equation">#</a></span>\[T = \frac{\sqrt{4F^{2} + D^{2}}-2F}{2(n-1)}\]</div>
+<p>Contrary to the hyperboloidal lens, we now have <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refraction</span></a> at both the inner and the outer surfaces. The lens profile given in <a class="reference internal" href="#equation-eq-planoconvex-1">Eq. 23</a> do not resemble any known function and we therefore simply call this lens a plano-convex lens.</p>
+</section>
+</section>
+<section id="lens-gain">
+<h2>Lens gain<a class="headerlink" href="#lens-gain" title="Link to this heading">#</a></h2>
+<p>The lens gain is related to the lens effective area by <span class="math notranslate nohighlight">\(G = \frac{4 \pi A_{e}}{\lambda^{2}}\)</span> where <span class="math notranslate nohighlight">\(\lambda\)</span> is the wavelength in the <a class="reference internal" href="../glossary.html#term-Dielectric"><span class="xref std std-term">dielectric</span></a> material. Approximating the effective area with the lens inner surface area <span class="math notranslate nohighlight">\(A_{e} = \pi \left(\frac{D}{2}\right)^{2}\)</span>, we obtain <span class="math notranslate nohighlight">\(G = \left(\frac{\pi D}{\lambda}\right)^{2}\)</span>. We thus notice that the lens gain is proportional to the square of the diameter. To get the lens <a class="reference internal" href="../glossary.html#term-RLG"><span class="xref std std-term">RLG</span></a>, we double the lens gain, because of the Tx and Rx path.</p>
+<p><a class="reference internal" href="#fig-hyperbolic-gain-vs-size"><span class="std std-numref">Figure 50</span></a> and <a class="reference internal" href="#fig-plano-convex-gain-vs-size"><span class="std std-numref">Figure 51</span></a> show simulated <a class="reference internal" href="../glossary.html#term-RLG"><span class="xref std std-term">RLG</span></a> pattern plots for the hyperbolic and the plano-convex lenses for some sample values of F and D. These figures can be used as a rough guideline for choosing the lens size. Observe that for the same diameter, the plano-convex lens yields somewhat higher gain compared to the hyperbolic lens. The exact <a class="reference internal" href="../glossary.html#term-RLG"><span class="xref std std-term">RLG</span></a> pattern will also depend on the lens housing, choice of material, and PCB size.</p>
+<figure class="align-center" id="id8">
+<span id="fig-hyperbolic-gain-vs-size"></span><a class="reference internal image-reference" href="../_images/hyperbolic_size_vs_gain.svg"><img alt="../_images/hyperbolic_size_vs_gain.svg" src="../_images/hyperbolic_size_vs_gain.svg" style="width: 95%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 50 </span><span class="caption-text">Simulated <a class="reference internal" href="../glossary.html#term-RLG"><span class="xref std std-term">RLG</span></a> patterns for different size hyperbolic lenses assuming lossless <a class="reference internal" href="../glossary.html#term-Dielectric"><span class="xref std std-term">dielectrics</span></a>.</span><a class="headerlink" href="#id8" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+<figure class="align-center" id="id9">
+<span id="fig-plano-convex-gain-vs-size"></span><a class="reference internal image-reference" href="../_images/Plano-convex_size_vs_gain.svg"><img alt="../_images/Plano-convex_size_vs_gain.svg" src="../_images/Plano-convex_size_vs_gain.svg" style="width: 95%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 51 </span><span class="caption-text">Simulated <a class="reference internal" href="../glossary.html#term-RLG"><span class="xref std std-term">RLG</span></a> patterns for different size plano-convex lenses assuming lossless <a class="reference internal" href="../glossary.html#term-Dielectric"><span class="xref std std-term">dielectrics</span></a>.</span><a class="headerlink" href="#id9" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</section>
+<section id="fresnel-zone-plate-fzp-lenses">
+<h2>Fresnel Zone Plate (FZP) lenses<a class="headerlink" href="#fresnel-zone-plate-fzp-lenses" title="Link to this heading">#</a></h2>
+<p>The plano-convex and convex-planar type lenses are <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refracting</span></a> type lenses. Another popular lens type is the Fresnel zone plate lens which is based on <a class="reference internal" href="../glossary.html#term-Diffraction"><span class="xref std std-term">diffraction</span></a> instead of <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refraction</span></a>. Different types of FZP lenses exists and here the phase correcting FZP lens is covered. The FZP lens structure is composed of <a class="reference internal" href="../glossary.html#term-Dielectric"><span class="xref std std-term">dielectric</span></a> rings with different thickness for correcting the phase of the incident waves. <a class="reference internal" href="#fig-fzp-ray-model"><span class="std std-numref">Figure 52</span></a> shows an example of FZP lens consisting of 3 zones with the phase step of quarter of a wavelength.</p>
+<div class="sd-container-fluid sd-sphinx-override sd-mb-4 docutils">
+<div class="sd-row sd-row-cols-2 sd-row-cols-xs-2 sd-row-cols-sm-2 sd-row-cols-md-2 sd-row-cols-lg-2 sd-g-2 sd-g-xs-2 sd-g-sm-2 sd-g-md-2 sd-g-lg-2 docutils">
+<div class="sd-col sd-d-flex-column docutils">
+<figure class="align-default" id="id10">
+<span id="fig-fzp-ray-model"></span><a class="reference internal image-reference" href="../_images/FZP_ray_model.png"><img alt="FZP Ray model" src="../_images/FZP_ray_model.png" style="width: 100%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 52 </span><span class="caption-text">FZP lens drawing</span><a class="headerlink" href="#id10" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</div>
+<div class="sd-col sd-d-flex-column docutils">
+<figure class="align-default" id="id11">
+<span id="fig-fzp-efield"></span><a class="reference internal image-reference" href="../_images/FZP_efield.png"><img alt="FZP E-field" src="../_images/FZP_efield.png" style="width: 92%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 53 </span><span class="caption-text">FZP Lens with spherical E-field source</span><a class="headerlink" href="#id11" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The radius <span class="math notranslate nohighlight">\(r_{i}\)</span> of the rings and the step thickness <span class="math notranslate nohighlight">\(s\)</span> can be calculated with:</p>
+<div class="math notranslate nohighlight" id="equation-eq-fzp-1">
+<span class="eqno">(25)<a class="headerlink" href="#equation-eq-fzp-1" title="Link to this equation">#</a></span>\[r_{i} = \sqrt{2Fi\frac{\lambda_{0}}{p} + \left(\frac{i\lambda_{0}}{P}\right)^{2}}, i = 1,2,3,...., N\]</div>
+<div class="math notranslate nohighlight" id="equation-eq-fzp-2">
+<span class="eqno">(26)<a class="headerlink" href="#equation-eq-fzp-2" title="Link to this equation">#</a></span>\[s = \frac{\lambda}{P\left(\sqrt{\varepsilon_r} -1\right)}\]</div>
+<p>Here <span class="math notranslate nohighlight">\(F\)</span> is the focal point, <span class="math notranslate nohighlight">\(P\)</span> is the number of sub-zones, or steps, <span class="math notranslate nohighlight">\(\lambda_{0}\)</span> is the wavelength in free space ( 5 mm at 60 GHz), and <span class="math notranslate nohighlight">\(\varepsilon_r\)</span>, is the <a class="reference internal" href="../glossary.html#term-Permittivity"><span class="xref std std-term">relative dielectric constant</span></a>. For small diameter lenses, we can choose one zone and 4 or 8 steps. For larger diameter lenses, additional sub-zones can be added for increased gain. Notice that contrary to the <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refracting</span></a> type lenses, the ring thickness and hence the total thickness is independent of the lens radius. This allows us to construct large diameter lenses without increasing the thickness.</p>
+<section id="example-fzp-lens-calculation">
+<span id="integration-a121-lenses-example-fzp"></span><h3>Example FZP lens calculation<a class="headerlink" href="#example-fzp-lens-calculation" title="Link to this heading">#</a></h3>
+<p>This is an example of a single zone FZP lens with a focal point F = 10 mm and quarter of wavelength step, N = 4. We assume material <a class="reference internal" href="../glossary.html#term-Permittivity"><span class="xref std std-term">permittivity</span></a> of <span class="math notranslate nohighlight">\(\varepsilon_r\)</span> = 2.6. Inserting this into <a class="reference internal" href="#equation-eq-fzp-1">Eq. 25</a> gives us the lens radii as follows:</p>
+<ul class="simple">
+<li><p><span class="math notranslate nohighlight">\(r_{1}\)</span> = 5.1 mm</p></li>
+<li><p><span class="math notranslate nohighlight">\(r_{2}\)</span> = 7.46 mm</p></li>
+<li><p><span class="math notranslate nohighlight">\(r_{3}\)</span> = 9.39 mm</p></li>
+<li><p><span class="math notranslate nohighlight">\(r_{4}\)</span> = 11.12 mm</p></li>
+</ul>
+<p><a class="reference internal" href="#equation-eq-fzp-2">Eq. 26</a> gives us the step thickness of s = 2.02 mm. Total thickness of the lens is then 4*2.02 = 8.1 mm.</p>
+<p>For further details regarding FZP lens design, see <a class="footnote-reference brackets" href="#f1" id="id1" role="doc-noteref"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></a>.</p>
+</section>
+<section id="lens-thickness-comparison">
+<h3>Lens thickness comparison<a class="headerlink" href="#lens-thickness-comparison" title="Link to this heading">#</a></h3>
+<p>For mass production, injection molding is usually cost effective but producing thick lenses can be challenging as sink marks and other deformations can occur. It is therefore of interest to find lens designs which are as thin as possible. In <a class="reference internal" href="#fig-lens-thickness-comp"><span class="std std-numref">Figure 54</span></a> we have compared the lens thickness to diameter ratio (T/D) as a function of <span class="math notranslate nohighlight">\(\varepsilon_r\)</span>. Common thermoplastics have <span class="math notranslate nohighlight">\(\varepsilon_r\)</span> in the range 2-4 and the hyperboloidal lens is the thinnest lens. To obtain even thinner lenses, the F/D ratio can be increased; however, this may also increase side lobe levels due to spillover radiation, especially for small-diameter lenses.</p>
+<figure class="align-center" id="id12">
+<span id="fig-lens-thickness-comp"></span><a class="reference internal image-reference" href="../_images/lens_thickness_comparison.svg"><img alt="../_images/lens_thickness_comparison.svg" src="../_images/lens_thickness_comparison.svg" style="width: 95%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 54 </span><span class="caption-text">Lens thickness comparison.</span><a class="headerlink" href="#id12" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+<section id="lens-design-guidelines-and-prototyping">
+<h2>Lens design guidelines and prototyping<a class="headerlink" href="#lens-design-guidelines-and-prototyping" title="Link to this heading">#</a></h2>
+<p>In general, multiple design aspects must be considered when choosing a lens type. Whenever possible, the lens can be made as a part of the outer enclosure and therefore avoid the need for an additional radome. For applications requiring a flat outer surface, convex-planar or FZP lenses are good choices. Outdoor applications may need to consider rain or ice buildup and here the lens outer surface is chosen to minimize this impact. For example, an upwards pointing convex surface would collect less rain.</p>
+<p>Manufacturing lenses by injection molding may pose limitations on the lens maximum thickness. For the refracting type lenses, thin lenses are obtained by choosing a high F/D ratio and higher <a class="reference internal" href="../glossary.html#term-Permittivity"><span class="xref std std-term">permittivity</span></a> materials. On the other hand, higher F/D ratios occupy more space as well as increased spillover energy which in turn leads to larger side lobes. For the plano-convex and convex-planar lenses, it is therefore recommended to keep 0.3 &lt; F/D &lt; 0.6. Lens design with F/D outside this range is certainly possible, but with additional loss in directivity and increased side lobes. When large diameter lenses are required, FZP type lenses should be considered as it’s thickness only depends on the <a class="reference internal" href="../glossary.html#term-Permittivity"><span class="xref std std-term">permittivity</span></a> and are thus generally thinner than <a class="reference internal" href="../glossary.html#term-Refraction"><span class="xref std std-term">refracting</span></a> type lenses.</p>
+<p>For maximum gain and low side-lobe levels, it is important to also follow the PCB ground plane guidelines in <a class="reference internal" href="electromagnetic_pcb_design_guidelines.html#integration-a121-em-pcb-groundplane-size"><span class="std std-ref">Sensor ground plane size</span></a>.</p>
+<section id="focal-distance-tuning">
+<h3>Focal distance tuning<a class="headerlink" href="#focal-distance-tuning" title="Link to this heading">#</a></h3>
+<p>The focal distance <span class="math notranslate nohighlight">\(F\)</span> is an input parameter for all lens designs provided here. However, the optimal focal distance may need to be slightly adjusted such that the <a class="reference internal" href="../glossary.html#term-Reflection"><span class="xref std std-term">reflection</span></a> from the lens is simultaneously minimized. In addition, other effects can impact the focal point, such as material <a class="reference internal" href="../glossary.html#term-Permittivity"><span class="xref std std-term">permittivity</span></a> being slightly off, impact of lens housing, radomes and other nearby mechanics.</p>
+<p><a class="reference internal" href="#fig-focal-distance-tuning"><span class="std std-numref">Figure 55</span></a> shows the gain variation of the integrated lens with the radome with respect to the free space scenario for the XM112 module. The maximum gain happens at 7.5 mm distance for both lenses. Other maxima happen every half-a-wavelength (2.5 mm).</p>
+<figure class="align-center" id="id13">
+<span id="fig-focal-distance-tuning"></span><a class="reference internal image-reference" href="../_images/gain_vs_focal_distance.png"><img alt="../_images/gain_vs_focal_distance.png" src="../_images/gain_vs_focal_distance.png" style="width: 95%;" />
+</a>
+<figcaption>
+<p><span class="caption-number">Figure 55 </span><span class="caption-text">Gain variation of the lens versus the distance to the XM112 radome. The amplitude is normalized to free space (FS). Gain is stated in one direction (Tx or Rx side). For <a class="reference internal" href="../glossary.html#term-RLG"><span class="xref std std-term">RLG</span></a> the values will be doubled.</span><a class="headerlink" href="#id13" title="Link to this image">#</a></p>
+</figcaption>
+</figure>
+</section>
+<section id="customized-lenses">
+<h3>Customized lenses<a class="headerlink" href="#customized-lenses" title="Link to this heading">#</a></h3>
+<p>The lens design equations provided here are based on ray optics and may not be adequate in more challenging applications, especially when the lens diameter is small. With a full wave EM solver, Acconeer can construct optimized lenses for maximizing the gain, minimizing the side lobes or customizing the radiation pattern. The impact of lens housings, nearby mechanics and the PCB can also be simulated. Acconeer provides a design service for this, visit the <a class="reference external" href="https://developer.acconeer.com/home/design-services/">Acconeer Developer page</a> for details.</p>
+<p>For more information, see:</p>
+<ul class="simple">
+<li><p><svg version="1.1" width="1.0em" height="1.0em" class="sd-octicon sd-octicon-download" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"></path><path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"></path></svg> <a class="reference external" href="https://developer.acconeer.com/download/Getting-Started-Guide-A121-Lenses">A121 Lenses Getting Started Guide</a></p></li>
+</ul>
+<p class="rubric">Footnotes</p>
+<aside class="footnote-list brackets">
+<aside class="footnote brackets" id="f1" role="doc-footnote">
+<span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">1</a><span class="fn-bracket">]</span></span>
+<p>J. C. W. D. N. Black, “Millimeter-Wave Characteristics of
+Phase-Correcting Fresnel Zone Plates,” <em>IEEE Transactions on Microwave
+Theory and Techniques</em>, vol. 35, no. 12, pp. 1122–1129, 1987.</p>
+</aside>
+</aside>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="electromagnetic_pcb_design_guidelines.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">PCB guidelines</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="radome_and_mechanical_design.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Radome and mechanical design</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#refracting-lenses">Refracting lenses</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#design-principles">Design Principles</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#convex-planar-lens-hyperboloidal-lens">Convex-planar lens (Hyperboloidal lens)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#plano-convex-lens">Plano-convex lens</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#lens-gain">Lens gain</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fresnel-zone-plate-fzp-lenses">Fresnel Zone Plate (FZP) lenses</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#example-fzp-lens-calculation">Example FZP lens calculation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#lens-thickness-comparison">Lens thickness comparison</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#lens-design-guidelines-and-prototyping">Lens design guidelines and prototyping</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#focal-distance-tuning">Focal distance tuning</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#customized-lenses">Customized lenses</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Acconeer AB
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2019-2026, Acconeer AB.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    <p class="last-updated">
+  Last updated on 2026-04-02.
+  <br/>
+</p>
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>

@@ -61,7 +61,7 @@ Optional IMU connections:
 - UI controls distance focus (`start_m`, `end_m`), profile, HWAAS, sweeps/frame, and frame rate.
 - Defaults follow Acconeer's breathing reference app for stable live operation (profile 3, HWAAS 32, 16 sweeps/frame, 20 Hz) and auto-clamp sweeps/frame to the A121 4095-sample buffer/serial limits for wide ranges.
 - Live visualization plots latest amplitude vs distance, Acconeer-selected target range, respiration band, heart band, rate FFTs, and raw IQ. Live time-domain traces are append-only causal filters so old samples do not change shape while the plot scrolls.
-- A121 target acquisition now follows Acconeer's breathing reference app state machine/presence-distance selection, and respiratory-rate extraction runs Acconeer's own `BreathingProcessor` on that compact range segment; heart-rate display remains experimental and conservatively gated.
+- A121 target acquisition follows Acconeer's breathing reference app state machine/presence-distance selection. New CSV/SQLite recordings persist Acconeer's selected target/range and breathing rate per frame, so offline/history analysis reuses that gate; heart-rate display remains experimental and conservatively gated.
 
 ### IMU Pipeline (Secondary)
 
@@ -108,6 +108,10 @@ uv run respi ports
 uv run respi app --sensor radar --port COM6
 uv run respi app --sensor a121 --port COM3
 uv run respi test-a121 --port COM3 --frames 20 --start-m 0.2 --end-m 1.5
+uv run respi record-a121-test --port COM3 --label foil-chest  # Ctrl+C to stop; optional --seconds has no upper cap
+uv run respi record-a121-test --port COM3 --seconds 80 --label auto --auto-breaths  # automatic inhale/exhale sidecar
+uv run respi annotate-a121-breaths data\raw\a121\a121_test_80s_auto_YYYY-MM-DD_HH-MM-SS.csv
+uv run respi record-a121-sleep --port COM3 --label sleep-night-1  # Ctrl+C when you wake up; optional --hours 8
 uv run respi capture-radar --port COM6
 uv run respi live-radar --port COM6  # compatibility alias for the unified app
 ```

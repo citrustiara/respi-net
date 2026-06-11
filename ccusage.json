@@ -1,0 +1,141 @@
+{
+  "daily": [
+    {
+      "cacheCreationTokens": 339725,
+      "cacheReadTokens": 20688526,
+      "date": "2026-05-28",
+      "inputTokens": 1889484,
+      "modelsUsed": [
+        "[pi] ~google/gemini-flash-latest",
+        "[pi] openai/gpt-5.5",
+        "[pi] anthropic/claude-sonnet-4.6",
+        "[pi] gpt-5.5"
+      ],
+      "outputTokens": 147342,
+      "totalCost": 20.132648599999985,
+      "totalTokens": 23065077
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 49108992,
+      "date": "2026-05-29",
+      "inputTokens": 2577519,
+      "modelsUsed": [
+        "[pi] gpt-5.5",
+        "[pi] xiaomi/mimo-v2.5"
+      ],
+      "outputTokens": 293632,
+      "totalCost": 45.29686122400001,
+      "totalTokens": 51980143
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 62001152,
+      "date": "2026-05-30",
+      "inputTokens": 3188231,
+      "modelsUsed": [
+        "[pi] gpt-5.5"
+      ],
+      "outputTokens": 384917,
+      "totalCost": 58.48924099999993,
+      "totalTokens": 65574300
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 39066112,
+      "date": "2026-05-31",
+      "inputTokens": 1410281,
+      "modelsUsed": [
+        "[pi] gpt-5.5"
+      ],
+      "outputTokens": 190339,
+      "totalCost": 32.29463100000002,
+      "totalTokens": 40666732
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 48750080,
+      "date": "2026-06-01",
+      "inputTokens": 3820466,
+      "modelsUsed": [
+        "[pi] gpt-5.5",
+        "[pi] gpt-5.4-mini"
+      ],
+      "outputTokens": 452561,
+      "totalCost": 55.628196649999964,
+      "totalTokens": 53023107
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 41071616,
+      "date": "2026-06-02",
+      "inputTokens": 2173069,
+      "modelsUsed": [
+        "[pi] gpt-5.5"
+      ],
+      "outputTokens": 318358,
+      "totalCost": 40.95189300000001,
+      "totalTokens": 43563043
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 54269440,
+      "date": "2026-06-03",
+      "inputTokens": 2856676,
+      "modelsUsed": [
+        "[pi] gpt-5.5",
+        "[pi] gpt-5.4-mini"
+      ],
+      "outputTokens": 354991,
+      "totalCost": 51.31619114999992,
+      "totalTokens": 57481107
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 105562112,
+      "date": "2026-06-04",
+      "inputTokens": 5176532,
+      "modelsUsed": [
+        "[pi] gpt-5.5",
+        "[pi] gpt-5.4-mini"
+      ],
+      "outputTokens": 750874,
+      "totalCost": 101.08262010000006,
+      "totalTokens": 111489518
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 75578368,
+      "date": "2026-06-05",
+      "inputTokens": 5159858,
+      "modelsUsed": [
+        "[pi] gpt-5.5",
+        "[pi] gpt-5.4-mini"
+      ],
+      "outputTokens": 566875,
+      "totalCost": 78.40974714999997,
+      "totalTokens": 81305101
+    },
+    {
+      "cacheCreationTokens": 0,
+      "cacheReadTokens": 25328128,
+      "date": "2026-06-06",
+      "inputTokens": 1480205,
+      "modelsUsed": [
+        "[pi] gpt-5.5",
+        "[pi] gpt-5.4-mini"
+      ],
+      "outputTokens": 162334,
+      "totalCost": 24.880555149999996,
+      "totalTokens": 26970667
+    }
+  ],
+  "totals": {
+    "cacheCreationTokens": 339725,
+    "cacheReadTokens": 521424526,
+    "inputTokens": 29732321,
+    "outputTokens": 3622223,
+    "totalCost": 508.4825850239999,
+    "totalTokens": 555118795
+  }
+}

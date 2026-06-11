@@ -112,7 +112,8 @@ A121-specific controls:
 
 - `A121 target selection` - uses Acconeer's breathing reference state machine/presence-distance selector by default
 - `A121 gate display` - overlays the currently selected compact range segment on the amplitude plot
-- `Fallback gate` - compact segment width used for CSV/history or if Acconeer reference selection is disabled/unavailable
+- `A121 breath phases` - automatically shades detected inhale/exhale phases on A121 respiration plots and saves a `*_breath_annotations.csv` sidecar for CSV recordings
+- `Offline/fallback gate` - compact segment width used only when no recorded/live Acconeer selected range is available
 - `A121 start` - start distance in meters, e.g. `0.20 m`
 - `A121 end` - end distance in meters, e.g. `1.50 m`
 - `A121 profile` - Acconeer profile `1..5`; profile 3 is the default breathing-reference profile
@@ -199,6 +200,62 @@ Test the A121 without opening the UI:
 uv run respi test-a121 --port COM3 --frames 20 --start-m 0.2 --end-m 1.0 --profile 3 --hwaas 32 --sweeps-per-frame 16 --frame-rate-hz 20
 ```
 
+Record a real-data A121 test CSV. Omit `--seconds` to record until Ctrl+C; if supplied, `--seconds` has no upper cap:
+
+```powershell
+uv run respi record-a121-test --port COM3 --label foil-chest
+uv run respi record-a121-test --port COM3 --seconds 60 --label foil-chest
+# Configure A121 range/profile/HWAAS/sweeps/frame-rate explicitly:
+uv run respi record-a121-test --port COM3 --seconds 80 --label 80hr --start-m 0.20 --end-m 1.50 --profile 3 --hwaas 32 --sweeps-per-frame 16 --frame-rate-hz 20
+# Automatic breath phase annotations, avoiding key-press vibration artifacts:
+uv run respi record-a121-test --port COM3 --seconds 80 --label auto-breath --auto-breaths
+# Manual breath phase markers are still available: press i for inhale start/end, o for exhale start/end.
+uv run respi record-a121-test --port COM3 --seconds 80 --label breath-marked --mark-breaths --inhale-key i --exhale-key o
+# Generate automatic breath annotations for an existing A121 CSV:
+uv run respi annotate-a121-breaths data/raw/a121/a121_test_80s_auto-breath_YYYY-MM-DD_HH-MM-SS.csv
+# Alias:
+uv run respi capture-a121 --port COM3 --label foil-chest
+uv run respi capture-a121 --port COM3 --seconds 60 --label foil-chest
+```
+
+This saves a new non-overwriting file under `data/raw/a121/`, for example `a121_test_60s_foil-chest_YYYY-MM-DD_HH-MM-SS.csv`. `--auto-breaths` or `annotate-a121-breaths` saves a sidecar `*_breath_annotations.csv` in the same five-column format as manual markers: `Timestamp_ms,Elapsed_s,Frame,Event,Key`. Events are `inhale_start`, `inhale_end`, `exhale_start`, and `exhale_end`; automatic rows use `Key=auto`. Manual `--mark-breaths` is still supported, but it can shake the sensor if key presses are hard.
+
+Record an overnight/sleep A121 CSV. The sleep command streams rows directly to disk instead of keeping the full night in RAM. Omit `--hours` to record until you manually stop with Ctrl+C; include it only as a safety limit. By default, stopping the sleep recording also runs gated vitals extraction, classifies radar sleep phases, computes a Garmin-like radar sleep score, and writes a plot plus CSV/JSON sidecars under `data/plots/`.
+
+```powershell
+uv run respi record-a121-sleep --port COM3 --label sleep-night-1
+uv run respi record-a121-sleep --port COM3 --label sleep-night-1 --hours 8
+# Disable automatic post-processing:
+uv run respi record-a121-sleep --port COM3 --label sleep-night-1 --no-auto-analyze
+# Keep automatic vitals analysis but skip the sleep/comparison plot:
+uv run respi record-a121-sleep --port COM3 --label sleep-night-1 --no-auto-plot
+# Include Garmin FIT overlay after recording if you already have exported FIT files:
+uv run respi record-a121-sleep --port COM3 --label sleep-night-1 --garmin-fit path\to\WELLNESS.fit --garmin-fit path\to\SLEEP_DATA.fit
+```
+
+Offline A121 sleep analysis and Garmin FIT comparison can be run later on existing files:
+
+```powershell
+# Full raw A121 CSV -> gated HR/RR trend -> sleep phases/score/plot
+uv run respi analyze-a121-sleep data\raw\a121\a121_sleep_YYYY-MM-DD_HH-MM-SS.csv
+# Existing gated trend CSV -> radar-only phase/score plot
+uv run respi plot-a121-sleep data\plots\a121_sleep_YYYY-MM-DD_HH-MM-SS_gated_sleep_vitals.csv
+# Existing trend + one Garmin FIT file or a directory of FIT files; timestamps are aligned in local time
+uv run respi plot-a121-sleep data\plots\a121_sleep_YYYY-MM-DD_HH-MM-SS_gated_sleep_vitals.csv --garmin-fit path\to\GarminExportDir
+uv run respi plot-a121-sleep data\plots\a121_sleep_YYYY-MM-DD_HH-MM-SS_gated_sleep_vitals.csv --garmin-fit path\to\WELLNESS.fit --garmin-fit path\to\SLEEP_DATA.fit
+# Vitals-only plot with no phase/score panel
+uv run respi plot-a121-sleep data\plots\a121_sleep_YYYY-MM-DD_HH-MM-SS_gated_sleep_vitals.csv --no-sleep-phases
+# Decode Garmin FIT tables only
+uv run respi decode-garmin-fit path\to\WELLNESS.fit path\to\SLEEP_DATA.fit --stem my_sleep
+```
+
+Reusable code/scripts:
+
+- Garmin FIT decoding: `src/respi_net/garmin_fit.py`, CLI `respi decode-garmin-fit`
+- Radar sleep phases/scoring/plotting: `src/respi_net/a121_sleep.py`, CLI `respi plot-a121-sleep`
+- Raw overnight A121 gated vitals extraction: `tools/analyze_a121_sleep_vitals_gated.py`, CLI `respi analyze-a121-sleep`
+- Direct repository wrapper: `tools/plot_a121_garmin_sleep_overlay.py`
+
 Expected output looks like:
 
 ```text
@@ -270,8 +327,9 @@ For every frame:
 - phase is computed with `np.angle(...)`
 - strongest amplitude bin becomes `PeakDistance_m`
 - full arrays are saved as JSON strings in CSV/SQLite
+- Acconeer reference-app state, presence distance, selected compact range, and breathing rate are saved per frame
 
-For live A121 respiration, target acquisition/reacquisition follows Acconeer's breathing reference app state machine and presence-distance selection; the analyzer then runs Acconeer's `BreathingProcessor` on that compact selected range segment. CSV/history analysis does not contain full intra-frame sweeps, so it falls back to the stored mean-IQ target scoring. Heart-rate extraction is not provided by Acconeer here; the app treats it as an experimental, conservatively gated candidate. The A121 result buffer is limited to about `num_points * sweeps_per_frame <= 4095`; the app automatically reduces sweeps/frame or increases step length when a requested range would exceed sensor/serial limits.
+For live A121 respiration, target acquisition/reacquisition follows Acconeer's breathing reference app state machine and presence-distance selection. New CSV/SQLite recordings persist that Acconeer selection, so history/offline analysis reuses the same selected gate instead of rediscovering a weaker host-side gate from averaged IQ. The `Offline/fallback gate` is now only for disabled/unavailable Acconeer selection or very old/core-only files. Heart-rate extraction is not provided by Acconeer here; the app treats it as an experimental, conservatively gated candidate. The A121 result buffer is limited to about `num_points * sweeps_per_frame <= 4095`; the app automatically reduces sweeps/frame or increases step length when a requested range would exceed sensor/serial limits.
 
 ## Troubleshooting
 

@@ -13,9 +13,10 @@ import numpy as np
 import pandas as pd
 import pyqtgraph as pg
 from PySide6 import QtCore, QtGui, QtWidgets
-from scipy.signal import welch
+from scipy.signal import find_peaks, welch
 
-from .a121 import A121_COLUMNS, A121Config, A121Capture, parse_json_array
+from .a121 import A121_CAPTURE_COLUMNS, A121_COLUMNS, A121Config, A121Capture, parse_json_array
+from .a121_breaths import default_breath_annotations_path, generate_a121_breath_annotations
 from .a121_vitals import (
     A121_RATE_WINDOW_S,
     A121_RESP_BAND_HZ,
@@ -103,10 +104,33 @@ class RecordingStore:
                     phase TEXT NOT NULL,
                     real TEXT NOT NULL,
                     imag TEXT NOT NULL,
+                    acconeer_app_state TEXT,
+                    acconeer_presence_detected INTEGER,
+                    acconeer_presence_distance_m REAL,
+                    acconeer_target_distance_m REAL,
+                    acconeer_range_start_index INTEGER,
+                    acconeer_range_end_index INTEGER,
+                    acconeer_range_start_m REAL,
+                    acconeer_range_end_m REAL,
+                    acconeer_breathing_rate_bpm REAL,
                     FOREIGN KEY(session_id) REFERENCES sessions(id)
                 )
                 """
             )
+            existing_a121_cols = {row[1] for row in db.execute("PRAGMA table_info(a121_samples)").fetchall()}
+            for column_name, column_type in {
+                "acconeer_app_state": "TEXT",
+                "acconeer_presence_detected": "INTEGER",
+                "acconeer_presence_distance_m": "REAL",
+                "acconeer_target_distance_m": "REAL",
+                "acconeer_range_start_index": "INTEGER",
+                "acconeer_range_end_index": "INTEGER",
+                "acconeer_range_start_m": "REAL",
+                "acconeer_range_end_m": "REAL",
+                "acconeer_breathing_rate_bpm": "REAL",
+            }.items():
+                if column_name not in existing_a121_cols:
+                    db.execute(f"ALTER TABLE a121_samples ADD COLUMN {column_name} {column_type}")
             db.execute("CREATE INDEX IF NOT EXISTS idx_radar_session ON radar_samples(session_id)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_imu_session ON imu_samples(session_id)")
             db.execute("CREATE INDEX IF NOT EXISTS idx_a121_session ON a121_samples(session_id)")
@@ -119,7 +143,7 @@ class RecordingStore:
             )
             return int(cur.lastrowid)
 
-    def append_samples(self, sensor: str, session_id: int, rows: list[list[float]]) -> None:
+    def append_samples(self, sensor: str, session_id: int, rows: list[list[Any]]) -> None:
         if not rows:
             return
         with self._connect() as db:
@@ -129,14 +153,23 @@ class RecordingStore:
                     [(session_id, row[0], row[1], row[2]) for row in rows],
                 )
             elif sensor == "a121":
+                normalized_rows = [
+                    (list(row) + [None] * max(0, len(A121_CAPTURE_COLUMNS) - len(row)))[: len(A121_CAPTURE_COLUMNS)]
+                    for row in rows
+                ]
                 db.executemany(
                     """
                     INSERT INTO a121_samples(
                         session_id, timestamp_ms, frame, peak_distance_m, peak_amplitude,
-                        peak_phase_rad, mean_amplitude, distances_m, amplitude, phase, real, imag
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        peak_phase_rad, mean_amplitude, distances_m, amplitude, phase, real, imag,
+                        acconeer_app_state, acconeer_presence_detected,
+                        acconeer_presence_distance_m, acconeer_target_distance_m,
+                        acconeer_range_start_index, acconeer_range_end_index,
+                        acconeer_range_start_m, acconeer_range_end_m,
+                        acconeer_breathing_rate_bpm
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    [(session_id, *row) for row in rows],
+                    [(session_id, *row) for row in normalized_rows],
                 )
             else:
                 db.executemany(
@@ -179,7 +212,16 @@ class RecordingStore:
                            peak_distance_m AS PeakDistance_m, peak_amplitude AS PeakAmplitude,
                            peak_phase_rad AS PeakPhase_rad, mean_amplitude AS MeanAmplitude,
                            distances_m AS Distances_m, amplitude AS Amplitude,
-                           phase AS Phase, real AS Real, imag AS Imag
+                           phase AS Phase, real AS Real, imag AS Imag,
+                           acconeer_app_state AS AcconeerAppState,
+                           acconeer_presence_detected AS AcconeerPresenceDetected,
+                           acconeer_presence_distance_m AS AcconeerPresenceDistance_m,
+                           acconeer_target_distance_m AS AcconeerTargetDistance_m,
+                           acconeer_range_start_index AS AcconeerRangeStartIndex,
+                           acconeer_range_end_index AS AcconeerRangeEndIndex,
+                           acconeer_range_start_m AS AcconeerRangeStart_m,
+                           acconeer_range_end_m AS AcconeerRangeEnd_m,
+                           acconeer_breathing_rate_bpm AS AcconeerBreathingRate_BPM
                     FROM a121_samples WHERE session_id = ? ORDER BY rowid
                     """,
                     db,
@@ -280,6 +322,25 @@ def _detect_sensor(df: pd.DataFrame) -> str:
     raise ValueError("CSV does not contain recognized HB100 radar, A121 radar, or IMU columns.")
 
 
+class HzBpmAxisItem(pg.AxisItem):
+    """Bottom axis that shows frequency in Hz with BPM equivalent on each tick."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.enableAutoSIPrefix(False)
+
+    def tickStrings(self, values: list[float], scale: float, spacing: float) -> list[str]:
+        strings: list[str] = []
+        for v in values:
+            hz = float(v) * scale
+            bpm = hz * 60.0
+            if abs(hz) < 1e-9:
+                strings.append("0")
+            else:
+                strings.append(f"{hz:.2f}\n{bpm:.0f} BPM")
+        return strings
+
+
 class A121AnalysisThread(QtCore.QThread):
     analysis_completed = QtCore.Signal(int, object)
 
@@ -294,6 +355,7 @@ class A121AnalysisThread(QtCore.QThread):
         heart_prior_std_hz: float | None,
         use_gating: bool,
         auto_gate: bool,
+        heart_window_s: float | None,
     ) -> None:
         super().__init__()
         self.request_id = request_id
@@ -305,13 +367,15 @@ class A121AnalysisThread(QtCore.QThread):
         self.heart_prior_std_hz = heart_prior_std_hz
         self.use_gating = use_gating
         self.auto_gate = auto_gate
+        self.heart_window_s = heart_window_s
 
     def run(self) -> None:
         try:
             analysis_rows = [row for row in self.rows if float(row[0]) >= self.cutoff_ms]
             if not analysis_rows and self.rows:
                 analysis_rows = [self.rows[-1]]
-            df = pd.DataFrame(analysis_rows, columns=A121_COLUMNS)
+            columns = A121_CAPTURE_COLUMNS if analysis_rows and len(analysis_rows[0]) >= len(A121_CAPTURE_COLUMNS) else A121_COLUMNS
+            df = pd.DataFrame(analysis_rows, columns=columns)
             analysis = analyze_a121_vitals(
                 df,
                 auto_gate=self.auto_gate,
@@ -321,10 +385,89 @@ class A121AnalysisThread(QtCore.QThread):
                 heart_prior_hz=self.heart_prior_hz,
                 heart_prior_std_hz=self.heart_prior_std_hz,
                 use_gating=self.use_gating,
+                heart_window_s=self.heart_window_s,
             )
             self.analysis_completed.emit(self.request_id, analysis)
         except Exception as exc:
             print(f"A121 analysis failed: {exc}", file=sys.stderr)
+
+
+class A121SignalTestWindow(QtWidgets.QWidget):
+    """Small utility window for comparing A121 peak signal strength setups."""
+
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowFlag(QtCore.Qt.WindowType.Window, True)
+        self.setWindowTitle("A121 max amplitude / distance test")
+        self.resize(420, 260)
+        self.active = False
+        self.start_ms: float | None = None
+        self.samples: list[tuple[float, float]] = []
+
+        layout = QtWidgets.QVBoxLayout(self)
+        self.current_label = QtWidgets.QLabel("Current peak: waiting for A121 samples…")
+        self.current_label.setStyleSheet("font-size: 16px; font-weight: 600;")
+        layout.addWidget(self.current_label)
+
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(QtWidgets.QLabel("Test duration"))
+        self.duration_spin = QtWidgets.QDoubleSpinBox()
+        self.duration_spin.setRange(1.0, 120.0)
+        self.duration_spin.setDecimals(1)
+        self.duration_spin.setValue(10.0)
+        self.duration_spin.setSuffix(" s")
+        row.addWidget(self.duration_spin, 1)
+        self.start_btn = QtWidgets.QPushButton("Start test")
+        self.start_btn.clicked.connect(self.start_test)
+        row.addWidget(self.start_btn)
+        layout.addLayout(row)
+
+        self.progress = QtWidgets.QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        layout.addWidget(self.progress)
+
+        self.result_label = QtWidgets.QLabel("Run a test to average the max amplitude and its distance.")
+        self.result_label.setWordWrap(True)
+        layout.addWidget(self.result_label)
+        layout.addStretch(1)
+
+    def start_test(self) -> None:
+        self.active = True
+        self.start_ms = None
+        self.samples = []
+        self.progress.setValue(0)
+        self.result_label.setText(f"Collecting for {self.duration_spin.value():.1f} s…")
+
+    def update_sample(self, timestamp_ms: float, peak_distance_m: float, peak_amplitude: float) -> None:
+        if not (np.isfinite(timestamp_ms) and np.isfinite(peak_distance_m) and np.isfinite(peak_amplitude)):
+            return
+        self.current_label.setText(f"Current peak: amp {peak_amplitude:.1f} at {peak_distance_m:.3f} m")
+        if not self.active:
+            return
+        if self.start_ms is None:
+            self.start_ms = float(timestamp_ms)
+        elapsed_s = max(0.0, (float(timestamp_ms) - self.start_ms) / 1000.0)
+        duration_s = float(self.duration_spin.value())
+        self.samples.append((float(peak_amplitude), float(peak_distance_m)))
+        self.progress.setValue(int(np.clip(100.0 * elapsed_s / max(duration_s, 1e-9), 0.0, 100.0)))
+        if elapsed_s >= duration_s:
+            self.finish_test()
+
+    def finish_test(self) -> None:
+        self.active = False
+        self.progress.setValue(100)
+        if not self.samples:
+            self.result_label.setText("No valid A121 peak samples were collected.")
+            return
+        samples = np.asarray(self.samples, dtype=float)
+        amp = samples[:, 0]
+        dist = samples[:, 1]
+        self.result_label.setText(
+            f"Result over {len(samples)} frames:\n"
+            f"Avg max amplitude: {float(np.mean(amp)):.1f}  (std {float(np.std(amp)):.1f})\n"
+            f"Avg distance of max amplitude: {float(np.mean(dist)):.3f} m  (std {float(np.std(dist)):.3f} m)"
+        )
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -377,6 +520,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.a121_resp_pending_hz = 0.0
         self.a121_resp_pending_count = 0
         self.a121_resp_missed_count = 0
+        self.a121_signal_window: A121SignalTestWindow | None = None
+        self.a121_live_breath_items: list[Any] = []
+        self.a121_history_breath_items: list[Any] = []
 
         self._build_ui()
         self._build_menu()
@@ -440,6 +586,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.window_spin.valueChanged.connect(lambda _value: self._invalidate_a121_analysis())
         form.addRow("Live window", self.window_spin)
 
+        self.a121_hr_window_spin = QtWidgets.QSpinBox()
+        self.a121_hr_window_spin.setRange(10, 120)
+        self.a121_hr_window_spin.setSingleStep(2)
+        self.a121_hr_window_spin.setValue(30)
+        self.a121_hr_window_spin.setSuffix(" s")
+        self.a121_hr_window_spin.setMinimumWidth(220)
+        self.a121_hr_window_spin.setToolTip(
+            "Seconds of recent A121 samples passed to the heart-rate analyzer. "
+            "Use 12/20/30 s to trade faster response against frequency resolution."
+        )
+        self.a121_hr_window_spin.valueChanged.connect(lambda _value: self._invalidate_a121_analysis(reset_tracker=True))
+        form.addRow("A121 HR analyzer window", self.a121_hr_window_spin)
+
+        self.a121_analysis_refresh_spin = QtWidgets.QDoubleSpinBox()
+        self.a121_analysis_refresh_spin.setRange(0.20, 30.00)
+        self.a121_analysis_refresh_spin.setDecimals(1)
+        self.a121_analysis_refresh_spin.setSingleStep(0.5)
+        self.a121_analysis_refresh_spin.setValue(1.0)
+        self.a121_analysis_refresh_spin.setSuffix(" s")
+        self.a121_analysis_refresh_spin.setMinimumWidth(220)
+        self.a121_analysis_refresh_spin.setToolTip(
+            "How often the A121 sliding-window HR/RR analyzer refreshes. "
+            "Set 5.0 s to update rates every 5 seconds."
+        )
+        self.a121_analysis_refresh_spin.valueChanged.connect(self._set_a121_analysis_refresh_interval)
+        form.addRow("A121 analyzer refresh", self.a121_analysis_refresh_spin)
+
         self.view_combo = QtWidgets.QComboBox()
         self.view_combo.addItems(["Vitals (filtered)", "Rate FFT", "Raw signal"])
         self.view_combo.currentTextChanged.connect(self._configure_live_plots)
@@ -454,6 +627,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.a121_show_gate_check.setChecked(False)
         form.addRow("A121 gate display", self.a121_show_gate_check)
 
+        self.a121_auto_breath_check = QtWidgets.QCheckBox("auto classify inhale/exhale")
+        self.a121_auto_breath_check.setChecked(True)
+        self.a121_auto_breath_check.setToolTip(
+            "Automatically mark inhale/exhale phases on A121 respiration plots and save a "
+            "*_breath_annotations.csv sidecar for CSV recordings."
+        )
+        form.addRow("A121 breath phases", self.a121_auto_breath_check)
+
         self.a121_auto_gate_check = QtWidgets.QCheckBox("Acconeer app-state reacquisition")
         self.a121_auto_gate_check.setChecked(True)
         self.a121_auto_gate_check.setEnabled(False)
@@ -467,7 +648,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.a121_gate_spin.setSuffix(" m")
         self.a121_gate_spin.setMinimumWidth(220)
         self.a121_gate_spin.valueChanged.connect(lambda _value: self._invalidate_a121_analysis(reset_tracker=True))
-        form.addRow("Fallback gate", self.a121_gate_spin)
+        form.addRow("Offline/fallback gate", self.a121_gate_spin)
 
         self.a121_start_spin = QtWidgets.QDoubleSpinBox()
         self.a121_start_spin.setRange(0.03, 10.0)
@@ -512,6 +693,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.a121_frame_rate_spin.setSuffix(" Hz")
         self.a121_frame_rate_spin.setMinimumWidth(220)
         form.addRow("A121 fps", self.a121_frame_rate_spin)
+
+        self.a121_signal_test_btn = QtWidgets.QPushButton("Open max-signal test")
+        self.a121_signal_test_btn.clicked.connect(self._show_a121_signal_test_window)
+        form.addRow("A121 signal test", self.a121_signal_test_btn)
         side_layout.addLayout(form)
 
         self.start_btn = QtWidgets.QPushButton("Start recording")
@@ -618,6 +803,13 @@ class MainWindow(QtWidgets.QMainWindow):
         refresh_recordings.triggered.connect(self._refresh_recordings)
         view_menu.addAction(refresh_recordings)
 
+    def _show_a121_signal_test_window(self) -> None:
+        if self.a121_signal_window is None:
+            self.a121_signal_window = A121SignalTestWindow(self)
+        self.a121_signal_window.show()
+        self.a121_signal_window.raise_()
+        self.a121_signal_window.activateWindow()
+
     def _sensor_changed(self, text: str) -> None:
         label = text.lower()
         if "a121" in label:
@@ -692,6 +884,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self._reset_a121_rate_display()
             self.last_a121_tracker_update_monotonic = 0.0
 
+    def _a121_heart_analysis_window_s(self) -> float:
+        if hasattr(self, "a121_hr_window_spin"):
+            return max(10.0, float(self.a121_hr_window_spin.value()))
+        return 30.0
+
+    def _set_a121_analysis_refresh_interval(self, interval_s: float) -> None:
+        self.a121_analysis_interval_s = max(float(interval_s), 0.20)
+        self.last_a121_analysis_monotonic = 0.0
+
+    def _a121_analysis_refresh_interval_s(self) -> float:
+        return max(float(self.a121_analysis_interval_s), 0.20)
+
     def _configure_gating_ui(self) -> None:
         enabled = self.a121_use_gating_check.isChecked()
         # Acconeer's reference app decides when to reacquire and which compact range segment to
@@ -716,7 +920,98 @@ class MainWindow(QtWidgets.QMainWindow):
         if plot.legend is None:
             plot.addLegend(offset=(10, 10))
 
+    def _clear_plot_items(self, plot: pg.PlotWidget, items: list[Any]) -> None:
+        for item in list(items):
+            try:
+                plot.removeItem(item)
+            except Exception:
+                pass
+        items.clear()
+
+    def _breath_phase_spans(
+        self,
+        times_s: np.ndarray,
+        resp_signal: np.ndarray,
+        resp_bpm: float,
+    ) -> list[tuple[float, float, str]]:
+        if len(times_s) < 20 or len(resp_signal) != len(times_s):
+            return []
+        duration_s = float(times_s[-1] - times_s[0]) if len(times_s) else 0.0
+        if duration_s <= 4.0:
+            return []
+        fs = (len(times_s) - 1) / max(duration_s, 1e-9)
+        bpm = float(resp_bpm) if np.isfinite(resp_bpm) and resp_bpm > 0 else 12.0
+        period_s = float(np.clip(60.0 / max(bpm, 1e-9), 2.0, 12.0))
+        norm = (resp_signal - float(np.median(resp_signal))) / (float(np.std(resp_signal)) + 1e-12)
+        min_distance = max(1, int(round(fs * period_s * 0.45)))
+        peaks, _ = find_peaks(norm, distance=min_distance, prominence=0.30)
+        troughs, _ = find_peaks(-norm, distance=min_distance, prominence=0.30)
+        if len(peaks) < 1 or len(troughs) < 1:
+            peaks, _ = find_peaks(norm, distance=min_distance, prominence=0.15)
+            troughs, _ = find_peaks(-norm, distance=min_distance, prominence=0.15)
+        spans: list[tuple[float, float, str]] = []
+        for peak_idx in peaks:
+            next_troughs = troughs[troughs > peak_idx]
+            if len(next_troughs) == 0:
+                continue
+            trough_idx = int(next_troughs[0])
+            next_peaks = peaks[peaks > trough_idx]
+            if len(next_peaks) == 0:
+                continue
+            next_peak_idx = int(next_peaks[0])
+            inhale_s = float(times_s[trough_idx] - times_s[peak_idx])
+            exhale_s = float(times_s[next_peak_idx] - times_s[trough_idx])
+            if 0.15 * period_s <= inhale_s <= 0.85 * period_s:
+                spans.append((float(times_s[peak_idx]), float(times_s[trough_idx]), "inhale"))
+            if 0.15 * period_s <= exhale_s <= 0.95 * period_s:
+                spans.append((float(times_s[trough_idx]), float(times_s[next_peak_idx]), "exhale"))
+        return spans
+
+    def _add_breath_phase_spans(self, plot: pg.PlotWidget, items: list[Any], spans: list[tuple[float, float, str]]) -> None:
+        self._clear_plot_items(plot, items)
+        for start_s, end_s, phase in spans[-40:]:
+            if not np.isfinite(start_s) or not np.isfinite(end_s) or end_s <= start_s:
+                continue
+            color = QtGui.QColor(59, 130, 246, 36) if phase == "inhale" else QtGui.QColor(249, 115, 22, 36)
+            item = pg.LinearRegionItem(values=(start_s, end_s), brush=color, pen=None, movable=False)
+            item.setZValue(-10)
+            plot.addItem(item)
+            items.append(item)
+
+    def _load_breath_annotation_spans(self, csv_path: Path) -> list[tuple[float, float, str]]:
+        candidates = [
+            csv_path.with_name(f"{csv_path.stem}_auto_breath_annotations.csv"),
+            default_breath_annotations_path(csv_path),
+        ]
+        annotation_path = next((path for path in candidates if path.exists()), None)
+        if annotation_path is None:
+            return []
+        ann = pd.read_csv(annotation_path)
+        if "Elapsed_s" not in ann.columns or "Event" not in ann.columns:
+            return []
+        ann["Elapsed_s"] = pd.to_numeric(ann["Elapsed_s"], errors="coerce")
+        ann = ann.dropna(subset=["Elapsed_s"]).sort_values("Elapsed_s")
+        spans: list[tuple[float, float, str]] = []
+        starts: dict[str, float] = {}
+        for _, row in ann.iterrows():
+            event = str(row["Event"])
+            elapsed_s = float(row["Elapsed_s"])
+            if event == "inhale_start":
+                starts["inhale"] = elapsed_s
+            elif event == "inhale_end" and "inhale" in starts:
+                start_s = starts.pop("inhale")
+                if elapsed_s > start_s:
+                    spans.append((start_s, elapsed_s, "inhale"))
+            elif event == "exhale_start":
+                starts["exhale"] = elapsed_s
+            elif event == "exhale_end" and "exhale" in starts:
+                start_s = starts.pop("exhale")
+                if elapsed_s > start_s:
+                    spans.append((start_s, elapsed_s, "exhale"))
+        return spans
+
     def _configure_live_plots(self, *_: Any) -> None:
+        self._clear_plot_items(self.live_plot_b, self.a121_live_breath_items)
         view_text = self.view_combo.currentText().lower() if hasattr(self, "view_combo") else ""
         raw_view = view_text.startswith("raw")
         fft_view = view_text.startswith("rate")
@@ -733,6 +1028,9 @@ class MainWindow(QtWidgets.QMainWindow):
         elif self.active_sensor == "a121":
             self._configure_plot(self.live_plot_a, "A121 range profile", "Amplitude", "Distance [m]")
             if raw_view:
+                # Restore default time-domain axes (in case FFT view was previously active)
+                self.live_plot_b.setAxisItems({"bottom": pg.AxisItem(orientation="bottom")})
+                self.live_plot_c.setAxisItems({"bottom": pg.AxisItem(orientation="bottom")})
                 self._configure_plot(self.live_plot_b, "A121 raw selected phase (IQ)", "Phase [rad]")
                 self._configure_plot(self.live_plot_c, "A121 raw selected IQ", "I / Q")
                 self.live_curves = {
@@ -744,8 +1042,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     "raw_q": self.live_plot_c.plot(pen=pg.mkPen("#fb7185", width=1.1), name="Q"),
                 }
             elif fft_view:
-                self._configure_plot(self.live_plot_b, "Respiration rate spectrum (Welch FFT)", "Power", "Frequency [Hz]")
-                self._configure_plot(self.live_plot_c, "Heart rate spectrum (Welch FFT)", "Power", "Frequency [Hz]")
+                # Install Hz/BPM dual-label x-axes for FFT plots
+                self.live_plot_b.setAxisItems({"bottom": HzBpmAxisItem(orientation="bottom")})
+                self.live_plot_c.setAxisItems({"bottom": HzBpmAxisItem(orientation="bottom")})
+                self._configure_plot(self.live_plot_b, "Respiration rate spectrum (Welch FFT)", "Power", "Frequency [Hz] / BPM")
+                self._configure_plot(self.live_plot_c, "Heart rate spectrum (Welch FFT)", "Power", "Frequency [Hz] / BPM")
                 self.live_curves = {
                     "amplitude": self.live_plot_a.plot(pen=pg.mkPen("#22d3ee", width=1.5), name="Amplitude"),
                     "target": self.live_plot_a.plot(pen=None, symbol="o", symbolBrush="#facc15", symbolSize=10, name="Target"),
@@ -756,8 +1057,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     "heart_peak": self.live_plot_c.plot(pen=None, symbol="o", symbolBrush="#facc15", symbolSize=9, name="Heart peak"),
                 }
             else:
-                self._configure_plot(self.live_plot_b, "Respiration from A121 phase (Acconeer 0.10-1.00 Hz)", "Phase displacement [rad]")
-                self._configure_plot(self.live_plot_c, "Heart motion from A121 phase (0.65-3.00 Hz)", "Phase displacement [rad]")
+                # Restore default time-domain axes (in case FFT view was previously active)
+                self.live_plot_b.setAxisItems({"bottom": pg.AxisItem(orientation="bottom")})
+                self.live_plot_c.setAxisItems({"bottom": pg.AxisItem(orientation="bottom")})
+                self._configure_plot(self.live_plot_b, "Respiration from A121 phase (0.10-0.50 Hz)", "Phase displacement [rad]")
+                self._configure_plot(self.live_plot_c, "Heart motion from A121 phase (0.70-2.00 Hz)", "Phase displacement [rad]")
                 self.live_curves = {
                     "amplitude": self.live_plot_a.plot(pen=pg.mkPen("#22d3ee", width=1.5), name="Amplitude"),
                     "target": self.live_plot_a.plot(pen=None, symbol="o", symbolBrush="#facc15", symbolSize=10, name="Target"),
@@ -852,7 +1156,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.csv_path is not None:
             self.csv_file = self.csv_path.open("w", newline="", encoding="utf-8")
             self.csv_writer = csv.writer(self.csv_file)
-            self.csv_writer.writerow(RADAR_COLUMNS if sensor == "radar" else A121_COLUMNS if sensor == "a121" else IMU_COLUMNS)
+            self.csv_writer.writerow(RADAR_COLUMNS if sensor == "radar" else A121_CAPTURE_COLUMNS if sensor == "a121" else IMU_COLUMNS)
         self.session_id = self.store.create_session(sensor, self.csv_path) if "SQLite" in storage else None
         self.persisted_index = 0
         self.last_persist_monotonic = 0.0
@@ -884,12 +1188,21 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.active_sensor == "radar":
             stats = _radar_stats(pd.DataFrame(rows, columns=RADAR_COLUMNS))
         elif self.active_sensor == "a121":
-            stats = _a121_stats(pd.DataFrame(rows, columns=A121_COLUMNS))
+            columns = A121_CAPTURE_COLUMNS if rows and len(rows[0]) >= len(A121_CAPTURE_COLUMNS) else A121_COLUMNS
+            stats = _a121_stats(pd.DataFrame(rows, columns=columns))
         else:
             stats = _imu_stats(pd.DataFrame(rows, columns=IMU_COLUMNS))
         if self.session_id is not None:
             self.store.finish_session(self.session_id, len(rows), stats)
         self._close_csv()
+        auto_breath_path: Path | None = None
+        auto_breath_error: str | None = None
+        if self.active_sensor == "a121" and self.csv_path is not None and self.a121_auto_breath_check.isChecked():
+            try:
+                result = generate_a121_breath_annotations(self.csv_path, overwrite=True)
+                auto_breath_path = result.annotations_path
+            except Exception as exc:
+                auto_breath_error = str(exc)
         self.capture = None
         self.session_id = None
         self.timer.stop()
@@ -899,9 +1212,14 @@ class MainWindow(QtWidgets.QMainWindow):
         saved_to = []
         if self.csv_path:
             saved_to.append(str(self.csv_path))
+        if auto_breath_path is not None:
+            saved_to.append(str(auto_breath_path))
         if self.storage_combo.currentText() != "CSV only":
             saved_to.append(str(self.store.path))
-        self.status_label.setText("Stopped. Saved to:\n" + "\n".join(saved_to))
+        status = "Stopped. Saved to:\n" + "\n".join(saved_to)
+        if auto_breath_error:
+            status += f"\nAuto breath annotation failed: {auto_breath_error}"
+        self.status_label.setText(status)
         self._refresh_recordings()
 
     def _close_csv(self) -> None:
@@ -1129,12 +1447,20 @@ class MainWindow(QtWidgets.QMainWindow):
     def _update_live_a121(self, storage_count: int, live_rows: list[list[Any]]) -> None:
         now = time.monotonic()
         window_s = float(self.window_spin.value())
+        heart_analysis_window_s = self._a121_heart_analysis_window_s()
+        if live_rows and self.a121_signal_window is not None:
+            latest = live_rows[-1]
+            self.a121_signal_window.update_sample(float(latest[0]), float(latest[2]), float(latest[3]))
         fallback_gate_half_width = float(self.a121_gate_spin.value())
         previous_gate_center = self.a121_gate_center_m
         user_gate_enabled = self.a121_use_gating_check.isChecked()
         selection = self._a121_reference_selection() if user_gate_enabled else {}
         app_state = str(selection.get("app_state", ""))
-        reference_target_m = selection.get("target_distance_m") if app_state == "ESTIMATE_BREATHING_RATE" else None
+        # Prefer Acconeer's compact breathing range when available. During distance determination,
+        # use its presence distance as a provisional center; do not gate on INTRA/NO_PRESENCE states.
+        reference_target_m = selection.get("target_distance_m")
+        if reference_target_m is None and app_state == "DETERMINE_DISTANCE_ESTIMATE":
+            reference_target_m = selection.get("presence_distance_m")
         if reference_target_m is not None:
             reference_target_m = float(reference_target_m)
             if not np.isfinite(reference_target_m) or reference_target_m <= 0:
@@ -1160,7 +1486,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # freshly reset trace look flat until another reset.  Seed from the recent analysis
             # horizon instead.
             latest_ms_for_trace = float(live_rows[-1][0])
-            trace_seed_s = max(30.0, A121_RATE_WINDOW_S, window_s)
+            trace_seed_s = max(heart_analysis_window_s, A121_RATE_WINDOW_S, window_s)
             cutoff_trace_ms = latest_ms_for_trace - trace_seed_s * 1000.0
             trace_rows = [row for row in live_rows if float(row[0]) >= cutoff_trace_ms]
         live_result = self.a121_live_trace.process_rows(
@@ -1178,7 +1504,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         if should_analyze and (self.a121_analysis_thread is None or self.a121_analysis_thread.isFinished()):
             latest_ms = float(live_rows[-1][0]) if live_rows else 0.0
-            analysis_s = max(window_s + A121_RATE_WINDOW_S, 30.0)
+            analysis_s = max(heart_analysis_window_s, A121_RATE_WINDOW_S)
             cutoff_analysis_ms = latest_ms - analysis_s * 1000.0
             heart_prior_hz = self.a121_heart_tracker.current_hz
             heart_prior_std_hz = self.a121_heart_tracker.current_std_hz if heart_prior_hz is not None else None
@@ -1194,6 +1520,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 heart_prior_std_hz=heart_prior_std_hz,
                 use_gating=analysis_use_gating,
                 auto_gate=self.a121_auto_gate_check.isChecked(),
+                heart_window_s=heart_analysis_window_s,
             )
             self.a121_analysis_thread.analysis_completed.connect(self._on_a121_analysis_completed)
             self.a121_analysis_thread.start()
@@ -1234,11 +1561,14 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 spectrum_fs = 0.0
             if analysis is not None and len(analysis.times_s):
-                # Plot the same analysis signals that produce the displayed rate markers.
                 resp_source = analysis.resp_signal
                 heart_source = analysis.heart_signal
+                if len(heart_source) and spectrum_fs > 0:
+                    heart_samples = int(round(spectrum_fs * heart_analysis_window_s))
+                    if heart_samples > 0:
+                        heart_source = heart_source[-min(len(heart_source), heart_samples) :]
             elif live_result is not None and len(trace_times):
-                spectrum_window_s = max(30.0, A121_RATE_WINDOW_S, window_s)
+                spectrum_window_s = max(heart_analysis_window_s, A121_RATE_WINDOW_S, window_s)
                 spectrum_mask = trace_times >= (trace_times[-1] - spectrum_window_s)
                 resp_source = live_result.resp_signal[spectrum_mask]
                 heart_source = live_result.heart_signal[spectrum_mask]
@@ -1270,7 +1600,18 @@ class MainWindow(QtWidgets.QMainWindow):
             plot_heart = live_result.heart_signal[trace_mask]
             self.live_curves["resp"].setData(trace_plot_times, plot_resp)
             self.live_curves["heart"].setData(trace_plot_times, plot_heart)
-            self._set_time_plot_range(self.live_plot_b, trace_plot_times, plot_resp, min_y_span=0.05)
+            if self.a121_auto_breath_check.isChecked():
+                resp_bpm_for_phases = self.a121_resp_display_hz * 60.0
+                if resp_bpm_for_phases <= 0 and analysis is not None:
+                    resp_bpm_for_phases = float(getattr(analysis, "resp_bpm", 0.0) or 0.0)
+                self._add_breath_phase_spans(
+                    self.live_plot_b,
+                    self.a121_live_breath_items,
+                    self._breath_phase_spans(trace_plot_times, plot_resp, resp_bpm_for_phases),
+                )
+            else:
+                self._clear_plot_items(self.live_plot_b, self.a121_live_breath_items)
+            self._set_time_plot_range(self.live_plot_b, trace_plot_times, plot_resp, min_y_span=0.50)
             self._set_time_plot_range(self.live_plot_c, trace_plot_times, plot_heart, min_y_span=0.03)
 
         if analysis is None:
@@ -1280,7 +1621,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"Frames: {storage_count}\n"
                 f"A121 reference state: {state_text}\n"
                 f"Selected target: {target_text}\n"
-                f"Rates: acquiring {A121_RATE_WINDOW_S:.0f} s analysis window…"
+                f"Analyzer: HR window {heart_analysis_window_s:.0f} s, refresh every {self._a121_analysis_refresh_interval_s():.1f} s\n"
+                f"Rates: acquiring analysis window…"
             )
             return
 
@@ -1303,6 +1645,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Range bins: {analysis.candidate_bins}  SQI: {analysis.signal_quality:.2f}\n"
             f"Respiration: {resp_text}  conf {analysis.resp_confidence:.1f}\n"
             f"Heart: {tracked_text}  candidate conf {analysis.heart_confidence:.1f}\n"
+            f"Analyzer: HR window {heart_analysis_window_s:.0f} s, refresh every {self._a121_analysis_refresh_interval_s():.1f} s\n"
             f"Resp rate: Acconeer BreathingProcessor; heart: experimental candidate"
         )
 
@@ -1348,7 +1691,8 @@ class MainWindow(QtWidgets.QMainWindow):
         records: list[dict[str, Any]] = []
         for path in sorted(RAW_RADAR_DIR.glob("radar_raw_*.csv"), reverse=True):
             records.append({"source": "CSV", "sensor": "radar", "label": path.name, "samples": "", "path": str(path), "data": path})
-        for path in sorted(RAW_A121_DIR.glob("a121_sparse_iq_*.csv"), reverse=True):
+        a121_paths = sorted({*RAW_A121_DIR.glob("a121_sparse_iq_*.csv"), *RAW_A121_DIR.glob("a121_test_*.csv")}, reverse=True)
+        for path in a121_paths:
             records.append({"source": "CSV", "sensor": "a121", "label": path.name, "samples": "", "path": str(path), "data": path})
         for path in sorted(RAW_IMU_DIR.glob("respiratory_6axis_raw_*.csv"), reverse=True):
             records.append({"source": "CSV", "sensor": "imu", "label": path.name, "samples": "", "path": str(path), "data": path})
@@ -1406,14 +1750,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def _open_csv(self, path: Path) -> None:
         df = pd.read_csv(path)
         sensor = _detect_sensor(df)
-        self._plot_history_df(sensor, df, path.name)
+        self._plot_history_df(sensor, df, path.name, csv_path=path)
 
-    def _plot_history_df(self, sensor: str, df: pd.DataFrame, title: str) -> None:
+    def _plot_history_df(self, sensor: str, df: pd.DataFrame, title: str, csv_path: Path | None = None) -> None:
         if df.empty:
             raise ValueError("Recording has no samples.")
         self.history_plot_a.clear()
         self.history_plot_b.clear()
         self.history_plot_c.clear()
+        self.a121_history_breath_items.clear()
         self._configure_plot(self.history_plot_a, title, "", "Time [s]")
         if sensor == "radar":
             df = df.sort_values("Timestamp_ms")
@@ -1456,13 +1801,21 @@ class MainWindow(QtWidgets.QMainWindow):
             self._configure_plot(self.history_plot_c, "A121 heart phase band", "Phase displacement [rad]", "Time [s]")
             self.history_plot_b.plot(analysis.times_s, analysis.resp_signal, pen=pg.mkPen("#34d399", width=1.3), name="Respiration")
             self.history_plot_c.plot(analysis.times_s, analysis.heart_signal, pen=pg.mkPen("#fb7185", width=1.2), name="Heart")
+            breath_spans: list[tuple[float, float, str]] = []
+            if self.a121_auto_breath_check.isChecked():
+                breath_spans = self._load_breath_annotation_spans(csv_path) if csv_path is not None else []
+                if not breath_spans:
+                    breath_spans = self._breath_phase_spans(analysis.times_s, analysis.resp_signal, float(analysis.resp_bpm))
+                self._add_breath_phase_spans(self.history_plot_b, self.a121_history_breath_items, breath_spans)
             presence = "YES" if analysis.present else "no"
+            breath_text = f"\nBreath phases: {len(breath_spans)} spans" if breath_spans else ""
             self.history_stats.setText(
                 f"{title}\nFrames: {len(df)}\nFs: {analysis.sample_rate_hz:.1f} Hz\n"
                 f"Presence: {presence} ({analysis.presence_score:.0f}/100)\n"
                 f"Auto target: {analysis.target_distance_m:.3f} m  gate {analysis.gate_min_m:.2f}-{analysis.gate_max_m:.2f} m\n"
                 f"Latest peak: {analysis.peak_distance_m:.3f} m  amp {analysis.peak_amplitude:.1f}\n"
                 f"Respiration: {analysis.resp_bpm:.1f} BPM\nHeart: {analysis.heart_bpm:.1f} BPM"
+                f"{breath_text}"
             )
         else:
             df = df.sort_values("Time_ms")
