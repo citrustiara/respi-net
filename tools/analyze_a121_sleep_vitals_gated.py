@@ -35,6 +35,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+import respi_net.a121_vitals as a121_vitals
 from respi_net.a121_vitals import analyze_a121_vitals, sample_rate_from_ms
 
 STATE_NO_PRESENCE = 0
@@ -409,9 +410,18 @@ def analyze(
     min_still_fraction: float = 0.65,
     max_no_presence_fraction: float = 0.05,
     min_hr_confidence: float = 5.0,
+    hr_min_bpm: float = 42.0,
+    hr_max_bpm: float = 120.0,
     dpi: int = 140,
 ) -> tuple[Path, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    hr_min_bpm = float(hr_min_bpm)
+    hr_max_bpm = float(hr_max_bpm)
+    if not (0.0 < hr_min_bpm < hr_max_bpm):
+        raise ValueError("HR band must satisfy 0 < hr_min_bpm < hr_max_bpm")
+    # The A121 analyzer stores the heart band as a module-level Hz tuple.  Set it here so offline
+    # runs can widen the range for non-human subjects (for example cats up to ~200 BPM).
+    a121_vitals.HEART_BAND_HZ = (hr_min_bpm / 60.0, hr_max_bpm / 60.0)
 
     scalar_df = pd.read_csv(csv_path, usecols=lambda col: col in SCALAR_COLUMNS)
     if scalar_df.empty:
@@ -498,7 +508,7 @@ def analyze(
                         analysis_target_m = float(analysis.target_distance_m)
                         analysis_quality = float(analysis.signal_quality)
                         candidate_bins = int(analysis.candidate_bins)
-                        if min_hr_confidence <= hr_conf and 42.0 <= analysis.heart_bpm <= 120.0:
+                        if min_hr_confidence <= hr_conf and hr_min_bpm <= analysis.heart_bpm <= hr_max_bpm:
                             candidate_hr = float(analysis.heart_bpm)
                             # Suppress weak, sudden HR jumps but allow high-confidence changes.
                             if prior_hr_hz is not None and abs(candidate_hr - prior_hr_hz * 60.0) > 24.0 and hr_conf < 15.0:
@@ -588,7 +598,7 @@ def analyze(
     trend_times_arr = np.asarray(trend_times, dtype=object)
     ds = _downsample_indices(len(time_s), max_points=4500)
     sample_times = _local_datetimes_from_ms(timestamps_ms[ds])
-    hr_ylim = _zoom_ylim(hr_plot_connected, lower_bound=40.0, upper_bound=90.0, pad=3.0, min_span=16.0)
+    hr_ylim = _zoom_ylim(hr_plot_connected, lower_bound=max(0.0, hr_min_bpm - 5.0), upper_bound=hr_max_bpm + 10.0, pad=3.0, min_span=16.0)
 
     fig = plt.figure(figsize=(18, 11), dpi=dpi)
     # Larger HR panel + headroom for title/summary.
@@ -596,7 +606,8 @@ def analyze(
     fig.suptitle(
         f"A121 gated sleep vitals: {csv_path.name}\n"
         f"{start_dt:%Y-%m-%d %H:%M}–{end_dt:%H:%M} local | "
-        f"{duration_s / 3600.0:.2f} h, {len(scalar_df)} rows, {fs:.2f} Hz | HR {window_s:.0f}s batch / {step_s:.0f}s step",
+        f"{duration_s / 3600.0:.2f} h, {len(scalar_df)} rows, {fs:.2f} Hz | "
+        f"HR {window_s:.0f}s batch / {step_s:.0f}s step / band {hr_min_bpm:.0f}-{hr_max_bpm:.0f} BPM",
         fontsize=14,
         fontweight="bold",
     )
@@ -697,6 +708,8 @@ def main() -> None:
     parser.add_argument("--min-still-fraction", type=float, default=0.65, help="Minimum still samples inside an analysis window")
     parser.add_argument("--max-no-presence-fraction", type=float, default=0.05, help="Maximum no-presence samples tolerated inside a window")
     parser.add_argument("--min-hr-confidence", type=float, default=5.0)
+    parser.add_argument("--hr-min-bpm", type=float, default=42.0, help="Minimum HR accepted/analyzed, in BPM")
+    parser.add_argument("--hr-max-bpm", type=float, default=120.0, help="Maximum HR accepted/analyzed, in BPM")
     parser.add_argument("--dpi", type=int, default=140)
     args = parser.parse_args()
     analyze(
@@ -708,6 +721,8 @@ def main() -> None:
         min_still_fraction=args.min_still_fraction,
         max_no_presence_fraction=args.max_no_presence_fraction,
         min_hr_confidence=args.min_hr_confidence,
+        hr_min_bpm=args.hr_min_bpm,
+        hr_max_bpm=args.hr_max_bpm,
         dpi=args.dpi,
     )
 

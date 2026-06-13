@@ -181,6 +181,8 @@ def _run_gated_sleep_analysis(
     min_still_fraction: float = 0.65,
     max_no_presence_fraction: float = 0.05,
     min_hr_confidence: float = 5.0,
+    hr_min_bpm: float = 42.0,
+    hr_max_bpm: float = 120.0,
     dpi: int = 140,
 ) -> tuple[Path, Path]:
     analyze = _load_gated_sleep_analyzer()
@@ -193,6 +195,8 @@ def _run_gated_sleep_analysis(
         min_still_fraction=min_still_fraction,
         max_no_presence_fraction=max_no_presence_fraction,
         min_hr_confidence=min_hr_confidence,
+        hr_min_bpm=hr_min_bpm,
+        hr_max_bpm=hr_max_bpm,
         dpi=dpi,
     )
 
@@ -649,6 +653,8 @@ def plot_a121_sleep(
 @click.option("--min-still-fraction", default=0.65, show_default=True, type=float)
 @click.option("--max-no-presence-fraction", default=0.05, show_default=True, type=float)
 @click.option("--min-hr-confidence", default=5.0, show_default=True, type=float)
+@click.option("--hr-min-bpm", default=42.0, show_default=True, type=float, help="Minimum HR accepted/analyzed, in BPM.")
+@click.option("--hr-max-bpm", default=120.0, show_default=True, type=float, help="Maximum HR accepted/analyzed, in BPM.")
 @click.option("--dpi", default=140, show_default=True, type=int)
 def analyze_a121_sleep(
     csv_path: Path,
@@ -664,6 +670,8 @@ def analyze_a121_sleep(
     min_still_fraction: float,
     max_no_presence_fraction: float,
     min_hr_confidence: float,
+    hr_min_bpm: float,
+    hr_max_bpm: float,
     dpi: int,
 ) -> None:
     """Run full offline sleep analysis from a raw A121 sleep CSV."""
@@ -679,6 +687,8 @@ def analyze_a121_sleep(
             min_still_fraction=min_still_fraction,
             max_no_presence_fraction=max_no_presence_fraction,
             min_hr_confidence=min_hr_confidence,
+            hr_min_bpm=hr_min_bpm,
+            hr_max_bpm=hr_max_bpm,
             dpi=dpi,
         )
     except Exception as exc:
