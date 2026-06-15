@@ -90,7 +90,7 @@ uv run respi app --sensor a121 --port COM3    # Acconeer A121/Waveshare CH342 In
 uv run respi app --sensor iphone-imu          # iPhone CoreMotion over BLE
 ```
 
-The app has HB100 Radar/A121 Radar/IMU sensor selection, serial port controls, Start/Stop buttons, live stats, interactive graphs (drag to pan, mouse wheel to zoom, right-click plot menu), and a Recordings tab for opening saved CSV files or SQLite sessions. Live sessions can be recorded to CSV, SQLite, or both. The SQLite database is stored at `data/respi_recordings.sqlite3`.
+The app has HB100 Radar/A121 Radar/IMU sensor selection, serial port controls, Start/Stop buttons, live stats, interactive graphs (drag to pan, mouse wheel to zoom, right-click plot menu), and a Recordings tab for opening saved CSV files or SQLite sessions. Live sessions can be recorded to CSV, SQLite, or both. On Windows, the app uses `E:/respi_recordings.sqlite3` when that file exists; otherwise it falls back to the project-local `data/respi_recordings.sqlite3` path, which is also the default on macOS/Linux. Set `RESPI_RECORDINGS_DB_PATH` to override this location.
 
 Generate a chart from one file:
 

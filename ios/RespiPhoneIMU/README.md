@@ -2,7 +2,21 @@
 
 Native SwiftUI iPhone companion app for streaming phone IMU data into RespiNet over Bluetooth Low Energy.
 
-Open `RespiPhoneIMU.xcodeproj` in Xcode on macOS, select your development team, then run the app on a physical iPhone. The simulator cannot provide real Bluetooth peripheral advertising or useful motion data.
+## Install on an iPhone
+
+You need a Mac with Xcode for the final build/sign/install step. Apple does not ship the iOS SDK, device installer, or signing toolchain for Windows.
+
+1. Copy or clone this repository on a Mac.
+2. Install Xcode from the Mac App Store, then open Xcode once so it finishes installing components.
+3. Connect the iPhone with USB, unlock it, and trust the Mac when prompted.
+4. Open `ios/RespiPhoneIMU/RespiPhoneIMU.xcodeproj` in Xcode.
+5. Select the `RespiPhoneIMU` target, then `Signing & Capabilities`.
+6. Choose your Apple ID team. A free Apple ID is usually enough for direct development installs, though the app may expire and need reinstalling.
+7. Select your physical iPhone as the run destination.
+8. Press Run in Xcode.
+9. If iOS asks for Developer Mode, enable it in Settings, restart the phone if prompted, then run again.
+
+The simulator cannot provide real Bluetooth peripheral advertising or useful motion data, so use a physical iPhone.
 
 ## Desktop capture
 

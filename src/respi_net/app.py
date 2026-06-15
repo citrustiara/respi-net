@@ -31,18 +31,24 @@ from .a121_vitals import (
 )
 from .imu import IMU_COLUMNS, BreathCapture
 from .iphone_imu import IPhoneIMUBluetoothCapture
-from .paths import DATA_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR
+from .paths import (
+    DATA_DIR,
+    RAW_A121_DIR,
+    RAW_IMU_DIR,
+    RAW_RADAR_DIR,
+    resolve_recordings_db_path,
+)
 from .radar import DOPPLER_HZ_PER_MPS, RADAR_COLUMNS, RadarCapture
 from .serial_utils import list_serial_ports
 
-DB_PATH = DATA_DIR / "respi_recordings.sqlite3"
+DB_PATH = resolve_recordings_db_path()
 
 
 class RecordingStore:
     """Small SQLite store for live sessions and their raw samples."""
 
-    def __init__(self, path: str | Path = DB_PATH):
-        self.path = Path(path)
+    def __init__(self, path: str | Path | None = None):
+        self.path = Path(path) if path is not None else resolve_recordings_db_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 

@@ -176,13 +176,13 @@ The `Recordings` tab can open:
 - saved CSV files from `data/raw/radar/`, `data/raw/a121/`, and `data/raw/imu/`
 - sessions stored in SQLite
 
-SQLite database path:
+SQLite database path priority:
 
-```text
-data/respi_recordings.sqlite3
-```
+1. `RESPI_RECORDINGS_DB_PATH` (or `RESPI_DB_PATH`) if set.
+2. `E:/respi_recordings.sqlite3` on Windows, when that file exists.
+3. `data/respi_recordings.sqlite3` in the project folder as the macOS/Linux-safe fallback.
 
-This file is ignored by Git.
+The project-local fallback database is ignored by Git.
 
 ## CLI commands
 
