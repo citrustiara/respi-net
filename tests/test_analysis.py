@@ -1,4 +1,5 @@
 from pathlib import Path
+import struct
 
 import numpy as np
 import pandas as pd
@@ -8,6 +9,7 @@ from respi_net.a121 import A121_COLUMNS
 from respi_net.a121_vitals import A121LiveTraceProcessor, HeartRateKalmanTracker, analyze_a121_vitals, sample_rate_from_ms
 from respi_net.app import _a121_stats, _detect_sensor
 from respi_net.imu import analyze_imu_csv
+from respi_net.iphone_imu import parse_iphone_imu_packet
 from respi_net.radar import analyze_radar_csv
 
 
@@ -53,6 +55,50 @@ def test_analyze_imu_csv(tmp_path: Path) -> None:
     assert result.plot_path and result.plot_path.exists()
     assert 95 <= result.sample_rate_hz <= 105
     assert result.heart_bpm >= 40
+
+
+def test_parse_iphone_imu_packet() -> None:
+    payload = struct.pack(
+        "<BBH"
+        "Ihhhhhh"
+        "Ihhhhhh",
+        1,
+        2,
+        513,
+        10,
+        1000,
+        -250,
+        42,
+        1234,
+        -567,
+        0,
+        20,
+        -1000,
+        500,
+        100,
+        -1234,
+        567,
+        25,
+    )
+
+    packet = parse_iphone_imu_packet(payload)
+
+    assert packet.sequence == 513
+    assert len(packet.samples) == 2
+    assert packet.samples[0].time_ms == 10
+    assert packet.samples[0].ax == 1.0
+    assert packet.samples[0].ay == -0.25
+    assert packet.samples[0].az == 0.042
+    assert packet.samples[0].gx == 12.34
+    assert packet.samples[0].gy == -5.67
+    assert packet.samples[1].gx == -12.34
+
+
+def test_parse_iphone_imu_packet_rejects_bad_length() -> None:
+    payload = struct.pack("<BBH", 1, 1, 0)
+
+    with pytest.raises(ValueError):
+        parse_iphone_imu_packet(payload)
 
 
 def test_a121_csv_detection_and_stats() -> None:
@@ -484,5 +530,4 @@ def test_a121_heart_confidence_can_lock_tracker() -> None:
     assert 68.0 <= analysis.heart_bpm <= 76.0
     assert analysis.heart_confidence >= 1.3
     assert 68.0 <= tracked * 60.0 <= 76.0
-
 

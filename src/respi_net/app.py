@@ -30,6 +30,7 @@ from .a121_vitals import (
     clean_signal,
 )
 from .imu import IMU_COLUMNS, BreathCapture
+from .iphone_imu import IPhoneIMUBluetoothCapture
 from .paths import DATA_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR
 from .radar import DOPPLER_HZ_PER_MPS, RADAR_COLUMNS, RadarCapture
 from .serial_utils import list_serial_ports
@@ -498,7 +499,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.default_baud = default_baud
 
         self.store = RecordingStore()
-        self.capture: RadarCapture | A121Capture | BreathCapture | None = None
+        self.capture: RadarCapture | A121Capture | BreathCapture | IPhoneIMUBluetoothCapture | None = None
         self.active_sensor = "radar"
         self.session_id: int | None = None
         self.persisted_index = 0
@@ -554,7 +555,7 @@ class MainWindow(QtWidgets.QMainWindow):
         form.setRowWrapPolicy(QtWidgets.QFormLayout.RowWrapPolicy.DontWrapRows)
         form.setHorizontalSpacing(14)
         self.sensor_combo = QtWidgets.QComboBox()
-        self.sensor_combo.addItems(["HB100 Radar", "A121 Radar", "IMU"])
+        self.sensor_combo.addItems(["HB100 Radar", "A121 Radar", "IMU", "iPhone IMU (BLE)"])
         self.sensor_combo.currentTextChanged.connect(self._sensor_changed)
         form.addRow("Sensor", self.sensor_combo)
 
@@ -814,10 +815,14 @@ class MainWindow(QtWidgets.QMainWindow):
         label = text.lower()
         if "a121" in label:
             self.active_sensor = "a121"
+        elif "iphone" in label:
+            self.active_sensor = "iphone_imu"
         elif "imu" in label:
             self.active_sensor = "imu"
         else:
             self.active_sensor = "radar"
+        if hasattr(self, "port_combo"):
+            self._refresh_ports()
         self._configure_live_plots()
 
     def _reset_a121_rate_display(self) -> None:
@@ -1070,9 +1075,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     "heart": self.live_plot_c.plot(pen=pg.mkPen("#fb7185", width=1.3), name="Heart"),
                 }
         else:
-            self._configure_plot(self.live_plot_a, "Live IMU accelerometer", "g")
-            self._configure_plot(self.live_plot_b, "Live IMU gyroscope", "deg/s")
-            self._configure_plot(self.live_plot_c, "IMU filtered vital bands", "Filtered accel magnitude [g]")
+            source_name = "iPhone IMU" if self.active_sensor == "iphone_imu" else "IMU"
+            self._configure_plot(self.live_plot_a, f"Live {source_name} accelerometer", "g")
+            self._configure_plot(self.live_plot_b, f"Live {source_name} gyroscope", "deg/s")
+            self._configure_plot(self.live_plot_c, f"{source_name} filtered vital bands", "Filtered accel magnitude [g]")
             self.live_curves = {
                 "ax": self.live_plot_a.plot(pen="#38bdf8", name="ax"),
                 "ay": self.live_plot_a.plot(pen="#34d399", name="ay"),
@@ -1087,16 +1093,26 @@ class MainWindow(QtWidgets.QMainWindow):
     def _refresh_ports(self) -> None:
         current = self.port_combo.currentText()
         self.port_combo.clear()
-        ports = list_serial_ports()
-        self.port_combo.addItem("Auto")
-        self.port_combo.addItems(ports)
+        if self.active_sensor == "iphone_imu":
+            self.port_combo.setEditable(True)
+            self.port_combo.addItem("Auto BLE")
+            self.port_combo.addItem("RespiPhoneIMU")
+        else:
+            self.port_combo.setEditable(False)
+            ports = list_serial_ports()
+            self.port_combo.addItem("Auto")
+            self.port_combo.addItems(ports)
         if current:
             idx = self.port_combo.findText(current)
             if idx >= 0:
                 self.port_combo.setCurrentIndex(idx)
+            elif self.active_sensor == "iphone_imu":
+                self.port_combo.setEditText(current)
 
     def _apply_startup_defaults(self) -> None:
-        if self.default_sensor == "imu":
+        if self.default_sensor in {"iphone_imu", "iphone-imu", "iphone"}:
+            self.sensor_combo.setCurrentText("iPhone IMU (BLE)")
+        elif self.default_sensor == "imu":
             self.sensor_combo.setCurrentText("IMU")
         elif self.default_sensor == "a121":
             self.sensor_combo.setCurrentText("A121 Radar")
@@ -1115,7 +1131,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         sensor = self.active_sensor
         port = self.port_combo.currentText()
-        port_name = None if port == "Auto" else port
+        port_name = None if port in {"Auto", "Auto BLE"} else port
         output_dir = RAW_RADAR_DIR if sensor == "radar" else RAW_A121_DIR if sensor == "a121" else RAW_IMU_DIR
         output_dir.mkdir(parents=True, exist_ok=True)
         self.csv_path = None
@@ -1146,11 +1162,14 @@ class MainWindow(QtWidgets.QMainWindow):
                     frame_rate_hz=float(self.a121_frame_rate_spin.value()),
                 ),
             )
-        else:
+        elif sensor == "imu":
             self.capture = BreathCapture(baud=self.baud_spin.value(), output_dir=output_dir)
+        else:
+            self.capture = IPhoneIMUBluetoothCapture(output_dir=output_dir)
         if not self.capture.connect(port_name):
             self.capture = None
-            QtWidgets.QMessageBox.warning(self, "Connection failed", f"Could not connect to {sensor} serial port.")
+            target = "Bluetooth device" if sensor == "iphone_imu" else "serial port"
+            QtWidgets.QMessageBox.warning(self, "Connection failed", f"Could not connect to {sensor} {target}.")
             return
 
         if self.csv_path is not None:
@@ -1184,7 +1203,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.a121_analysis_thread is not None and self.a121_analysis_thread.isRunning():
             self.a121_analysis_thread.wait()
         self._persist_new_samples()
-        rows = self.capture.snapshot_data_storage() if isinstance(self.capture, A121Capture) else list(self.capture.data_storage)
+        rows = (
+            self.capture.snapshot_data_storage()
+            if isinstance(self.capture, (A121Capture, IPhoneIMUBluetoothCapture))
+            else list(self.capture.data_storage)
+        )
         if self.active_sensor == "radar":
             stats = _radar_stats(pd.DataFrame(rows, columns=RADAR_COLUMNS))
         elif self.active_sensor == "a121":
@@ -1232,7 +1255,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def _persist_new_samples(self) -> None:
         if self.capture is None:
             return
-        rows = self.capture.snapshot_data_since(self.persisted_index) if isinstance(self.capture, A121Capture) else self.capture.data_storage[self.persisted_index :]
+        rows = (
+            self.capture.snapshot_data_since(self.persisted_index)
+            if isinstance(self.capture, (A121Capture, IPhoneIMUBluetoothCapture))
+            else self.capture.data_storage[self.persisted_index :]
+        )
         if not rows:
             return
         rows_copy = [list(row) for row in rows]
@@ -1260,7 +1287,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self._update_live_a121(storage_count, live_rows)
             return
 
-        rows = self.capture.data_storage
+        rows = (
+            self.capture.snapshot_data_storage()
+            if isinstance(self.capture, IPhoneIMUBluetoothCapture)
+            else self.capture.data_storage
+        )
         if not rows:
             self.stats_box.setText("Waiting for samples…")
             return

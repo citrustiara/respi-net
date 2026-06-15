@@ -72,6 +72,16 @@ Default output folder:
 data/raw/imu/
 ```
 
+### iPhone IMU over BLE
+
+Use this with the native SwiftUI companion app in `ios/RespiPhoneIMU/`. The iPhone advertises a custom BLE service named `RespiPhoneIMU`, samples CoreMotion at 20-100 Hz, and sends compact binary batches. The desktop receiver expands those batches to the same IMU CSV schema used by the ESP32 path:
+
+```text
+Time_ms,ax,ay,az,gx,gy,gz
+```
+
+Acceleration is in `g`, gyroscope values are in `deg/s`, and `Time_ms` is aligned to the desktop host clock from the first received phone sample.
+
 ## Unified desktop app
 
 Open the app:
@@ -86,6 +96,7 @@ Open the app with a specific sensor and port:
 uv run respi app --sensor radar --port COM6
 uv run respi app --sensor a121 --port COM3
 uv run respi app --sensor imu --port COM6
+uv run respi app --sensor iphone-imu
 ```
 
 Available app sensor choices:
@@ -93,6 +104,7 @@ Available app sensor choices:
 - `HB100 Radar`
 - `A121 Radar`
 - `IMU`
+- `iPhone IMU (BLE)`
 
 ### App controls
 
@@ -275,6 +287,13 @@ Capture IMU from serial until Ctrl+C:
 uv run respi capture-imu --port COM6
 ```
 
+Scan for and capture iPhone IMU data over BLE:
+
+```powershell
+uv run respi iphone-imu-devices
+uv run respi capture-iphone-imu --seconds 60
+```
+
 Generate an offline HB100 radar plot:
 
 ```powershell
@@ -372,6 +391,7 @@ src/respi_net/app.py      # Unified Qt/pyqtgraph app
 src/respi_net/a121.py     # Acconeer A121 Sparse IQ capture
 src/respi_net/radar.py    # HB100 radar analysis/capture
 src/respi_net/imu.py      # IMU analysis/capture
+src/respi_net/iphone_imu.py # iPhone BLE IMU batch receiver
 src/respi_net/cli.py      # Click CLI commands
 src/respi_net/paths.py    # Data/output paths
 ```

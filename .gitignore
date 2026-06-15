@@ -35,3 +35,6 @@ kicad_error.txt
 *.swp
 *.swo
 node_modules/
+xcuserdata/
+*.xcuserstate
+DerivedData/

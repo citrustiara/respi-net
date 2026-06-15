@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 import csv
 import importlib.util
@@ -13,6 +14,7 @@ import time
 import click
 
 from .imu import BreathCapture, analyze_imu_csv
+from .iphone_imu import IPhoneIMUBluetoothCapture, discover_iphone_imu_devices
 from .paths import DATA_DIR, IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR
 from .radar import RadarCapture, analyze_radar_csv
 from .serial_utils import list_serial_ports
@@ -35,14 +37,19 @@ def ports() -> None:
 
 
 @cli.command("app")
-@click.option("--sensor", type=click.Choice(["radar", "a121", "imu"], case_sensitive=False), default="radar", show_default=True)
+@click.option(
+    "--sensor",
+    type=click.Choice(["radar", "a121", "imu", "iphone-imu", "iphone_imu"], case_sensitive=False),
+    default="radar",
+    show_default=True,
+)
 @click.option("-p", "--port", help="Preferred serial port, for example COM6.")
 @click.option("-b", "--baud", default=921600, show_default=True)
 def app(sensor: str, port: str | None, baud: int) -> None:
     """Open the unified radar/IMU desktop app."""
     from .app import launch_app
 
-    raise SystemExit(launch_app(default_sensor=sensor.lower(), default_port=port, default_baud=baud))
+    raise SystemExit(launch_app(default_sensor=sensor.lower().replace("-", "_"), default_port=port, default_baud=baud))
 
 
 @cli.command("plot-imu")
@@ -122,6 +129,65 @@ def capture_imu(port: str | None, baud: int, output_dir: Path, plot: bool) -> No
         capture.stop()
     csv_path = capture.save()
     click.echo(f"Saved: {csv_path}")
+    if plot:
+        result = analyze_imu_csv(csv_path)
+        click.echo(f"Plot: {result.plot_path}")
+
+
+@cli.command("iphone-imu-devices")
+@click.option("--timeout", "timeout_s", default=6.0, show_default=True, type=float, help="BLE scan duration in seconds.")
+def iphone_imu_devices(timeout_s: float) -> None:
+    """Scan for nearby RespiPhoneIMU BLE peripherals."""
+    try:
+        devices = asyncio.run(discover_iphone_imu_devices(timeout_s=timeout_s))
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not devices:
+        click.echo("No RespiPhoneIMU devices found. Open the iPhone app and start advertising.")
+        return
+    for device in devices:
+        click.echo(f"{device['name']}  {device['address']}")
+
+
+@cli.command("capture-iphone-imu")
+@click.option("-d", "--device", help="Optional BLE device name/address. Defaults to auto-discovering RespiPhoneIMU.")
+@click.option(
+    "-s",
+    "--seconds",
+    type=click.IntRange(1),
+    help="Optional capture length. Omit to capture until Ctrl+C.",
+)
+@click.option("--scan-timeout", default=10.0, show_default=True, type=float, help="BLE discovery timeout in seconds.")
+@click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=RAW_IMU_DIR, show_default=True)
+@click.option("--plot/--no-plot", default=True, show_default=True)
+def capture_iphone_imu(device: str | None, seconds: int | None, scan_timeout: float, output_dir: Path, plot: bool) -> None:
+    """Capture batched iPhone IMU samples over BLE, save CSV, and optionally chart it."""
+    capture = IPhoneIMUBluetoothCapture(output_dir=output_dir, scan_timeout_s=scan_timeout)
+    if not capture.connect(device):
+        raise click.ClickException("Could not connect to the iPhone IMU BLE app.")
+    if seconds is None:
+        click.echo("Capturing iPhone IMU data over BLE. Press Ctrl+C to stop.")
+    else:
+        click.echo(f"Capturing iPhone IMU data over BLE for {seconds}s. Press Ctrl+C to stop early.")
+    started = time.monotonic()
+    last_report = -1
+    try:
+        while capture.running:
+            elapsed = time.monotonic() - started
+            if seconds is not None and elapsed >= seconds:
+                break
+            whole_second = int(elapsed)
+            if whole_second != last_report:
+                last_report = whole_second
+                click.echo(f"  {whole_second:>4}s | samples={capture.data_count()}")
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        capture.stop()
+    csv_path = capture.save()
+    click.echo(f"Saved: {csv_path}")
+    click.echo(f"Batches: {capture.received_batches} received, {capture.dropped_batches} dropped")
     if plot:
         result = analyze_imu_csv(csv_path)
         click.echo(f"Plot: {result.plot_path}")

@@ -12,10 +12,11 @@ Current Progress:
 - **HB100 10.525 GHz analog radar integrated** with custom amplification and filtering.
 - ESP32 ADC firmware captures raw radar voltage at high serial throughput.
 - Click CLI supports serial capture, batch processing, and chart generation.
-- Unified Qt desktop app (`respi app`) combines HB100 radar, Acconeer A121 radar, and IMU live viewing, controls, history browsing, CSV recording, and SQLite recording.
+- Unified Qt desktop app (`respi app`) combines HB100 radar, Acconeer A121 radar, ESP32 IMU, and iPhone BLE IMU live viewing, controls, history browsing, CSV recording, and SQLite recording.
 - Radar CSV recordings are organized under `data/raw/radar/` and A121 Sparse IQ recordings under `data/raw/a121/`.
 - Radar plots are generated under `outputs/plots/radar/`.
 - IMU capture and analysis remain available for comparison experiments.
+- A native iPhone companion app in `ios/RespiPhoneIMU/` streams batched CoreMotion IMU samples over BLE into the same Python IMU analysis path.
 - Calibrated HB100 analog frontend schematic is documented and rendered in [`hardware/hb100_calibrated_schematic.svg`](hardware/hb100_calibrated_schematic.svg).
 
 ## Hardware Setup
@@ -68,6 +69,7 @@ Optional IMU connections:
 - Orientation-independent analysis with PCA over accelerometer axes.
 - Butterworth filtering for respiratory and cardiac bands.
 - Plot generation for comparison with radar recordings.
+- Optional iPhone capture uses Bluetooth LE batches and writes the same `Time_ms,ax,ay,az,gx,gy,gz` CSV schema as the ESP32 IMU stream.
 
 ## Usage
 
@@ -85,6 +87,7 @@ Open the unified desktop app:
 ```powershell
 uv run respi app --sensor radar --port COM6   # HB100/ESP32 ADC
 uv run respi app --sensor a121 --port COM3    # Acconeer A121/Waveshare CH342 Interface A
+uv run respi app --sensor iphone-imu          # iPhone CoreMotion over BLE
 ```
 
 The app has HB100 Radar/A121 Radar/IMU sensor selection, serial port controls, Start/Stop buttons, live stats, interactive graphs (drag to pan, mouse wheel to zoom, right-click plot menu), and a Recordings tab for opening saved CSV files or SQLite sessions. Live sessions can be recorded to CSV, SQLite, or both. The SQLite database is stored at `data/respi_recordings.sqlite3`.
@@ -122,6 +125,8 @@ IMU comparison commands are still available when needed:
 uv run respi plot-imu data\raw\imu\respiratory_6axis_raw_2026-03-08_02-37-19.csv
 uv run respi batch-imu
 uv run respi capture-imu --port COM6
+uv run respi iphone-imu-devices
+uv run respi capture-iphone-imu --seconds 60
 ```
 
 ## Repository Structure
@@ -135,6 +140,7 @@ uv run respi capture-imu --port COM6
 - `data/raw/imu/` - Optional IMU comparison recordings.
 - `outputs/plots/imu/` - Generated IMU comparison charts.
 - `firmware/esp32_imu_stream/` - Optional ESP32 firmware for IMU streaming.
+- `ios/RespiPhoneIMU/` - iPhone SwiftUI BLE peripheral app for streaming phone IMU batches.
 - `docs/` - Reports, notes, and logs.
 - `tools/docx_generator/` - Legacy Node-based report generator.
 
