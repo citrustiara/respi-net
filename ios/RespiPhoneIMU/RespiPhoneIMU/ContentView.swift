@@ -52,16 +52,38 @@ struct ContentView: View {
             }
             .buttonStyle(.bordered)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label("Sample rate", systemImage: "waveform.path.ecg")
                     Spacer()
-                    Text("\(Int(streamer.sampleRateHz)) Hz")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
                 }
-                Slider(value: $streamer.sampleRateHz, in: 20...100, step: 10)
+                Picker("Sample rate", selection: $streamer.sampleRateHz) {
+                    Text("25 Hz").tag(25.0)
+                    Text("50 Hz").tag(50.0)
+                    Text("100 Hz").tag(100.0)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
                     .disabled(streamer.isStreaming)
+            }
+
+            DisclosureGroup("Options") {
+                VStack(spacing: 12) {
+                    Toggle(isOn: $streamer.autoStartOnConnection) {
+                        Label("Auto-start on connection", systemImage: "bolt.fill")
+                    }
+                    Toggle(isOn: $streamer.keepScreenAwake) {
+                        Label("Keep screen awake", systemImage: "sun.max.fill")
+                    }
+                    Button(role: .destructive) {
+                        streamer.resetStatistics()
+                    } label: {
+                        Label("Reset statistics", systemImage: "arrow.counterclockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(.top, 12)
             }
         }
     }

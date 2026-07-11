@@ -1,6 +1,7 @@
 import CoreBluetooth
 import CoreMotion
 import Foundation
+import UIKit
 
 private let imuServiceUUID = CBUUID(string: "7B61B4E2-F5B4-4C90-8C7F-A7B2F1E8F4D0")
 private let imuDataUUID = CBUUID(string: "7B61B4E3-F5B4-4C90-8C7F-A7B2F1E8F4D0")
@@ -21,7 +22,18 @@ final class MotionBLEStreamer: NSObject, ObservableObject {
     @Published var isAdvertising = false
     @Published var isStreaming = false
     @Published var subscriberCount = 0
-    @Published var sampleRateHz = 100.0
+    @Published var sampleRateHz = UserDefaults.standard.object(forKey: "sampleRateHz") as? Double ?? 100.0 {
+        didSet { UserDefaults.standard.set(sampleRateHz, forKey: "sampleRateHz") }
+    }
+    @Published var autoStartOnConnection = UserDefaults.standard.object(forKey: "autoStartOnConnection") as? Bool ?? false {
+        didSet { UserDefaults.standard.set(autoStartOnConnection, forKey: "autoStartOnConnection") }
+    }
+    @Published var keepScreenAwake = UserDefaults.standard.object(forKey: "keepScreenAwake") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(keepScreenAwake, forKey: "keepScreenAwake")
+            updateIdleTimer()
+        }
+    }
     @Published var samplesSent = 0
     @Published var batchesSent = 0
     @Published var latestBatchSize = 0
@@ -43,6 +55,7 @@ final class MotionBLEStreamer: NSObject, ObservableObject {
         motionQueue.name = "RespiPhoneIMU.motion"
         motionQueue.maxConcurrentOperationCount = 1
         peripheralManager = CBPeripheralManager(delegate: self, queue: nil)
+        updateIdleTimer()
     }
 
     func startAdvertising() {
@@ -103,6 +116,19 @@ final class MotionBLEStreamer: NSObject, ObservableObject {
         streamStartTimestamp = nil
         pendingSamples.removeAll(keepingCapacity: true)
         statusMessage = "Streaming stopped."
+    }
+
+    func resetStatistics() {
+        samplesSent = 0
+        batchesSent = 0
+        latestBatchSize = 0
+        statusMessage = isStreaming ? "Streaming motion samples." : "Statistics reset."
+    }
+
+    private func updateIdleTimer() {
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = self.keepScreenAwake
+        }
     }
 
     private func configureService() {
@@ -268,6 +294,9 @@ extension MotionBLEStreamer: CBPeripheralManagerDelegate {
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didSubscribeTo characteristic: CBCharacteristic) {
         subscriberCount = dataCharacteristic.subscribedCentrals?.count ?? 0
         statusMessage = "Central subscribed."
+        if autoStartOnConnection && !isStreaming {
+            startStreaming()
+        }
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom characteristic: CBCharacteristic) {
@@ -310,7 +339,7 @@ private extension Data {
 
     mutating func appendLittleEndian<T: FixedWidthInteger>(_ value: T) {
         var littleEndian = value.littleEndian
-        withUnsafeBytes(of: &littleEndian) { rawBuffer in
+        Swift.withUnsafeBytes(of: &littleEndian) { rawBuffer in
             append(contentsOf: rawBuffer)
         }
     }
