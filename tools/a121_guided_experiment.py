@@ -38,7 +38,6 @@ if str(SRC) not in sys.path:
 
 import numpy as np
 import pandas as pd
-import serial.tools.list_ports
 from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
@@ -55,7 +54,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from respi_net.a121 import A121_CAPTURE_COLUMNS, A121Config, A121Capture
+from respi_net.a121 import A121_CAPTURE_COLUMNS, A121Config, A121Capture, find_a121_serial_ports
 
 
 DEFAULT_CONFIG_PATH = ROOT / "configs" / "a121_foil_lens_experiment.json"
@@ -185,32 +184,9 @@ def safe_filename(value: str) -> str:
 
 
 def discover_a121_port() -> str | None:
-    """Prefer the WCH USB Dual_Serial Interface A used by this A121 board on macOS."""
-    ports = list(serial.tools.list_ports.comports())
-    if not ports:
-        return None
-
-    def score(port: Any) -> tuple[int, str]:
-        device = str(getattr(port, "device", ""))
-        vid = getattr(port, "vid", None)
-        pid = getattr(port, "pid", None)
-        text = " ".join(
-            str(getattr(port, attr, "") or "")
-            for attr in ("description", "manufacturer", "product", "interface", "hwid")
-        ).lower()
-        value = 0
-        if (vid, pid) == (0x1A86, 0x55D2):
-            value += 100
-        if "ch342" in text or "wch" in text or "acconeer" in text or "a121" in text:
-            value += 30
-        # The board's Interface A is the device ending in 1; Interface B ends in 3.
-        if re.search(r"1$", device):
-            value += 20
-        if re.search(r"3$", device):
-            value -= 10
-        return (-value, device)
-
-    return sorted(ports, key=score)[0].device
+    """Return the same preferred A121 port used by the main application."""
+    candidates = find_a121_serial_ports()
+    return candidates[0] if candidates else None
 
 
 def write_rows_csv(rows: list[list[Any]], path: Path) -> None:
