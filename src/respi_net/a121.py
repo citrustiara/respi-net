@@ -78,6 +78,19 @@ def find_a121_serial_ports() -> list[str]:
             for attr in ("device", "description", "manufacturer", "product", "interface", "hwid")
         ).lower()
         value = 0
+        # macOS exposes the Waveshare A121 board as WCH USB Dual_Serial
+        # (VID 0x1A86, PID 0x55D2), with Interface A ending in 1 and
+        # Interface B ending in 3.  The text fields do not identify it as
+        # CH342, so identify this known device by its USB identifiers too.
+        if (
+            getattr(port, "vid", None) == 0x1A86
+            and getattr(port, "pid", None) == 0x55D2
+        ):
+            value += 40
+            if str(getattr(port, "device", "")).endswith("1"):
+                value += 10
+            elif str(getattr(port, "device", "")).endswith("3"):
+                value -= 10
         if "ch342" in text or "wch" in text or "usb-enhanced" in text:
             value += 20
         if "acconeer" in text or "a121" in text or "waveshare" in text:

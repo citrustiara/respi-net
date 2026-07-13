@@ -1,0 +1,89 @@
+{
+  "experiment_name": "A121 aluminium foil and lens comparison",
+  "prep_seconds": 10,
+  "measurement_seconds": 60,
+  "output_dir": "data/raw/a121/guided",
+  "a121": {
+    "start_m": 0.2,
+    "end_m": 1.5,
+    "profile": 3,
+    "hwaas": 32,
+    "sweeps_per_frame": 8,
+    "frame_rate_hz": 20.0,
+    "step_length": 1
+  },
+  "steps": [
+    {
+      "lens": "hyperbolic",
+      "patch": "glued",
+      "distance_cm": 50,
+      "instruction": "Keep the foil patch glued in the marked position. Keep still and breathe normally."
+    },
+    {
+      "lens": "fzp",
+      "patch": "glued",
+      "distance_cm": 50,
+      "instruction": "Keep the foil patch glued in the marked position. Keep still and breathe normally."
+    },
+    {
+      "lens": "flat_cover",
+      "patch": "glued",
+      "distance_cm": 50,
+      "instruction": "Keep the foil patch glued in the marked position. Keep still and breathe normally."
+    },
+    {
+      "lens": "hyperbolic",
+      "patch": "glued",
+      "distance_cm": 100,
+      "instruction": "Keep the foil patch glued in the marked position. Keep still and breathe normally."
+    },
+    {
+      "lens": "fzp",
+      "patch": "glued",
+      "distance_cm": 100,
+      "instruction": "Keep the foil patch glued in the marked position. Keep still and breathe normally."
+    },
+    {
+      "lens": "flat_cover",
+      "patch": "glued",
+      "distance_cm": 100,
+      "instruction": "Keep the foil patch glued in the marked position. Keep still and breathe normally."
+    },
+    {
+      "lens": "hyperbolic",
+      "patch": "unglued",
+      "distance_cm": 50,
+      "instruction": "Remove the foil patch before this step. Keep still and breathe normally."
+    },
+    {
+      "lens": "fzp",
+      "patch": "unglued",
+      "distance_cm": 50,
+      "instruction": "Remove the foil patch before this step. Keep still and breathe normally."
+    },
+    {
+      "lens": "flat_cover",
+      "patch": "unglued",
+      "distance_cm": 50,
+      "instruction": "Remove the foil patch before this step. Keep still and breathe normally."
+    },
+    {
+      "lens": "hyperbolic",
+      "patch": "unglued",
+      "distance_cm": 100,
+      "instruction": "Remove the foil patch before this step. Keep still and breathe normally."
+    },
+    {
+      "lens": "fzp",
+      "patch": "unglued",
+      "distance_cm": 100,
+      "instruction": "Remove the foil patch before this step. Keep still and breathe normally."
+    },
+    {
+      "lens": "flat_cover",
+      "patch": "unglued",
+      "distance_cm": 100,
+      "instruction": "Remove the foil patch before this step. Keep still and breathe normally."
+    }
+  ]
+}
