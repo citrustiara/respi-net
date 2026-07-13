@@ -111,6 +111,8 @@ def default_config() -> dict[str, Any]:
         "experiment_name": "A121 aluminium foil and lens comparison",
         "prep_seconds": 10,
         "measurement_seconds": 60,
+        "reconnect_delay_seconds": 5,
+        "connect_attempts": 2,
         "output_dir": "data/raw/a121/guided",
         "a121": {
             "start_m": 0.2,
@@ -334,16 +336,47 @@ class MeasurementWorker(QObject):
             if not self.resolved_port:
                 raise RuntimeError("No A121 serial port found. Connect the WCH USB Dual_Serial device or pass --port.")
 
-            self.status_changed.emit(f"Connecting to A121 on {self.resolved_port}…")
-            self.capture = A121Capture(
-                output_dir=self.output_path.parent,
-                config=self.a121_config,
-            )
-            if self.abort_event.is_set():
-                self._abort()
-                return
-            if not self.capture.connect(self.resolved_port):
-                raise RuntimeError("A121 connection/setup failed. Check that Interface A is selected.")
+            reconnect_delay = max(0.0, float(self.config.get("reconnect_delay_seconds", 5)))
+            connect_attempts = max(1, int(self.config.get("connect_attempts", 2)))
+            # The WCH USB Dual_Serial interface can need a few seconds after stop_session()
+            # before it accepts the next A121 setup request. This matters from step 2 onward,
+            # when the operator has just changed lenses or patch state.
+            if self.step.number > 1 and reconnect_delay > 0:
+                self.status_changed.emit(
+                    f"Allowing the A121 interface to settle for {reconnect_delay:.0f} seconds…"
+                )
+                if self.abort_event.wait(reconnect_delay):
+                    self._abort()
+                    return
+
+            connected = False
+            last_connection_error = ""
+            for attempt in range(1, connect_attempts + 1):
+                if self.abort_event.is_set():
+                    self._abort()
+                    return
+                self.status_changed.emit(
+                    f"Connecting to A121 on {self.resolved_port} (attempt {attempt}/{connect_attempts})…"
+                )
+                self.capture = A121Capture(
+                    output_dir=self.output_path.parent,
+                    config=self.a121_config,
+                )
+                if self.capture.connect(self.resolved_port):
+                    connected = True
+                    break
+                last_connection_error = "A121 connection/setup failed."
+                if attempt < connect_attempts:
+                    self.status_changed.emit(
+                        f"A121 did not respond; retrying in {reconnect_delay:.0f} seconds…"
+                    )
+                    if self.abort_event.wait(reconnect_delay):
+                        self._abort()
+                        return
+            if not connected:
+                raise RuntimeError(
+                    f"{last_connection_error} Check that Interface A is selected and the sensor is powered."
+                )
 
             prep_seconds = max(0, int(round(float(self.config.get("prep_seconds", 10)))))
             self.status_changed.emit("Connected. Hold position and prepare for the measurement.")
