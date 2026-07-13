@@ -14,7 +14,8 @@ Run from the repository root with::
 
 The sequence, timing, A121 settings, and instructions are read from the JSON config
 file in configs/a121_foil_lens_experiment.json.  Use --start-step to begin at any
-1-based step, and --end-step to stop after a selected step.
+1-based expanded measurement run, and --end-step to stop after a selected run.
+The default configuration repeats each of the 12 conditions three times, for 36 runs.
 """
 
 from __future__ import annotations
@@ -76,6 +77,9 @@ PATCH_LABELS = {
 @dataclass(frozen=True)
 class ExperimentStep:
     number: int
+    condition_number: int
+    repeat_number: int
+    repeat_total: int
     lens: str
     lens_label: str
     patch: str
@@ -113,6 +117,7 @@ def default_config() -> dict[str, Any]:
         "measurement_seconds": 60,
         "reconnect_delay_seconds": 5,
         "connect_attempts": 2,
+        "repeats_per_condition": 3,
         "output_dir": "data/raw/a121/guided",
         "a121": {
             "start_m": 0.2,
@@ -147,30 +152,42 @@ def load_config(path: Path) -> dict[str, Any]:
 
 def parse_steps(payload: dict[str, Any]) -> list[ExperimentStep]:
     steps: list[ExperimentStep] = []
-    for number, raw in enumerate(payload["steps"], start=1):
+    run_number = 1
+    default_repeats = int(payload.get("repeats_per_condition", 1))
+    if default_repeats < 1:
+        raise ValueError("repeats_per_condition must be at least 1.")
+    for condition_number, raw in enumerate(payload["steps"], start=1):
         if not isinstance(raw, dict):
-            raise ValueError(f"Step {number} must be a JSON object.")
+            raise ValueError(f"Condition {condition_number} must be a JSON object.")
         lens = str(raw.get("lens", "")).strip()
         patch = str(raw.get("patch", "")).strip()
         if not lens or not patch:
-            raise ValueError(f"Step {number} needs both 'lens' and 'patch'.")
+            raise ValueError(f"Condition {condition_number} needs both 'lens' and 'patch'.")
         try:
             distance_cm = float(raw["distance_cm"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"Step {number} needs numeric 'distance_cm'.") from exc
+            raise ValueError(f"Condition {condition_number} needs numeric 'distance_cm'.") from exc
         if distance_cm <= 0:
-            raise ValueError(f"Step {number} distance must be positive.")
-        steps.append(
-            ExperimentStep(
-                number=number,
-                lens=lens,
-                lens_label=str(raw.get("lens_label") or LENS_LABELS.get(lens, lens)),
-                patch=patch,
-                patch_label=str(raw.get("patch_label") or PATCH_LABELS.get(patch, patch)),
-                distance_cm=distance_cm,
-                instruction=str(raw.get("instruction") or "Keep still and breathe normally."),
+            raise ValueError(f"Condition {condition_number} distance must be positive.")
+        repeat_total = int(raw.get("repeats", default_repeats))
+        if repeat_total < 1:
+            raise ValueError(f"Condition {condition_number} repeats must be at least 1.")
+        for repeat_number in range(1, repeat_total + 1):
+            steps.append(
+                ExperimentStep(
+                    number=run_number,
+                    condition_number=condition_number,
+                    repeat_number=repeat_number,
+                    repeat_total=repeat_total,
+                    lens=lens,
+                    lens_label=str(raw.get("lens_label") or LENS_LABELS.get(lens, lens)),
+                    patch=patch,
+                    patch_label=str(raw.get("patch_label") or PATCH_LABELS.get(patch, patch)),
+                    distance_cm=distance_cm,
+                    instruction=str(raw.get("instruction") or "Keep still and breathe normally."),
+                )
             )
-        )
+            run_number += 1
     return steps
 
 
@@ -224,6 +241,9 @@ def summarize_measurement(
 
     summary: dict[str, Any] = {
         "step": step.number,
+        "condition_number": step.condition_number,
+        "repeat_number": step.repeat_number,
+        "repeat_total": step.repeat_total,
         "lens": step.lens,
         "lens_label": step.lens_label,
         "patch": step.patch,
@@ -276,7 +296,7 @@ def format_summary(summary: dict[str, Any]) -> str:
             return str(raw)
 
     lines = [
-        "Measurement finished",
+        f"Measurement finished — repeat {summary.get('repeat_number', '?')}/{summary.get('repeat_total', '?')} for this condition",
         f"Frames: {summary.get('frames', 0)}  |  sample rate: {value('sample_rate_hz', 2, ' Hz')}",
         f"Peak distance: {value('median_peak_distance_m', 3, ' m')}  |  peak amplitude: {value('median_peak_amplitude', 1)}",
         f"Target distance: {value('median_target_distance_m', 3, ' m')}  |  presence: {value('presence_percent', 1, '%')}",
@@ -451,6 +471,7 @@ class GuidedExperimentWindow(QWidget):
         self.a121_config = a121_config
         self.current_index = start_step - 1
         self.end_index = end_step - 1
+        self.condition_count = max(step.condition_number for step in steps)
         self.port = port
         self.session_dir = session_dir
         self.active_thread: QThread | None = None
@@ -568,11 +589,15 @@ class GuidedExperimentWindow(QWidget):
             self.start_button.setEnabled(False)
             return
 
-        self.step_label.setText(f"Step {step.number}/{len(self.steps)}")
+        self.step_label.setText(
+            f"Run {step.number}/{len(self.steps)} — condition {step.condition_number}/{self.condition_count}, "
+            f"repeat {step.repeat_number}/{step.repeat_total}"
+        )
         self.instructions.setText(
             f"Lens: {step.lens_label}\n"
             f"Patch condition: {step.patch_label}\n"
             f"Distance: {step.distance_cm:g} cm\n\n"
+            f"This is repeat {step.repeat_number} of {step.repeat_total} for this condition.\n"
             f"{step.instruction}\n\n"
             "Check the setup, then click Start measurement."
         )
@@ -581,7 +606,8 @@ class GuidedExperimentWindow(QWidget):
 
     def output_path_for_step(self, step: ExperimentStep) -> Path:
         filename = (
-            f"step_{step.number:02d}_{safe_filename(step.patch)}_"
+            f"condition_{step.condition_number:02d}_repeat_{step.repeat_number:02d}_"
+            f"run_{step.number:02d}_{safe_filename(step.patch)}_"
             f"{safe_filename(str(step.distance_cm).replace('.', 'p'))}cm_"
             f"{safe_filename(step.lens)}.csv"
         )
@@ -690,7 +716,14 @@ class GuidedExperimentWindow(QWidget):
         self._save_manifest()
         self.pending_summary = None
         self.current_index += 1
-        self.show_step("Accepted. Set up the next measurement, then click Start measurement.")
+        next_step = self.current_step()
+        if next_step is not None and next_step.condition_number == entry.get("condition_number"):
+            next_status = (
+                f"Accepted. Repeat {next_step.repeat_number}/{next_step.repeat_total} is next for this same condition."
+            )
+        else:
+            next_status = "Accepted. Set up the next condition, then click Start measurement."
+        self.show_step(next_status)
 
     @Slot()
     def redo_measurement(self) -> None:
@@ -716,8 +749,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH, help="JSON experiment configuration.")
     parser.add_argument("--port", help="A121 Interface A serial port. Omit to auto-detect the WCH device.")
-    parser.add_argument("--start-step", type=int, default=1, help="1-based step to start at.")
-    parser.add_argument("--end-step", type=int, help="1-based step to stop after, inclusive.")
+    parser.add_argument("--start-step", type=int, default=1, help="1-based expanded measurement run to start at.")
+    parser.add_argument("--end-step", type=int, help="1-based expanded measurement run to stop after, inclusive.")
     parser.add_argument("--session-dir", type=Path, help="Existing/new output session directory.")
     parser.add_argument("--duration", type=float, help="Override measurement_seconds from the config.")
     parser.add_argument("--prep-seconds", type=int, help="Override prep_seconds from the config.")

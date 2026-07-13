@@ -4,6 +4,7 @@
   "measurement_seconds": 60,
   "reconnect_delay_seconds": 5,
   "connect_attempts": 2,
+  "repeats_per_condition": 3,
   "output_dir": "data/raw/a121/guided",
   "a121": {
     "start_m": 0.2,
