@@ -19,10 +19,13 @@ ENV/
 # Project Specific
 build_log.txt
 *.log
+.DS_Store
 data/respi_recordings.sqlite3*
 # Generated CSV recordings/results
 data/**/*.csv
 outputs/**/*.csv
+# Local guided sessions include large recordings and small manifest files.
+data/raw/a121/guided/guided_*/
 kicad_error.txt
 *~
 *.bak
@@ -38,3 +41,4 @@ node_modules/
 xcuserdata/
 *.xcuserstate
 DerivedData/
+data/archive/

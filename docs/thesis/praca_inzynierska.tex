@@ -1,0 +1,2341 @@
+% =====================================================================
+%  PRACA INŻYNIERSKA — SZKIC ROBOCZY (jeden plik)
+%  "Sieci neuronowe do analizy rytmu oddechowego"
+%  Maciej Łukasiewicz (197865) — Politechnika Gdańska
+%  Promotor: dr hab. inż. Julian Szymański
+%
+%  Kompilacja:  tectonic praca_inzynierska.tex
+%           lub  latexmk -pdf praca_inzynierska.tex
+%
+%  UWAGA: [TODO: ...] oznacza miejsca do uzupełnienia — usunąć makro
+%  \todo przed oddaniem pracy.
+% =====================================================================
+\documentclass[12pt,a4paper,oneside]{report}
+
+% Obsługa czcionek: działa zarówno pod XeLaTeX/tectonic, jak i pdfLaTeX
+% (np. na Overleafie). Bez tego znaki diakrytyczne znikają z PDF-a.
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T1]{fontenc}
+  \usepackage{lmodern}
+\else
+  \usepackage{fontspec}
+  \setmainfont{lmroman10-regular.otf}[
+    BoldFont       = lmroman10-bold.otf,
+    ItalicFont     = lmroman10-italic.otf,
+    BoldItalicFont = lmroman10-bolditalic.otf]
+  \setsansfont{lmsans10-regular.otf}[
+    BoldFont   = lmsans10-bold.otf,
+    ItalicFont = lmsans10-oblique.otf]
+  \setmonofont{lmmono10-regular.otf}[
+    BoldFont   = lmmonolt10-bold.otf,
+    ItalicFont = lmmono10-italic.otf]
+\fi
+\usepackage[polish]{babel}
+\usepackage[margin=2.5cm,bindingoffset=0.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\sisetup{output-decimal-marker={,}}
+\usepackage{xcolor}
+\usepackage{tikz}
+\setlength{\emergencystretch}{3em}  % ostatnia deska ratunku dla łamania akapitów
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\usepackage[hidelinks]{hyperref}
+
+% Styl schematów blokowych potoku przetwarzania.
+\tikzset{
+  blok/.style   = {draw, rounded corners=2pt, align=center, font=\small,
+                   minimum height=8mm, inner sep=4pt, fill=blue!5, draw=blue!45},
+  wejscie/.style= {draw, rounded corners=2pt, align=center, font=\small,
+                   minimum height=8mm, inner sep=4pt, fill=gray!10, draw=gray!55},
+  wynik/.style  = {draw, rounded corners=2pt, align=center, font=\small,
+                   minimum height=8mm, inner sep=4pt, fill=green!8, draw=green!45!black},
+  strzalka/.style = {-{Latex[length=2mm]}, draw=gray!70},
+}
+
+% Znacznik miejsc do uzupełnienia (usunąć w wersji finalnej).
+\newcommand{\todo}[1]{\textcolor{red!75!black}{\textbf{[TODO: #1]}}}
+% Rezerwa miejsca na treść, która dopiero powstanie.
+\newcommand{\miejsce}[1]{%
+  \par\vspace{0.4em}%
+  \noindent\fcolorbox{gray!40}{gray!5}{%
+    \parbox{0.97\linewidth}{\small\itshape Miejsce zarezerwowane: #1}}%
+  \par\vspace{0.6em}}
+
+\title{Sieci neuronowe do analizy rytmu oddechowego}
+\author{Maciej Łukasiewicz}
+\date{Gdańsk 2026}
+
+\begin{document}
+
+% =====================================================================
+% STRONA TYTUŁOWA
+% =====================================================================
+\begin{titlepage}
+    \centering
+    {\large Politechnika Gdańska\\[0.2em]
+    Wydział Elektroniki, Telekomunikacji i Informatyki\par}
+    \vspace{3.5cm}
+
+    {\large Praca dyplomowa inżynierska\par}
+    \vspace{1.2cm}
+    {\LARGE\bfseries Sieci neuronowe do analizy\\[0.3em] rytmu oddechowego\par}
+    \vspace{0.8cm}
+    {\large\itshape Neural networks for respiratory rhythm analysis\par}
+    \vspace{3cm}
+
+    {\large Autor: Maciej Łukasiewicz (197865)\par}
+    \vspace{0.4cm}
+    {\large Promotor: dr hab. inż. Julian Szymański\par}
+    \vfill
+    {\large Gdańsk 2026\par}
+    \vspace{0.5cm}
+    {\footnotesize\color{red!75!black} Wersja robocza --- szkic pracy.\par}
+\end{titlepage}
+
+% =====================================================================
+% STRESZCZENIA
+% =====================================================================
+\chapter*{Streszczenie}
+\addcontentsline{toc}{chapter}{Streszczenie}
+
+Praca dotyczy bezkontaktowego pomiaru rytmu oddechowego i tętna przy użyciu
+radaru. W ramach części implementacyjnej zbudowano dwa niezależne tory
+pomiarowe: niskokosztowy radar dopplerowski HB100 (\SI{10.525}{GHz}) wraz
+z zaprojektowanym od podstaw analogowym układem kondycjonowania sygnału oraz
+radar impulsowo-koherentny Acconeer A121 (\SI{60}{GHz}) pracujący na surowych
+danych Sparse~IQ. Opracowano algorytmy estymacji częstości oddechu i tętna
+oparte na analizie fazy sygnału odbitego, aplikację desktopową do akwizycji
+i podgądu na żywo oraz zestaw narzędzi do analizy offline. Przeprowadzono
+kontrolowany eksperyment porównujący trzy soczewki dielektryczne
+(hiperboliczną, FZP i płaską pokrywę) oraz wpływ folii aluminiowej naklejonej
+na klatkę piersiową (36 nagrań). W części eksperymentalnej system zastosowano
+do całonocnego monitoringu snu, porównując wyniki z zegarkiem Garmin~Fenix~7.
+
+\todo{Uzupełnić streszczenie o wyniki końcowe sieci neuronowych, gdy powstaną.}
+
+\paragraph{Słowa kluczowe:} radar dopplerowski, radar impulsowo-koherentny,
+rytm oddechowy, parametry witalne, HB100, Acconeer A121, analiza snu, sieci
+neuronowe.
+
+% =====================================================================
+\tableofcontents
+\listoffigures
+\listoftables
+
+% =====================================================================
+% WSTĘP
+% =====================================================================
+\chapter{Wstęp}
+
+\section{Motywacja}
+Rytm oddechowy i tętno należą do podstawowych parametrów opisujących stan
+fizjologiczny człowieka. Ich długotrwała obserwacja jest istotna między innymi
+w~medycynie snu, opiece domowej i~monitorowaniu osób, dla których zakładanie
+klasycznych czujników może być uciążliwe. Pasy oddechowe, elektrody EKG
+i~pulsoksymetry zapewniają bezpośredniejszy związek z~mierzoną wielkością, ale
+wymagają kontaktu z~ciałem, właściwego założenia i~tolerowania przewodów lub
+urządzenia nasobnego przez całą noc.
+
+W~pracy rozpatrzono dwie grupy metod mniej typowych. Pierwszą stanowią radary,
+które rejestrują ruch powierzchni ciała bez kontaktu i~nie zależą od oświetlenia.
+Drugą są czujniki inercyjne: osobny moduł LSM6DS3 oraz sensory wbudowane
+w~telefonie. IMU nie jest w~tej pracy wzorcem dla radaru, lecz niezależnym,
+kontaktowym sposobem obserwowania kinematyki klatki piersiowej. Jego zaletą jest
+niski koszt i~powszechna dostępność, szczególnie gdy akwizycję realizuje zwykły
+smartfon. Badanie obejmuje zatem nie tylko dokładność estymowanej częstości, ale
+również praktyczną użyteczność sygnału w~różnych pozycjach ciała.
+
+Zestawienie prostego radaru CW HB100 z~koherentnym radarem impulsowym A121
+pozwala pokazać, jak dostęp do odległości oraz zespolonych danych I/Q zmienia
+możliwości analizy. Uzupełnieniem jest ocena wpływu soczewek, folii aluminiowej,
+odzieży i~innych materiałów znajdujących się między radarem a~badanym.
+
+\section{Cel i zakres pracy}
+Celem głównym pracy jest zaprojektowanie i~ocena systemu do rejestracji oraz
+analizy sygnałów związanych z~oddechem i~pracą serca z~wykorzystaniem
+niekonwencjonalnych torów pomiarowych. Zakres obejmuje:
+\begin{enumerate}
+  \item budowę toru radaru dopplerowskiego HB100 wraz z~analogowym układem
+  kondycjonowania i~akwizycją na ESP32,
+  \item integrację radaru Acconeer A121 oraz analizę surowych danych Sparse~IQ,
+  \item opracowanie algorytmów estymacji częstości oddechu i~tętna,
+  \item uruchomienie osobnych torów inercyjnych: LSM6DS3 oraz aplikacji iOS
+  wykorzystującej Core~Motion i~transmisję BLE,
+  \item eksperymentalną ocenę wpływu odległości, soczewki, folii aluminiowej,
+  materiałów pośrednich i~pozycji badanego na użyteczność sygnału,
+  \item przygotowanie danych i~metod bazowych do oceny możliwości zastosowania
+  sieci neuronowych w~analizie faz cyklu oddechowego.
+\end{enumerate}
+Ostateczny zakres części dotyczącej sieci neuronowych zostanie doprecyzowany po
+ocenie jakości i~liczności zgromadzonego zbioru danych; nie wpływa to na zakres
+zbudowanego systemu pomiarowego i~badań sygnałowych.
+
+\section{Struktura pracy}
+Praca dzieli się na trzy części:
+\begin{itemize}
+  \item \textbf{Część~\ref{part:sota}} --- przegląd literatury i istniejących
+  rozwiązań bezkontaktowego pomiaru parametrów witalnych, ze szczególnym
+  uwzględnieniem architektur radarowych.
+  \item \textbf{Część~\ref{part:system}} --- opis zbudowanego systemu: tor
+  radaru HB100 z autorskim front-endem analogowym, integracja radaru
+  Acconeer~A121, algorytmy estymacji oddechu i tętna, oprogramowanie oraz
+  eksperyment porównujący soczewki i wzmacnianie odbicia folią aluminiową.
+  \item \textbf{Część~\ref{part:eksperymenty}} --- zastosowanie systemu:
+  całonocne pomiary snu, porównanie z zegarkiem Garmin~Fenix~7 oraz algorytmy
+  klasyfikacji faz snu.
+\end{itemize}
+
+% =====================================================================
+% =====================================================================
+\part{Przegląd literatury i istniejących rozwiązań}
+\label{part:sota}
+% =====================================================================
+% =====================================================================
+
+\chapter{Bezkontaktowy pomiar parametrów witalnych}
+
+\section{Mierzone parametry i ich zakresy fizjologiczne}
+W~potoku przetwarzania przyjęto pasmo oddechowe
+\SIrange{0.10}{0.50}{Hz}, odpowiadające 6--30 oddechom na minutę, oraz pasmo
+sercowe \SIrange{0.70}{2.00}{Hz}, czyli 42--120 uderzeniom na minutę.
+Oddychanie powoduje ruch powierzchni tułowia rzędu milimetrów, natomiast
+drgania wywołane pracą serca są znacznie słabsze. Oba zjawiska mogą więc
+pojawić się w~sygnale ruchowym, ale ich separacja wymaga innych filtrów i~miar
+jakości.
+
+Żaden z~zastosowanych czujników nie mierzy bezpośrednio objętości oddechowej
+ani czynności elektrycznej serca. Radar obserwuje zmianę odległości radialnej
+i~fazy odbicia, akcelerometr --- przyspieszenie właściwe, a~żyroskop ---
+prędkość kątową obudowy. Częstość oddechu i~tętno są wielkościami wyznaczanymi
+pośrednio z~okresowości tych sygnałów. Z~tego powodu wyniki należy interpretować
+jako ocenę użyteczności metod ruchowych, a~nie jako walidację kliniczną.
+
+\section{Motywacja kliniczna}
+\miejsce{Polisomnografia jako złoty standard i jej ograniczenia. Monitoring
+domowy, opieka senioralna, zespół nagłej śmierci łóżeczkowej.}
+
+\section{Klasyczne metody kontaktowe}
+Do metod klinicznych i~laboratoryjnych należą między innymi EKG,
+pulsoksymetria, spirometria oraz pasy do pletyzmografii indukcyjnej (RIP).
+Mierzą one inne wielkości fizyczne niż radar i~IMU, dlatego mogą pełnić rolę
+zewnętrznego odniesienia, lecz nie są wymienne z~pomiarem ruchu powierzchni
+ciała. W~niniejszym projekcie dane z~zegarka Garmin wykorzystano jedynie jako
+porównanie konsumenckie dla pomiarów nocnych. LSM6DS3 i~iPhone są natomiast
+pełnoprawnymi, osobnymi torami badanymi pod kątem wykrywalności oddechu i~tętna.
+
+\chapter{Radarowe metody pomiaru parametrów witalnych}
+
+\section{Radary dopplerowskie fali ciągłej (CW)}
+Radar CW nadaje sinusoidę o~stałej częstotliwości. Ruch celu zmienia fazę
+sygnału odbitego, a~ruch ze stałą prędkością powoduje przesunięcie Dopplera
+$f_d=2v/\lambda$. Dla ruchu okresowego, takiego jak oddychanie, wyjście
+mieszacza jest modulowane zmianą odległości powierzchni klatki piersiowej.
+Układ jest prosty i~tani, ale sygnały od wszystkich obiektów w~wiązce sumują
+się w~jednym kanale --- nie ma informacji, z~jakiej odległości pochodzi dany
+składnik.
+
+W~odbiorniku jednokanałowym napięcie ma w~uproszczeniu postać
+\begin{equation}
+  b(t)=A\cos\!\left(\frac{4\pi}{\lambda}[d_0+x(t)]+\varphi_0\right).
+  \label{eq:cw-baseband}
+\end{equation}
+Dla małego ruchu czułość zależy od fazy statycznej celu. W~pewnych
+odległościach pochodna funkcji cosinus zanika i~powstają punkty zerowe
+(\emph{null points}). Drugi, przesunięty o~$90^\circ$ kanał kwadraturowy Q
+uzupełnia kanał I~i~pozwala śledzić fazę niezależnie od tego położenia.
+Niskokosztowy HB100 udostępnia jednak tylko pojedyncze, rzeczywiste wyjście IF,
+co stanowi jego fundamentalne ograniczenie \cite{hb100_doc}.
+
+\section{Radary FMCW}
+Radar FMCW nadaje ciąg odcinków, w~których częstotliwość nośna zmienia się
+liniowo w~czasie (\emph{chirp}). Po zmieszaniu echa z~sygnałem nadawanym
+częstotliwość różnicowa jest proporcjonalna do opóźnienia, a~więc do odległości
+celu. FFT próbek pojedynczego chirpu tworzy profil odległości, natomiast analiza
+faz kolejnych chirpów pozwala oszacować prędkość radialną. W~radarach
+wielokanałowych dodatkowa analiza różnic faz między antenami dostarcza kąta
+nadejścia. Cena za rozdzielczość odległościową to większa złożoność toru RF,
+akwizycji i~obliczeń \cite{infineon_fmcw}.
+
+\section{Radary impulsowo-koherentne (PCR)}
+Radar impulsowo-koherentny wysyła krótkie impulsy i~próbkuje echo w~wybranych
+opóźnieniach odpowiadających odległościom. Zachowanie koherencji pomiędzy
+pomiarami umożliwia zwracanie zespolonych próbek I/Q. A121 pracuje w~paśmie
+\SIrange{57}{64}{GHz}; przy długości fali około \SI{5}{mm} pełny obrót fazy
+odpowiada zmianie drogi w~obie strony, czyli radialnemu przesunięciu celu
+o~około \SI{2.5}{mm} \cite{acconeer_datasheet,acconeer_sparse_iq}.
+
+A121 nie jest radarem FMCW i~nie wyznacza odległości z~częstotliwości dudnień
+chirpu. Zarówno FMCW, jak i~PCR mogą wytworzyć profil celu względem odległości,
+lecz robią to inną metodą: FMCW koduje opóźnienie w~częstotliwości sygnału IF,
+a~PCR próbkuje odpowiedź na koherentny impuls. W~projekcie wykorzystywana jest
+usługa Sparse~IQ: dla każdego punktu odległości zapisuje się amplitudę oraz
+fazę odbicia.
+
+\section{Radary UWB}
+\miejsce{Ultra-wideband w monitoringu oddechu, rozdzielczość czasowa,
+przegląd literatury.}
+
+\section{Porównanie torów HB100 i A121}
+
+Tabela~\ref{tab:hb100-a121} zestawia cechy istotne w~tej pracy. Nie jest to
+porównanie dwóch równoważnych czujników: HB100 udostępnia minimalny tor
+dopplerowski wymagający własnej elektroniki analogowej, natomiast A121 jest
+zintegrowanym radarem koherentnym z~cyfrowym profilem odległości.
+
+\begin{table}[H]
+\centering
+\caption{Porównanie radarów HB100 i Acconeer A121 na podstawie dokumentacji
+producentów \cite{hb100_doc,acconeer_datasheet,waveshare_a121}.}
+\label{tab:hb100-a121}
+\small
+\begin{tabular}{@{}p{3.1cm}p{5.25cm}p{5.25cm}@{}}
+\toprule
+Cecha & HB100 & Acconeer A121 / moduł Waveshare \\
+\midrule
+Pasmo pracy & \SI{10.525}{GHz}, $\lambda\approx\SI{28.5}{mm}$
+& \SIrange{57}{64}{GHz}, $\lambda\approx\SI{5}{mm}$ \\
+Rodzaj radaru & bistatyczny CW Doppler & impulsowo-koherentny PCR \\
+Dane wyjściowe & jeden rzeczywisty sygnał analogowy IF & zespolone Sparse~IQ
+dla wielu punktów odległości \\
+Rozdzielenie celów po odległości & brak & tak, zależne od profilu impulsu \\
+Mikroruch & zmiana napięcia zależna od fazy celu; punkty zerowe & zmiana fazy
+I/Q w~wybranej bramce odległościowej \\
+Typowy EIRP & 15~dBm & 11{,}4~dBm \\
+Szerokość wiązki bez dodatkowej soczewki & $80^\circ$ w~azymucie,
+$40^\circ$ w~elewacji & typowo $53^\circ$ w~płaszczyźnie E,
+$65^\circ$ w~płaszczyźnie H \\
+Elektronika zewnętrzna & wzmacniacz, filtr, ADC i~mikrokontroler & układ RF,
+baseband i~anteny w~obudowie; moduł zawiera STM32 i~USB/UART \\
+Najważniejsze ograniczenie w~projekcie & brak odległości i~kwadratury,
+wrażliwość na całe otoczenie & większa złożoność konfiguracji, przeciek
+bezpośredni, dobór profilu i~bramki celu \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Odbicie, transmisja i tłumienie w materiałach}
+\label{sec:materialy-radar}
+
+Fala padająca na granicę materiałów dzieli się na część odbitą, transmitowaną
+i~pochłoniętą. Proporcje zależą od zespolonej przenikalności elektrycznej,
+przewodności, grubości, częstotliwości, polaryzacji i~kąta padania. Dlatego
+potoczne stwierdzenie, że radar ,,widzi przez materiał'', jest nieprecyzyjne:
+część energii może przejść przez przeszkodę, lecz po przejściu w~obie strony
+i~odbiciu od klatki sygnał może już znaleźć się poniżej użytecznego poziomu.
+Warstwowa budowa materiału może ponadto powodować interferencję i~zmieniać fazę
+echa.
+
+Różnica częstotliwości pomiędzy zastosowanymi radarami jest duża. Dla HB100
+długość fali wynosi około \SI{28.5}{mm}, a~dla A121 około \SI{5}{mm}. Przy
+krótszej fali większego znaczenia nabierają niewielkie nierówności powierzchni,
+grubość warstw i~dokładne ustawienie. Pomiary materiałów budowlanych w~zakresie
+\SIrange{4}{40}{GHz} wykazały dla wielu lekkich materiałów wewnętrznych jedynie
+umiarkowaną stratę, podczas gdy pustaki powodowały straty większe o~dziesiątki
+decybeli \cite{wallace2018}. W~badaniach budynków przy \SI{60}{GHz} zmierzono
+zależne od kąta i~konstrukcji straty rzędu 12--32~dB dla ściany gipsowej,
+8--18~dB dla szkła wewnętrznego i~26--41~dB dla drewnianych drzwi
+\cite{jun2020}. Liczby te nie są stałymi materiałowymi --- obejmują konkretne
+grubości, warstwy i~geometrię pomiaru --- ale pokazują, dlaczego wyników dla
+\SI{10.525}{GHz} nie można bezpośrednio przenosić na \SI{60}{GHz}.
+
+W~scenariuszu monitoringu snu szczególnie istotne są odzież i~pościel.
+Eksperyment z~modulowanym reflektorem przy 61, 122 i~\SI{175}{GHz} wykazał, że
+cienkie suche tkaniny wnoszą niewielką stratę, natomiast zawilgocenie może
+znacznie zwiększyć tłumienie \cite{albrecht2023}. Uzasadnia to osobny test
+przez suchą kołdrę, ale również wymaga zapisania rodzaju i~stanu materiału.
+
+Metal zachowuje się odmiennie od dielektryków. Dla dobrego przewodnika energia
+wnika jedynie na głębokość naskórkową
+\begin{equation}
+  \delta=\sqrt{\frac{2}{\omega\mu\sigma}}.
+\end{equation}
+Dla aluminium otrzymuje się w~przybliżeniu \SI{0.83}{\micro\metre} przy
+\SI{10.525}{GHz} i~\SI{0.35}{\micro\metre} przy \SI{60}{GHz}, znacznie mniej
+niż grubość folii kuchennej. Folia jest więc praktycznie nieprzezroczystym
+reflektorem dla obu radarów. Nie oznacza to jednak automatycznej poprawy
+pomiaru: niewielka łata konkuruje z~odbiciem od całego, bogatego w~wodę tułowia,
+a~zmiana dominującego reflektora może jednocześnie zmienić amplitudę, fazę
+i~wielodrogowość.
+
+\section{Soczewki dielektryczne i kształtowanie wiązki}
+\miejsce{Soczewki refrakcyjne (hiperboliczna, plano-convex) i dyfrakcyjne
+(płytka strefowa Fresnela, FZP). Zysk anteny a szerokość wiązki, kompromis
+zysk/pole widzenia. Materiał teoretyczny do wykorzystania w
+rozdziale~\ref{chap:soczewki}.}
+
+\chapter{Metody niradarowe}
+
+\section{Czujniki inercyjne (IMU)}
+Czujnik inercyjny umieszczony na tułowiu rejestruje zmianę orientacji i~ruch
+wywołany oddechem. Składowe o~wyższej częstotliwości mogą zawierać drgania
+sejsmokardiograficzne (SCG) i~gyro-kardiograficzne (GCG) związane z~pracą
+serca. Jest to metoda kontaktowa, lecz nie wymaga specjalizowanego pasa
+oddechowego: odpowiednie sensory znajdują się również w~telefonach.
+
+Landreani i~wsp. rejestrowali oddech dwoma telefonami ułożonymi na mostku
+i~nadbrzuszu osób leżących, stosując kontrolowane częstości
+\SIrange{0.10}{0.25}{Hz}; po filtracji uzyskali błąd częstości poniżej 2\%
+względem pasa, z~lepszymi wynikami nad brzuchem \cite{landreani2017}.
+Nayak i~Bolic pokazali możliwość jednoczesnej estymacji oddechu i~tętna z~IMU
+telefonu swobodnie leżącego na klatce w~pozycji na plecach
+\cite{nayak2024}. Wyniki literaturowe uzasadniają sprawdzenie własnej aplikacji
+iOS zarówno w~leżeniu, jak i~w~pozycji siedzącej, ale nie zastępują oceny
+konkretnego telefonu, sposobu mocowania i~implementacji transmisji BLE.
+
+W~projekcie zrealizowano dwa niezależne warianty: moduł LSM6DS3 odczytywany
+przez ESP32 oraz aplikację iOS korzystającą z~Core~Motion. Oba zapisują trzy
+osie akcelerometru i~żyroskopu do wspólnego formatu CSV, dzięki czemu można
+porównać jakość przebiegu, stabilność częstości próbkowania i~wrażliwość na
+pozycję ciała. Ich rola i~implementacja zostały opisane w~rozdziale
+\ref{chap:imu}.
+
+\section{Metody optyczne}
+\miejsce{rPPG z kamery RGB, termowizja, kamery głębi.}
+
+\section{Urządzenia nasobne jako źródło porównania}
+\miejsce{Zegarki sportowe, w tym Garmin Fenix~7 wykorzystany jako konsumenckie
+źródło porównania w części~\ref{part:eksperymenty}. Dokładność szacowania faz
+snu przez zegarki względem polisomnografii.}
+
+\section{Rozwiązania komercyjne}
+\miejsce{Google Nest Hub (radar Soli), Withings Sleep Analyzer, Somnofy.}
+
+\chapter{Uczenie maszynowe w analizie sygnałów oddechowych}
+\label{chap:sota-ml}
+
+\section{Klasyczne podejścia oparte na cechach}
+\miejsce{FFT/Welch, filtracja pasmowa, detekcja pików --- czyli to, co
+zaimplementowano jako baseline w rozdziale~\ref{chap:algorytmy}.}
+
+\section{Sieci neuronowe dla sygnałów jednowymiarowych}
+\miejsce{1D-CNN, LSTM/GRU, architektury typu transformer dla szeregów
+czasowych; uczenie na spektrogramach.}
+
+\section{Klasyfikacja faz oddechu}
+\miejsce{Detekcja wdechu, wydechu i pauzy oddechowej --- przegląd metod.
+To jest bezpośrednia podstawa teoretyczna dla rozdziału~\ref{chap:sieci}.}
+
+\section{Dostępne zbiory danych}
+\miejsce{Publiczne zbiory radarowych sygnałów witalnych; problem braku
+etykiet faz oddechu i konieczność samodzielnej anotacji.}
+
+% =====================================================================
+% =====================================================================
+\part{Zbudowany system pomiarowy}
+\label{part:system}
+% =====================================================================
+% =====================================================================
+
+\chapter{Architektura systemu i przebieg prac}
+\label{chap:architektura}
+
+\section{Ogólna architektura}
+System składa się z czterech torów pomiarowych zintegrowanych w jednej
+aplikacji desktopowej:
+\begin{enumerate}
+  \item radar dopplerowski HB100 z analogowym front-endem i akwizycją przez
+  przetwornik ADC mikrokontrolera ESP32,
+  \item radar impulsowo-koherentny Acconeer A121 podłączony przez USB-UART,
+  dostarczający surowe dane Sparse~IQ,
+  \item czujnik inercyjny LSM6DS3 na ESP32 (osobna metoda kontaktowa),
+  \item aplikacja na iPhone strumieniująca dane z CoreMotion przez BLE
+  (drugi wariant metody inercyjnej).
+\end{enumerate}
+Wspólna warstwa programowa zapewnia nagrywanie do plików CSV oraz bazy
+SQLite, podgląd na żywo i analizę offline.
+
+\miejsce{Rysunek blokowy całego systemu (do wykonania). Powinien pokazywać
+przepływ: czujnik $\rightarrow$ kondycjonowanie $\rightarrow$ akwizycja
+$\rightarrow$ zapis $\rightarrow$ analiza $\rightarrow$ wynik.}
+
+\section{Przebieg prac i ewolucja projektu}
+\label{sec:historia}
+
+Projekt rozwijał się iteracyjnie; historia repozytorium dokumentuje kolejne
+etapy oraz zmiany kierunku, które okazały się kluczowe dla ostatecznego
+kształtu pracy.
+
+\begin{table}[H]
+\centering
+\caption{Etapy realizacji projektu na podstawie historii repozytorium.}
+\label{tab:historia}
+\small
+\begin{tabular}{@{}llp{7.6cm}@{}}
+\toprule
+Okres & Etap & Zakres prac \\
+\midrule
+III 2026 & Start & Pierwsza akwizycja, uruchomienie toru radarowego HB100,
+podstawowe wykresy i FFT. \\
+IV--V 2026 & Tor IMU & Akwizycja I2C z LSM6DS3, analiza PCA, filtry
+Butterwortha; wyodrębnienie rytmu oddechu i tętna. \\
+18 V 2026 & \emph{Zmiana kierunku} & Przeniesienie głównego nacisku
+z~czujnika IMU na tor radarowy. \\
+31 V 2026 & Integracja A121 & Wsparcie dla radaru Acconeer~A121, schemat
+front-endu analogowego, prototyp aplikacji. \\
+1 VI 2026 & Parametry witalne & Poprawki algorytmu estymacji oddechu
+i~tętna (bramkowanie odległościowe, miary pewności). \\
+VI 2026 & Eksperymenty & Pomiary całonocne, aplikacja na iPhone, rozbudowa
+bazy nagrań. \\
+VII 2026 & Eksperyment sterowany & Automatyczna procedura badania soczewek
+i~folii aluminiowej (36 nagrań, 12 warunków, 3 powtórzenia). \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Zmiana głównego kierunku z~IMU na radar wynikała z~odmiennego scenariusza
+użytkowego: czujnik inercyjny musi poruszać się wraz z~ciałem, natomiast radar
+umożliwia obserwację z~odległości. Nie oznacza to odrzucenia IMU ani nadania mu
+roli wzorca. W~dalszej części oba warianty inercyjne są oceniane jako osobne,
+niekonwencjonalne metody pomiaru. W~torach radarowych głównymi problemami były
+niska amplituda analogowego wyjścia HB100, punkty zerowe odbiornika
+jednokanałowego oraz wybór właściwego odbicia w~danych odległościowych A121.
+
+% ---------------------------------------------------------------------
+\chapter{Radar dopplerowski HB100}
+\label{chap:hb100}
+
+\section{Moduł HB100 --- zasada działania}
+Moduł HB100 to niskokosztowy, bistatyczny radar dopplerowski fali ciągłej
+pracujący nominalnie przy \SI{10.525}{GHz}. Odbity sygnał jest mieszany
+z~sygnałem nadawanym, a~na wyjściu pośredniej częstotliwości (IF) pojawia się
+składowa zależna od ruchu radialnego celu. Dla stałej prędkości $v$ przesunięcie
+Dopplera wynosi
+\begin{equation}
+  f_d=\frac{2v}{\lambda}=\frac{2vf_0}{c}.
+  \label{eq:hb100-doppler}
+\end{equation}
+Oddech jest jednak ruchem okresowym, a~nie ruchem ze stałą prędkością. Jego
+przemieszczenie $x(t)$ zmienia fazę echa o~$4\pi x(t)/\lambda$, zgodnie
+z~modelem~\eqref{eq:cw-baseband}. Przy $\lambda\approx\SI{28.5}{mm}$ pełny
+obrót fazy odpowiada przesunięciu celu o~około \SI{14.2}{mm}. Ponieważ HB100
+udostępnia tylko jeden rzeczywisty kanał IF, lokalna czułość na mały ruch jest
+proporcjonalna do sinusa fazy statycznej. Zmiana średniej odległości o~około
+$\lambda/4\approx\SI{7.1}{mm}$ może zatem przenieść układ z~maksimum czułości
+do punktu zerowego. W~pobliżu takiego punktu składowa podstawowa oddechu
+słabnie, a~względnie rośnie druga harmoniczna. Nie jest to błąd filtracji,
+lecz konsekwencja jednokanałowej architektury CW.
+
+\begin{table}[H]
+\centering
+\caption{Wybrane parametry modułu HB100 według noty katalogowej
+\cite{hb100_doc}.}
+\label{tab:hb100-spec}
+\small
+\begin{tabular}{@{}p{5.7cm}p{7.0cm}@{}}
+\toprule
+Parametr & Wartość \\
+\midrule
+Częstotliwość nadawcza & \SIrange{10.520}{10.530}{GHz}, typowo
+\SI{10.525}{GHz} \\
+EIRP & \SIrange{12}{20}{dBm}, typowo \SI{15}{dBm} \\
+Sygnał IF w~warunkach pomiarowych producenta & typowo
+\SI{200}{\micro\volt} p-p przy dwukierunkowej stracie toru \SI{93}{dB} \\
+Szum wyjścia IF & typowo \SI{5}{\micro\volt} RMS w~paśmie
+\SIrange{10}{100}{Hz} \\
+Szerokość wiązki & typowo $80^\circ$ w~azymucie i~$40^\circ$ w~elewacji \\
+Zasilanie & \SI{5}{V}, pobór prądu \SIrange{30}{40}{mA} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Problem: amplituda sygnału wyjściowego}
+Podstawowym problemem praktycznym okazała się bardzo niska amplituda sygnału
+IF --- rzędu pojedynczych miliwoltów --- niemożliwa do bezpośredniego pomiaru
+przetwornikiem ADC mikrokontrolera ESP32. Wymusiło to zaprojektowanie
+dedykowanego analogowego układu kondycjonowania sygnału.
+
+\section{Zaprojektowany analogowy front-end}
+\label{sec:frontend}
+
+Zbudowany układ (rys.~\ref{fig:hb100schemat}) opiera się na dwóch
+symetrycznych stopniach nieodwracających na wzmacniaczu operacyjnym MCP6002.
+Każdy stopień wykorzystuje $R_f = \SI{100}{k\ohm}$ oraz
+$R_g = \SI{10}{k\ohm}$, co daje wzmocnienie około $11\times$ na stopień
+i~w~przybliżeniu $121\times$ łącznie. Kondensator \SI{22}{nF} w~pętli
+sprzężenia zwrotnego ogranicza pasmo od góry. Wejścia sprzężone pojemnościowo
+są podciągane do wirtualnej masy \SI{1.65}{V} rezystorami \SI{1}{M\ohm},
+a~wyjście zabezpieczono rezystorem \SI{1}{k\ohm} przed wejściem ADC
+(GPIO~33 / ADC1\_CH5). Zasilanie części analogowej realizuje stabilizator
+liniowy MCP1700, aby odseparować ją od zakłóceń cyfrowych ESP32.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{hb100_frontend_schemat.png}
+    \caption{Schemat zaprojektowanego analogowego front-endu radaru HB100:
+    dwa stopnie wzmacniające MCP6002 ($\approx 121\times$), filtracja
+    pasmowa, wirtualna masa \SI{1.65}{V} i separowane zasilanie analogowe
+    MCP1700.}
+    \label{fig:hb100schemat}
+\end{figure}
+
+Wykonany prototyp przedstawiono na rys.~\ref{fig:hb100-stanowisko}. Moduł
+HB100, analogowy układ kondycjonowania oraz ESP32 połączono na płytce
+stykowej. Taka postać stanowiska ułatwiała zmianę elementów podczas
+uruchamiania toru, ale wymagała zachowania stałego prowadzenia przewodów ze
+względu na podatność wejścia o~małej amplitudzie na zakłócenia.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{stanowisko_hb100.jpg}
+        \caption{Moduł HB100 oraz układ kondycjonowania i~akwizycji.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{frontend_hb100.jpg}
+        \caption{Zbliżenie analogowego front-endu na płytce stykowej.}
+    \end{subfigure}
+    \caption[Prototyp toru pomiarowego HB100]{Prototyp toru pomiarowego
+    HB100 z~dwustopniowym front-endem i~mikrokontrolerem ESP32 (fotografie
+    własne).}
+    \label{fig:hb100-stanowisko}
+\end{figure}
+
+\miejsce{Do uzupełnienia: obliczenia projektowe (dobór częstotliwości
+granicznych filtru pod pasmo oddechu 0,1--0,5~Hz i tętna 0,7--2,0~Hz),
+charakterystyka częstotliwościowa układu (symulacja i~pomiar), analiza szumów
+oraz pomiary oscyloskopem.}
+
+\section{Akwizycja na ESP32}
+Firmware w~katalogu \texttt{firmware/esp32\_radar\_adc} korzysta z~wejścia
+GPIO~33 (ADC1, kanał~5) z~tłumieniem \texttt{ADC\_ATTEN\_DB\_12}. Każda
+publikowana próbka jest średnią z~64 kolejnych konwersji ADC. Napięcie jest
+przeliczane z~wykorzystaniem kalibracji liniowej ESP-IDF, a~w~razie jej braku
+stosowane jest przeliczenie przybliżone. Zadany okres transmisji wynosi
+\SI{2}{ms}, czyli nominalnie \SI{500}{Hz}; jest to duży nadmiar względem pasm
+oddechu i~tętna, ale ułatwia późniejsze filtrowanie i~ocenę szumu toru.
+
+Każdy wiersz transmisji przy \SI{921600}{baud} zawiera znacznik czasu z~zegara
+\texttt{esp\_timer} w~milisekundach, uśredniony kod ADC oraz napięcie w~mV.
+Na komputerze dane otrzymują nagłówek
+\texttt{Timestamp\_ms,RawADC,Voltage\_mV}. O~rzeczywistej częstości próbkowania
+nie należy jednak wnioskować wyłącznie z~wartości zadanej: średni czas 64
+konwersji, formatowanie tekstu i~transmisja mogą powodować jitter. Dlatego jest
+ona wyznaczana z~różnic znaczników czasu, a~przed każdym eksperymentem należy
+sprawdzić monotoniczność czasu, liczbę brakujących próbek oraz rozkład odstępów.
+
+\section{Wstępne wyniki pomiarowe}
+Wstępne pomiary potwierdziły możliwość detekcji oddechu z odległości około
+\SI{50}{cm} od klatki piersiowej. Zaobserwowano również, że wstrzymanie
+oddechu odsłania w~sygnale oscylacje odpowiadające pracy serca.
+
+Do domknięcia oceny toru potrzebne są: wykresy czasowe i~widma Welcha dla
+powtarzalnej serii, odsetek nagrań z~pikiem przy częstości narzuconej
+metronomem oraz przypadki niepowodzenia (ruch tła, punkt zerowy, druga
+harmoniczna). Jednoczesne nagranie HB100 i~A121 może służyć porównaniu dwóch
+metod obserwujących ten sam oddech, ale A121 nie jest przez to wzorcem prawdy.
+Kontrolę negatywną stanowią odcinki bez ruchu badanego i~ze wstrzymanym
+oddechem.
+
+\section{Ograniczenia toru HB100 i wnioski}
+HB100 sumuje echa ze wszystkich obiektów w~wiązce, nie rozdziela ich po
+odległości i~nie udostępnia kanału kwadraturowego. Wynik zależy więc od
+statycznej fazy celu, ruchu tła i~wielodrogowości. Te ograniczenia wyjaśniają,
+dlaczego nawet duże wzmocnienie analogowe nie gwarantuje powtarzalnego pomiaru
+mikroruchu. Wprowadzenie A121 nie było wyłącznie wymianą czujnika na czulszy,
+lecz zmianą klasy pomiaru: możliwy stał się wybór bramki odległościowej i~praca
+na pełnym sygnale I/Q. HB100 pozostaje samodzielną niskokosztową metodą oraz
+demonstracją kompletnego łańcucha inżynierskiego --- od mikrofalowego modułu
+i~analogowego kondycjonowania po cyfrową estymację rytmu oddechowego. Jego
+praktycznym wynikiem powinno być wskazanie granic użyteczności, a~nie próba
+uznania go za referencję dla A121.
+
+% ---------------------------------------------------------------------
+\chapter{Radar impulsowo-koherentny Acconeer A121}
+\label{chap:a121}
+
+\section{Charakterystyka czujnika}
+Acconeer A121 to radar impulsowo-koherentny pracujący w~paśmie
+\SIrange{57}{64}{GHz} \cite{acconeer_datasheet}.
+W~przeciwieństwie do HB100 dostarcza on zespolone dane Sparse~IQ dla całego
+szeregu bramek odległościowych, co pozwala jednocześnie \emph{zlokalizować}
+cel i~śledzić \emph{fazę} sygnału od niego odbitego. Przy długości fali
+$\lambda \approx \SI{5}{mm}$ przesunięcie fazy $\Delta\varphi$ odpowiada
+przemieszczeniu celu
+\begin{equation}
+    \Delta d = \frac{\lambda}{4\pi}\,\Delta\varphi ,
+    \label{eq:faza}
+\end{equation}
+co daje czułość rzędu ułamków milimetra --- wystarczającą, aby zarejestrować
+zarówno oddech (kilka milimetrów), jak i~składową sercową.
+
+Sam układ A121 integruje część radiową, baseband oraz anteny w~obudowie
+o~wymiarach około $5{,}2\times5{,}5\times0{,}88$~mm. Producent podaje EIRP
+\SI{11.4}{dBm}, typowe szerokości wiązki $53^\circ$ i~$65^\circ$ w~dwóch
+płaszczyznach oraz możliwość bezwzględnego pomiaru odległości do \SI{23}{m},
+zależną od celu i~konfiguracji \cite{acconeer_datasheet}. Ostatnia wartość nie
+jest zasięgiem detekcji oddechu; mikroruch klatki stanowi znacznie trudniejszy
+cel i~musi zostać scharakteryzowany eksperymentalnie.
+
+W~projekcie użyto płytki Waveshare A121 Range Sensor z~mikrokontrolerem
+STM32L431, interfejsem USB/UART oraz zasilaniem \SI{5}{V}. Moduł ma wymiary
+$39\times39$~mm i~według producenta pobiera maksymalnie \SI{80}{mA}
+\cite{waveshare_a121}. Rozdzielczości profilu odległościowego nie należy mylić
+z~czułością fazową: dla profilu~3 szerokość odpowiedzi impulsowej jest rzędu
+\SI{89}{mm}, lecz po ustabilizowaniu właściwej bramki względną zmianę drogi
+można śledzić znacznie dokładniej na podstawie fazy.
+
+\section{Konfiguracja pomiarowa}
+W~pomiarach wykorzystano konfigurację: profil~3, HWAAS~32, 8~przemiatań na
+ramkę, częstotliwość ramek \SI{20}{Hz}, zakres \SIrange{0.20}{1.50}{m}.
+Dane zapisywane są do plików CSV zawierających m.in. składowe rzeczywistą
+i~urojoną dla każdej bramki odległościowej, amplitudę, fazę oraz metadane
+z~wbudowanych detektorów Acconeera.
+
+Profil~3 stanowi kompromis między energią impulsu, separacją celów i~zasięgiem.
+Parametr HWAAS określa liczbę sprzętowo uśrednianych próbek: jego zwiększenie
+poprawia SNR kosztem czasu pomiaru i~zużycia energii. Osiem przemiatań jest
+uśrednianych w~ramce, natomiast \SI{20}{Hz} zachowuje duży zapas względem pasma
+oddechu oraz pasma sercowego używanego w~projekcie. Dla każdego dystansu trzeba
+rozszerzyć konfigurowany przedział tak, aby obejmował cel; w~przeciwnym razie
+eksperyment mierzy ograniczenie konfiguracji, a~nie radaru. Komputer łączy się
+z~czujnikiem przez klienta szeregowego Acconeer Exploration Tool. Z~każdej
+ramki zapisywane są odległości oraz tablice wartości rzeczywistych i~urojonych,
+co umożliwia ponowne wykonanie całej analizy offline.
+
+% ---------------------------------------------------------------------
+\chapter{Inercyjne tory pomiarowe}
+\label{chap:imu}
+
+Czujniki inercyjne tworzą w~tej pracy osobny nurt pomiarowy. Rejestrują ruch
+obudowy spoczywającej na tułowiu, podczas gdy radar rejestruje zmianę drogi
+propagacji fali. Zgodność częstości wyznaczonej z~obu metod może być użyteczną
+kontrolą spójności, ale sama nie czyni IMU wzorcem dla radaru. Ocena dotyczy
+tego, czy sygnał inercyjny jest dostatecznie czytelny w~pozycji siedzącej
+i~leżącej oraz czy prosty tor z~telefonem może zastąpić osobny moduł sprzętowy.
+
+\section{Moduł LSM6DS3 z ESP32}
+LSM6DS3 zawiera trójosiowy akcelerometr i~trójosiowy żyroskop. Wykorzystany
+firmware ESP-IDF komunikuje się z~czujnikiem po I2C z~częstotliwością
+\SI{400}{kHz}. Rejestry \texttt{CTRL1\_XL} oraz \texttt{CTRL2\_G} otrzymują
+wartość \texttt{0x70}, co ustawia częstotliwość ODR obu sensorów na
+\SI{1.66}{kHz}, zakres akcelerometru $\pm2g$ i~żyroskopu
+$\pm\SI{250}{\degree\per\second}$ \cite{lsm6ds3}. Po zgłoszeniu gotowości obu
+części odczytywane są trzy osie przyspieszenia w~$g$ oraz trzy osie prędkości
+kątowej w~stopniach na sekundę i~wysyłane tekstowo przez UART.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.68\textwidth]{stanowisko_lsm6ds3.jpg}
+    \caption[Stanowisko pomiarowe z~modułem LSM6DS3]{Moduł LSM6DS3 połączony
+    przez I2C z~mikrokontrolerem ESP32 na prototypowej płytce stykowej
+    (fotografia własna).}
+    \label{fig:lsm6ds3-stanowisko}
+\end{figure}
+
+Analiza offline filtruje trzy osie w~paśmie oddechowym
+\SIrange{0.10}{0.60}{Hz}, a~następnie wyznacza pierwszą składową główną PCA.
+Osobna ścieżka łączy żyroskop z~kierunkiem grawitacji filtrem komplementarnym
+i~tworzy sygnał kąta oddechowego. Składowa sercowa jest poszukiwana w~paśmie
+\SIrange{0.65}{4.00}{Hz}. PCA redukuje zależność od wyboru pojedynczej osi,
+ale nie gwarantuje niezmienności względem postawy, miejsca położenia czujnika
+ani przesunięcia podczas pomiaru. To założenie wymaga sprawdzenia osobno dla
+pozycji siedzącej i~leżącej.
+
+\section{Aplikacja iOS i transmisja BLE}
+Aplikacja \emph{RespiPhoneIMU} korzysta z~\texttt{CMDeviceMotion}. Użytkownik
+wybiera \SI{25}{Hz}, \SI{50}{Hz} albo \SI{100}{Hz}; domyślnie ustawiono
+\SI{100}{Hz}. Zapisywane przyspieszenie jest sumą wektora grawitacji
+i~\texttt{userAcceleration}, natomiast prędkość kątowa pochodzi z~estymaty
+\texttt{rotationRate} dostarczanej przez Core~Motion \cite{apple_coremotion}.
+Każda próbka otrzymuje znacznik \texttt{motion.timestamp} względem początku
+strumienia. Jest to istotne, ponieważ Apple zaleca wyznaczanie rzeczywistych
+odstępów aktualizacji właśnie ze znaczników czasu, a~nie z~samej zadanej
+wartości interwału \cite{apple_coremotion_interval}.
+
+Telefon działa jako urządzenie peryferyjne BLE. W~jednym powiadomieniu może
+przesłać kilka próbek; każda zawiera własny czas, sześć składowych ruchu,
+a~nagłówek paczki --- numer sekwencyjny. Komputer wyrównuje pierwszy czas
+telefonu do zegara hosta i~zapisuje ten sam schemat CSV co dla LSM6DS3:
+\texttt{Time\_ms,ax,ay,az,gx,gy,gz}. Grupowanie próbek w~paczki nie zniekształca
+więc osi czasu, o~ile zachowane są czasy próbek. Numer sekwencyjny umożliwia
+wykrywanie zagubionych powiadomień po dodaniu kontroli jego ciągłości po
+stronie odbiornika.
+
+\section{Ograniczenie synchronizacji i kryteria oceny}
+W~obecnej wersji firmware LSM6DS3 wysyła jedynie sześć wartości pomiarowych,
+bez znacznika czasu ani licznika próbki. Aplikacja desktopowa nadaje im czas
+dopiero podczas przetwarzania kolejnych wierszy UART. Buforowanie transmisji
+może wtedy utworzyć wiele próbek o~niemal identycznym czasie i~zafałszować
+oszacowanie częstotliwości próbkowania. Przed ilościową oceną LSM6DS3 należy
+dodać czas z~\texttt{esp\_timer} lub monotonny licznik próbek do firmware
+i~obsłużyć go po stronie komputera. iPhone ma już czas per próbka, lecz nadal
+trzeba sprawdzić histogram $\Delta t$, luki numerów sekwencyjnych i~rzeczywistą
+liczbę próbek na sekundę.
+
+Podstawowy eksperyment obejmuje dla obu urządzeń pozycję siedzącą i~leżącą,
+oddech swobodny, oddech narzucony metronomem oraz krótki odcinek wstrzymania
+oddechu. Porównywane powinny być: dominująca częstotliwość, SNR widmowy,
+prominencja piku, stabilność wyniku w~kolejnych oknach oraz udział wariancji
+wyjaśniony przez PCA. Wniosek ma dotyczyć użyteczności każdego toru, nie jego
+zgodności z~rzekomym wzorcem radarowym.
+
+% ---------------------------------------------------------------------
+\chapter{Algorytmy estymacji oddechu i tętna}
+\label{chap:algorytmy}
+
+Rozdział ten opisuje najobszerniejszą część własnej pracy programistycznej:
+potok przetwarzania, który z~surowych danych Sparse~IQ czujnika A121 wyznacza
+częstość oddechu i~tętno. Implementacja liczy około 2300~linii
+(\texttt{src/\allowbreak respi\_net/\allowbreak a121\_vitals.py}) i~składa się z~dwóch ścieżek:
+\begin{itemize}
+  \item \texttt{analyze\_a121\_vitals()} --- bezstanowy analizator okna,
+  używany do analizy nagrań CSV i~historii; to on dostarcza wszystkich liczb
+  prezentowanych w~tej pracy,
+  \item \texttt{A121LiveTraceProcessor} --- stanowy procesor strumieniowy
+  z~pamięcią filtrów IIR, używany wyłącznie do rysowania przebiegów na żywo,
+  tak aby raz narysowana próbka nie zmieniała już kształtu przy kolejnym
+  odświeżeniu wykresu.
+\end{itemize}
+
+Świadomie opisano tu również \emph{drogę dojścia} do obecnej postaci
+algorytmu. Pierwsza wersja, mimo poprawnej teorii, dawała wyniki bezużyteczne;
+sekcja~\ref{sec:co-nie-dzialalo} zestawia kolejne awarie, ich przyczyny
+i~zastosowane rozwiązania.
+
+\section{Model sygnału}
+\label{sec:model-sygnalu}
+Czujnik zwraca dla każdej ramki $n$ i~bramki odległościowej $k$ liczbę
+zespoloną
+\begin{equation}
+  z[n,k] = A[n,k]\,\mathrm{e}^{\,\mathrm{j}\varphi[n,k]},
+  \label{eq:iq}
+\end{equation}
+gdzie amplituda $A$ opisuje siłę odbicia, a~faza $\varphi$ --- drogę optyczną
+fali. Dla celu oddalonego o~$d$ faza sygnału odbitego wynosi
+$\varphi = -4\pi d/\lambda$, skąd bezpośrednio wynika zależność wykorzystywana
+w~całym potoku:
+\begin{equation}
+  \Delta d = \frac{\lambda}{4\pi}\,\Delta\varphi .
+  \label{eq:faza-przemieszczenie}
+\end{equation}
+Dla $f_0 = \SI{60}{GHz}$ mamy $\lambda \approx \SI{5}{mm}$, a~więc
+$\SI{1}{rad}$ zmiany fazy odpowiada zaledwie \SI{0.4}{mm} przemieszczenia.
+To właśnie ta czułość --- a~nie amplituda --- jest źródłem informacji
+o~parametrach życiowych.
+
+Skala zjawisk, które trzeba rozdzielić, jest jednak skrajnie nierówna:
+ruch klatki piersiowej przy spokojnym oddechu wynosi \SIrange{4}{12}{mm},
+natomiast mikroruch powierzchni ciała wywołany pracą serca to zaledwie
+\SIrange{0.2}{0.5}{mm}. Sygnał sercowy jest więc o~\emph{rząd do dwóch rzędów
+wielkości słabszy} od oddechowego i~w~dodatku leży w~paśmie, w~które wpadają
+harmoniczne oddechu. Cała trudność algorytmu tętna sprowadza się do tego
+jednego faktu i~to jemu poświęcona jest sekcja~\ref{sec:tetno}.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[node distance=5.5mm and 7mm]
+      \node[wejscie] (iq)    {Sparse IQ\\$z[n,k]$};
+      \node[blok, right=of iq] (fs) {estymacja $f_s$\\(korekcja burstów)};
+      \node[blok, right=of fs] (clut) {usunięcie\\echa statycznego};
+      \node[blok, right=of clut] (gate) {wybór bramek\\i~wagi};
+
+      \node[blok, below=9mm of gate] (faza) {faza różnicowa\\(centrowanie IQ)};
+      \node[blok, left=of faza] (oddech) {pasmo oddechu\\\SIrange{0.10}{0.50}{Hz}};
+      \node[blok, left=of oddech] (serce) {usunięcie ruchu\\skorelowanego};
+      \node[blok, left=of serce] (pasmoh) {pasmo serca\\\SIrange{0.70}{2.00}{Hz}};
+
+      \node[wynik, below=9mm of oddech] (rr) {częstość oddechu\\$f_r$ [odd./min]};
+      \node[blok, below=9mm of pasmoh] (kand) {kandydaci widmowi\\+ walidator czasowy};
+      \node[wynik, below=9mm of kand] (hr) {tętno\\$f_h$ [ud./min]};
+
+      \draw[strzalka] (iq) -- (fs);
+      \draw[strzalka] (fs) -- (clut);
+      \draw[strzalka] (clut) -- (gate);
+      \draw[strzalka] (gate) -- (faza);
+      \draw[strzalka] (faza) -- (oddech);
+      \draw[strzalka] (oddech) -- (serce);
+      \draw[strzalka] (serce) -- (pasmoh);
+      \draw[strzalka] (oddech) -- (rr);
+      \draw[strzalka] (pasmoh) -- (kand);
+      \draw[strzalka] (kand) -- (hr);
+      \draw[strzalka] (rr.west) -| node[font=\scriptsize, pos=0.78, right=1pt]
+        {$f_r$} (serce.south);
+    \end{tikzpicture}
+    \caption[Schemat potoku przetwarzania sygnału A121]{Potok przetwarzania
+    sygnału A121. Ścieżka oddechowa jest krótka i~stabilna; ścieżka sercowa
+    wymaga dodatkowo usunięcia ruchu skorelowanego z~oddechem oraz walidacji
+    kandydatów w~dziedzinie czasu. Estymowana częstość oddechu $f_r$ wraca
+    jako parametr do toru sercowego.}
+    \label{fig:potok}
+\end{figure}
+
+\section{Estymacja częstotliwości próbkowania}
+Pozornie trywialny krok okazał się pierwszym źródłem poważnych błędów.
+Ramki są dostarczane przez UART \emph{paczkami}: kilka ramek trafia do hosta
+niemal jednocześnie (odstępy poniżej milisekundy, czasem zerowe), po czym
+następuje dłuższa przerwa. Naiwny estymator oparty na medianie odstępów
+$\hat{f_s} = 1/\mathrm{med}(\Delta t)$ mierzy wtedy odstęp \emph{wewnątrz
+paczki}, a~nie rzeczywisty odstęp ramek, i~zawyża $f_s$ nawet kilkukrotnie.
+Ponieważ pasma filtrów są definiowane względem $f_s$, całe pasmo oddechowe
+przesuwało się poza rzeczywisty rytm i~estymaty były bezwartościowe.
+
+Zaimplementowany estymator (\texttt{sample\_rate\_from\_ms}) wykrywa taką
+sytuację i~przełącza się na estymator globalny:
+\begin{equation}
+  \hat{f_s} =
+  \begin{cases}
+    \dfrac{N-1}{t_{N-1} - t_0}, & \text{gdy sygnatury czasowe są ,,paczkowe'',}\\[2ex]
+    \left(\overline{\Delta t}\,\right)^{-1}, & \text{w~przeciwnym razie,}
+  \end{cases}
+  \label{eq:fs}
+\end{equation}
+gdzie średnia $\overline{\Delta t}$ jest liczona odpornie, tylko po odstępach
+z~przedziału $(0{,}25\,\mathrm{med},\ 4\,\mathrm{med})$. Za ,,paczkowe'' uznaje
+się sygnatury, w~których ponad 5\% odstępów jest niedodatnich lub krótszych
+niż $\max(\SI{2}{ms},\ 0{,}2\,\mathrm{med})$, albo w~których obie estymaty
+różnią się o~więcej niż 25\%.
+
+\section{Usunięcie echa statycznego i~wybór bramki odległościowej}
+\label{sec:bramkowanie}
+Dominującą składową sygnału nie jest człowiek, lecz nieruchome otoczenie
+(ściana, rama łóżka, sam korpus czujnika). Odbicia te są stałe w~czasie,
+więc usuwa się je filtrem górnoprzepustowym w~dziedzinie ramek:
+\begin{equation}
+  z_m[n,k] = z[n,k] - \mathrm{LP}\big(z[\cdot,k]\big)[n],
+  \label{eq:clutter}
+\end{equation}
+gdzie $\mathrm{LP}$ jest filtrem Butterwortha dolnoprzepustowym o~częstotliwości
+granicznej równej dolnej granicy pasma oddechowego (\SI{0.10}{Hz}). Sygnał
+$z_m$ służy do \emph{oceny amplitudy} bramek --- ale, co kluczowe,
+\textbf{nie do wyznaczania fazy} (patrz sekcja~\ref{sec:faza}).
+
+Każdą bramkę ocenia się dwoma niezależnymi kryteriami. Pierwszym jest
+medianowa amplituda po usunięciu echa, $\mathrm{med}_n |z_m[n,k]|$. Drugim ---
+stosunek energii w~paśmie życiowym do energii tła:
+\begin{equation}
+  R_k = \frac{\big\langle |\Phi_k(f)|^2 \big\rangle_{f \in [0{,}10;\,2{,}00]\,\mathrm{Hz}}}
+             {\big\langle |\Phi_k(f)|^2 \big\rangle_{f \in [0{,}03;\,5]\,\mathrm{Hz}\setminus\text{pasmo życiowe}}},
+  \label{eq:ber}
+\end{equation}
+gdzie $\Phi_k$ jest widmem fazy $k$-tej bramki. Bramka z~silnym odbiciem, ale
+bez periodycznej modulacji (np. metalowa rama łóżka), ma wysoką amplitudę
+i~niskie $R_k$ --- i~zostaje odrzucona. Sama amplituda nie wystarcza.
+
+Cel wybiera się jako bramkę o~najwyższym łącznym wyniku, a~następnie tworzy
+wokół niej klaster bramek w~promieniu bramkowania. Sygnał wypadkowy jest
+średnią ważoną amplitudą, przy czym do estymacji oddechu używa się co najwyżej
+3~bramek (torsu nie trzeba szerzej obejmować, a~każda dodatkowa bramka wnosi
+szum).
+
+\section{Ekstrakcja fazy: dlaczego nie wprost \texorpdfstring{$\arg z$}{arg z}}
+\label{sec:faza}
+Naturalny pomysł --- rozwinąć fazę residuum $\arg(z_m)$ i~przefiltrować ---
+w~praktyce nie działa i~był jedną z~najkosztowniejszych pomyłek w~projekcie.
+Wektor $z_m$ po usunięciu echa statycznego jest \emph{mały} i~przy typowym,
+podmilimetrowym ruchu klatki piersiowej regularnie \emph{przechodzi przez
+początek układu współrzędnych}. Funkcja $\operatorname{atan2}$ wykonuje wtedy
+skok o~$\pi$, którego rozwijanie fazy nie potrafi odróżnić od prawdziwego
+ruchu. W~efekcie przebieg po filtracji pasmowej zawierał losowe skoki
+i~płaskie odcinki.
+
+Rozwiązanie składa się z~dwóch elementów. Po pierwsze, faza jest wyznaczana
+z~\emph{surowego} sygnału $z$ (którego moduł jest duży i~który nie zbliża się
+do zera), a~echo statyczne usuwa się dopiero \emph{w~dziedzinie fazy} przez
+centrowanie okręgu IQ. Trajektoria $z[n,k]$ dla nieruchomego tła z~drgającym
+celem jest łukiem okręgu o~środku $c$ przesuniętym od zera; środek ten
+wyznacza się algebraicznym dopasowaniem okręgu (metoda Kåsy), minimalizując
+\begin{equation}
+  \sum_n \Big( |z[n,k] - c|^2 - r^2 \Big)^2,
+  \label{eq:okrag}
+\end{equation}
+co po podstawieniu $c = (c_x, c_y)$ sprowadza się do liniowego zadania
+najmniejszych kwadratów. Dopasowanie przyjmuje się tylko wtedy, gdy jest
+wiarygodne (względny błąd promienia poniżej 0,45); w~przeciwnym razie bramka
+zachowuje fazę surową.
+
+Po drugie --- i~to jest właściwe zabezpieczenie --- fazę akumuluje się
+\emph{przyrostowo}, z~różnic międzyramkowych, zamiast rozwijać fazę
+bezwzględną:
+\begin{equation}
+  \Delta\varphi[n,k] = \arg\!\big( \hat{z}[n,k]\,\hat{z}^{*}[n-1,k] \big),
+  \qquad
+  \varphi[n,k] = \sum_{i=1}^{n} \Delta\varphi[i,k],
+  \label{eq:faza-roznicowa}
+\end{equation}
+gdzie $\hat{z} = z/|z|$. Kolejne próbki dzieli krótki łuk, więc
+$\Delta\varphi$ nigdy nie zbliża się do $\pm\pi$ i~problem niejednoznaczności
+znika. Jest to zarazem podejście stosowane w~referencyjnym procesorze
+oddechowym firmy Acconeer.
+
+Łączenie bramek wykonuje się \emph{koherentnie}, przed operacją arcus tangens:
+\begin{equation}
+  \Delta\varphi[n] = \arg \left( \sum_k w_k\, \hat{z}[n,k]\,\hat{z}^{*}[n-1,k] \right),
+  \label{eq:koherentne}
+\end{equation}
+dzięki czemu bramka o~małej wadze wnosi mało energii do sumy, a~nie --- jak
+przy uśrednianiu już policzonych faz --- pełnoprawny, zaszumiony kąt.
+
+\section{Estymacja częstości oddechu}
+Ścieżka oddechowa jest stosunkowo prosta, ponieważ sygnał jest silny.
+Sygnał fazowy jest filtrowany pasmowo w~zakresie
+\SIrange{0.10}{0.50}{Hz} (6--30~oddechów/min) filtrem Butterwortha
+2.~rzędu w~implementacji zerofazowej (\texttt{sosfiltfilt}, filtracja
+w~przód i~w~tył --- brak przesunięcia fazowego kosztem pracy wsadowej),
+a~częstość wyznaczana jest z~położenia maksimum gęstości widmowej mocy
+w~oknie \SI{20}{s}, z~interpolacją paraboliczną wokół prążka maksymalnego.
+
+Po serii nieudanych prób własnej implementacji ostatecznie zdecydowano się
+oprzeć estymację częstości oddechu na \textbf{referencyjnym procesorze
+producenta} (\texttt{Breathing\allowbreak Processor} z~pakietu \emph{Acconeer Exploration
+Tool}), któremu podaje się wybrany wcześniej segment bramek. Procesor ten
+realizuje własne usuwanie echa statycznego (filtr IIR), rozwijanie fazy,
+filtrację pasmową, okno Hamminga, uzupełnianie zerami i~interpolację
+kwadratową piku. Własna implementacja pozostała jako ścieżka zapasowa na
+wypadek zmian w~API biblioteki. Decyzja ta była jednym z~przełomowych momentów
+projektu (commit \texttt{9d2130a}, \emph{,,vital signals fix''}).
+
+Pewność estymaty definiowana jest jako wyrazistość piku względem tła w~paśmie:
+\begin{equation}
+  C_r = \frac{P(f_r)}{\mathrm{med}_{f \in \text{pasmo}} P(f)}.
+  \label{eq:conf-resp}
+\end{equation}
+
+Dodatkowo zaimplementowano \textbf{detekcję braku oddechu}: jeżeli wartość
+skuteczna sygnału oddechowego spada poniżej \SI{0.005}{rad} (próg dobrany
+empirycznie dla A121, co odpowiada ruchowi rzędu pojedynczych mikrometrów),
+oddech jest nieodróżnialny od szumu czujnika i~zamiast losowej częstotliwości
+raportowany jest brak wyniku. Bez tego zabezpieczenia system podczas wstrzymania
+oddechu pokazywał ,,oddech'' wzięty z~szumu.
+
+\section{Estymacja tętna --- problem harmonicznych}
+\label{sec:tetno}
+Ruch klatki piersiowej przy oddychaniu nie jest sinusoidalny: wdech i~wydech
+mają różne profile, przez co widmo oddechu zawiera silne harmoniczne
+$n f_r$. Dla typowej częstości spoczynkowej $f_r \approx \SI{0.15}{Hz}$
+harmoniczne pojawiają się co \SI{0.15}{Hz}, a~więc \emph{w~całym paśmie
+sercowym} \SIrange{0.70}{2.00}{Hz} leży ich kilkanaście (rzędy 5--13).
+Ponieważ sygnał sercowy jest 20--50~razy słabszy od oddechowego, harmoniczna
+oddechu bywa w~paśmie serca silniejsza niż samo tętno. Prosty detektor
+maksimum widma wskazuje wtedy harmoniczną --- i~dokładnie to robiła pierwsza
+wersja algorytmu.
+
+Ostateczne rozwiązanie jest kaskadą pięciu mechanizmów; żaden z~nich osobno
+nie wystarcza.
+
+\paragraph{1. Usunięcie ruchu skorelowanego z~oddechem.}
+Zamiast ,,wycinać'' każdą harmoniczną (co niszczy tętno leżące przypadkiem
+w~pobliżu), modeluje się nieliniowość oddechu bezpośrednio. Znormalizowany
+przebieg oddechowy $r[n]$ podnosi się do potęg $p = 2,\dots,6$, każdą potęgę
+filtruje pasmowo do pasma serca i~traktuje jako regresor. Współczynniki
+wyznacza regresja grzbietowa:
+\begin{equation}
+  \hat{\boldsymbol\beta} = \big(\mathbf{X}^{\!\top}\mathbf{X} + \gamma \mathbf{I}\big)^{-1}
+  \mathbf{X}^{\!\top} \mathbf{x},
+  \qquad
+  \mathbf{X}_{:,p} = \mathrm{BP}_{\text{serce}}\big(r^{\,p}\big),
+  \label{eq:regresja}
+\end{equation}
+a~od sygnału odejmuje się dopasowany artefakt \emph{miękko}, ze współczynnikiem
+0{,}70:
+\begin{equation}
+  x_{\text{serce}}[n] = x[n] - 0{,}70 \cdot \big(\mathbf{X}\hat{\boldsymbol\beta}\big)[n].
+  \label{eq:miekkie-odejmowanie}
+\end{equation}
+Niepełne odejmowanie jest celowe: dzięki niemu prawdziwe tętno leżące blisko
+harmonicznej przetrwa i~może zostać odzyskane przez walidator z~punktu~4.
+
+\paragraph{2. Filtracja pasmowa i~kandydaci widmowi.}
+Sygnał filtruje się pasmowo (\SIrange{0.70}{2.00}{Hz}, Butterworth 3.~rzędu,
+zerofazowo), a~z~widma mocy wybiera się nie jedno maksimum, lecz do sześciu
+kandydatów. Widmo jest przed wyborem modyfikowane wycięciami gaussowskimi
+w~miejscach harmonicznych oddechu:
+\begin{equation}
+  S(f) = P(f) \prod_{n=2}^{7}
+  \left[ 1 - 0{,}75 \exp\!\left( -\tfrac{1}{2}\Big(\tfrac{f - n f_r}{\sigma_n}\Big)^{\!2} \right) \right],
+  \qquad \sigma_n = \max(0{,}040,\ 0{,}030\, n f_r).
+  \label{eq:notch}
+\end{equation}
+Pierwotne wycięcia były wąskie i~płytkie, przez co przepuszczały większość
+energii harmonicznej; obecne są szersze i~tłumią o~\SI{-12}{dB}.
+
+\paragraph{3. Tłumienie prążków brzegowych.}
+Energia zbocza filtra gromadzi się w~skrajnych prążkach FFT, przez co detektor
+regularnie ,,zatrzaskiwał się'' na dokładnie \SI{0.70}{Hz} (42~ud./min ---
+podejrzanie równa dolna granica pasma). Na obu krańcach pasma nałożono
+liniowe okno tłumiące o~szerokości około \SI{0.05}{Hz}.
+
+\paragraph{4. Walidacja w~dziedzinie czasu.}
+Kluczowa obserwacja: harmoniczna oddechu jest silna \emph{widmowo}, ale rzadko
+tworzy regularny ciąg uderzeń w~czasie. Każdego kandydata $f$ weryfikuje się
+więc, zawężając sygnał wokół $f$ i~szukając w~nim ciągu pików. Ocena
+periodyczności łączy cztery składniki:
+\begin{equation}
+  s(f) = 0{,}38\,g + 0{,}27\,\rho + 0{,}20\,c + 0{,}15\,\sigma_{\text{span}},
+  \label{eq:periodycznosc}
+\end{equation}
+gdzie $g$ to frakcja odstępów międzypikowych mieszczących się w~$\pm32\%$
+oczekiwanego okresu $1/f$, $\rho = \max(0,\ 1 - \mathrm{CV}/0{,}42)$ jest miarą
+regularności opartą na współczynniku zmienności odstępów, $c$ --- pokryciem
+(stosunek liczby znalezionych pików do oczekiwanej), a~$\sigma_{\text{span}}$
+--- częścią okna faktycznie objętą ciągiem pików.
+
+Wynik końcowy łączy pewność widmową i~periodyczność, przy czym kandydat
+leżący na harmonicznej i~jednocześnie słabo periodyczny ($s < 0{,}45$) jest
+dodatkowo karany współczynnikiem 0{,}62:
+\begin{equation}
+  \mathrm{score}(f) = \eta(f)\,\Big[ C(f)\big(0{,}72 + 0{,}55\,s(f)\big) + 2{,}8\,s(f) \Big].
+  \label{eq:fuzja}
+\end{equation}
+Autokorelacja pełni rolę wyłącznie \emph{potwierdzającą}: jeśli jej wskazanie
+zgadza się z~widmowym w~granicach \SI{0.22}{Hz}, wyniki są mieszane w~proporcji
+70/30; przy słabym widmie autokorelacja bywa zwodzona przez harmoniczne i~nie
+jest używana samodzielnie.
+
+\paragraph{5. Poszukiwanie tętna w~sąsiednich bramkach.}
+Okazało się, że mikroruch sercowy jest często najlepiej widoczny \emph{nie}
+w~bramce o~największej amplitudzie (którą wybiera tor oddechowy), lecz na
+\emph{bliższej krawędzi} odbicia od torsu. Algorytm przeszukuje więc do
+13~bramek w~promieniu \SI{\pm 0.18}{m} od celu, licząc niezależną estymatę
+w~każdej z~nich, i~przyjmuje wynik z~innej bramki tylko wtedy, gdy jest on
+wyraźnie lepszy (pewność $\geq 12$ oraz co najmniej 1,1~raza wyższa niż
+estymaty głównej).
+
+\section{Śledzenie tętna filtrem Kalmana (podgląd na żywo)}
+Analizator wsadowy jest bezstanowy, ale podgląd na żywo wymaga stabilnego
+wskazania. Zastosowano filtr Kalmana ze stałym przyspieszeniem, o~wektorze
+stanu $\mathbf{x} = [f,\ \dot f,\ \ddot f]^{\top}$ i~modelu
+\begin{equation}
+  \mathbf{A} =
+  \begin{bmatrix}
+    1 & \Delta t & \tfrac{1}{2}\Delta t^2\\
+    0 & 1 & \Delta t\\
+    0 & 0 & 1
+  \end{bmatrix},
+  \qquad
+  \mathbf{Q} = \mathbf{G}\mathbf{G}^{\!\top}\rho_a^2,
+  \quad \rho_a = \SI{0.065}{Hz\per\second\squared}.
+  \label{eq:kalman}
+\end{equation}
+Wariancja pomiaru jest wiązana z~pewnością widmową,
+$\sigma_z = \mathrm{clip}\big(0{,}22/\sqrt{C},\ 0{,}035,\ 0{,}22\big)$, więc
+pewne estymaty korygują stan mocniej. Odstające pomiary odrzuca bramka
+chi-kwadrat na innowacji ($d^2 \leq 9$), z~poszerzeniem po czterech
+odrzuceniach z~rzędu, aby filtr mógł odzyskać śledzenie po zmianie tętna.
+Po 12~nieudanych aktualizacjach filtr się resetuje. Bieżący stan jest
+podawany z~powrotem do estymatora jako zawężone pasmo poszukiwań --- to on
+zapobiega przeskokom wskazania na harmoniczne.
+
+\section{Miary pewności i~bramki decyzyjne}
+Każda estymata jest publikowana tylko wtedy, gdy przejdzie zestaw bramek:
+oddech wymaga co najmniej \SI{20}{s} historii i~pewności $C_r \geq 4$, tętno ---
+co najmniej \SI{10}{s} i~$C_h \geq 5$; brak wykrytej obecności zeruje oba
+wyniki. Zbiorczy wskaźnik \emph{signal\_quality} $\in [0,1]$ jest ważoną sumą
+logarytmu kontrastu amplitudowego, obu pewności oraz stosunku energii
+pasmowej~\eqref{eq:ber}.
+
+\paragraph{Uczciwe zastrzeżenie.} Jak wynika z~eksperymentu opisanego
+w~następnym rozdziale~(\ref{chap:soczewki}), wskaźniki te \textbf{osiągają wartość
+maksymalną we wszystkich 36~nagraniach} wykonanych na siedząco do \SI{1}{m}.
+Są więc użyteczne jako zabezpieczenie przed publikowaniem szumu, ale
+\emph{nie nadają się} do porównywania jakości konfiguracji sprzętowych ---
+do tego trzeba sięgnąć po miary widmowe liczone poza potokiem.
+
+\section{Historia: co nie działało i~dlaczego}
+\label{sec:co-nie-dzialalo}
+Poniższe zestawienie odtworzono z~historii repozytorium. Warto je czytać jako
+ostrzeżenie: każdy z~tych błędów dawał przebieg, który ,,wyglądał prawie
+dobrze'' i~żaden nie objawiał się wyjątkiem ani komunikatem o~błędzie.
+
+{\small
+\begin{longtable}{@{}p{3.4cm}p{4.6cm}p{4.6cm}@{}}
+\caption[Awarie algorytmu i~ich rozwiązania]{Kolejne awarie potoku
+przetwarzania, ich przyczyny i~zastosowane rozwiązania.}
+\label{tab:awarie}\\
+\toprule
+\textbf{Objaw} & \textbf{Przyczyna} & \textbf{Rozwiązanie} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Objaw} & \textbf{Przyczyna} & \textbf{Rozwiązanie} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{3}{r@{}}{\footnotesize\itshape ciąg dalszy na następnej stronie}\\
+\endfoot
+\bottomrule
+\endlastfoot
+Częstości przesunięte o~dziesiątki procent &
+Ramki dostarczane paczkami; mediana odstępów mierzy odstęp \emph{wewnątrz}
+paczki, nie między ramkami &
+Estymator globalny $f_s = (N-1)/(t_{N-1}-t_0)$ przy wykryciu paczkowości,
+równanie~\eqref{eq:fs} \\
+\addlinespace
+Przebieg z~losowymi skokami i~płaskimi odcinkami &
+Faza brana z~residuum po usunięciu echa; mały wektor przechodzi przez zero,
+$\operatorname{atan2}$ skacze o~$\pi$ &
+Faza z~sygnału surowego + akumulacja różnic międzyramkowych,
+równanie~\eqref{eq:faza-roznicowa} \\
+\addlinespace
+Podgląd na żywo psuje się po kilku minutach &
+Skumulowana faza narasta monotonicznie (rzędu \SI{1400}{rad}) i~nasyca stan
+filtru IIR &
+Filtr górnoprzepustowy 1.~rzędu \SI{0.04}{Hz} (poniżej pasma oddechu) przed
+filtracją pasmową \\
+\addlinespace
+Przebieg na żywo zapada się w~linię prostą &
+Sąsiednie bramki o~przeciwnej fazie znoszą się w~średniej ważonej &
+Dominująca waga 0{,}65 dla bramki wybranej (tryb live); retrospektywne
+wyrównanie znaku (tryb wsadowy) \\
+\addlinespace
+Niestabilna częstość oddechu &
+Własna implementacja estymatora &
+Referencyjny \texttt{BreathingProcessor} Acconeera; własny tor jako zapasowy \\
+\addlinespace
+Tętno przeskakuje między harmonicznymi oddechu &
+Zbyt szerokie pasmo (\SIrange{0.65}{3.00}{Hz}) i~zbyt wąskie wycięcia
+harmonicznych &
+Zawężenie pasma do \SIrange{0.70}{2.00}{Hz}; szersze i~głębsze wycięcia
+gaussowskie, równanie~\eqref{eq:notch} \\
+\addlinespace
+Tętno ,,przykleja się'' do 42~ud./min &
+Energia zbocza filtra gromadzi się w~skrajnym prążku FFT &
+Okno tłumiące o~szerokości \SI{0.05}{Hz} na krańcach pasma \\
+\addlinespace
+Tętno znika mimo dobrego sygnału &
+Twarda reguła zerująca estymatę leżącą blisko harmonicznej --- a~prawdziwe
+tętno leży tam bardzo często &
+Usunięcie reguły; zastąpienie jej miękką regresją~\eqref{eq:regresja}
+i~walidatorem czasowym~\eqref{eq:periodycznosc}; próg pewności obniżony
+z~14 do~5 \\
+\addlinespace
+Tętno niewidoczne w~bramce celu &
+Mikroruch sercowy najsilniejszy na bliższej krawędzi torsu, nie w~maksimum
+amplitudy &
+Przeszukiwanie do 13~bramek w~promieniu \SI{\pm 0.18}{m} \\
+\end{longtable}
+}
+
+Widać w~tym wyraźny wzorzec: \emph{wszystkie} poważne błędy wynikały
+z~operowania na fazie w~sposób, który był poprawny matematycznie, ale
+niestabilny numerycznie przy rzeczywistych, słabych sygnałach. Ewolucję pasm
+podsumowuje tabela~\ref{tab:pasma}.
+
+\begin{table}[H]
+\centering
+\caption[Ewolucja pasm filtrów]{Zmiany pasm filtrów w~kolejnych wersjach
+algorytmu. Systematyczne zawężanie pasm było reakcją na przeskoki estymat
+na harmoniczne i~artefakty ruchowe.}
+\label{tab:pasma}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Wersja} & \textbf{Pasmo oddechu} & \textbf{Pasmo serca} & \textbf{Uwagi} \\
+\midrule
+\texttt{b9f49e8} (31.05) & \SIrange{0.08}{0.70}{Hz} & \SIrange{0.65}{3.00}{Hz} & pierwsza wersja \\
+\texttt{7924d95} (31.05) & \SIrange{0.10}{0.70}{Hz} & \SIrange{0.65}{3.00}{Hz} & korekta $f_s$, tryb live \\
+\texttt{9d2130a} (01.06) & \SIrange{0.10}{1.00}{Hz} & \SIrange{0.65}{3.00}{Hz} & procesor Acconeera \\
+\texttt{bf82a08} (11.06) & \SIrange{0.10}{0.50}{Hz} & \SIrange{0.70}{2.00}{Hz} & wersja obecna \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Zestawienie parametrów}
+\begin{table}[H]
+\centering
+\caption[Parametry potoku przetwarzania]{Parametry potoku estymacji
+parametrów życiowych (wartości domyślne).}
+\label{tab:parametry-algo}
+\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Parametr} & \textbf{Znaczenie} & \textbf{Wartość} \\
+\midrule
+\texttt{A121\_RESP\_BAND\_HZ}   & pasmo oddechowe        & \SIrange{0.10}{0.50}{Hz} \\
+\texttt{HEART\_BAND\_HZ}        & pasmo sercowe          & \SIrange{0.70}{2.00}{Hz} \\
+\texttt{A121\_RATE\_WINDOW\_S}  & okno estymacji częstości & \SI{20}{s} \\
+\texttt{DEFAULT\_GATE\_HALF\_WIDTH\_M} & połowa szerokości bramki & \SI{0.05}{m} \\
+\texttt{HEART\_RANGE\_HALF\_WIDTH\_M}  & promień poszukiwań tętna & \SI{0.18}{m} \\
+\texttt{HEART\_RANGE\_MAX\_BINS}       & maks. liczba bramek tętna & 13 \\
+\texttt{RESP\_RATE\_CONFIDENCE\_MIN}   & próg publikacji oddechu & 4{,}0 \\
+\texttt{HEART\_RATE\_CONFIDENCE\_MIN}  & próg publikacji tętna   & 5{,}0 \\
+\texttt{A121\_MIN\_TARGET\_DISTANCE\_M} & min. odległość celu    & \SI{0.28}{m} \\
+--- & rząd filtru oddechowego & 2 \\
+--- & rząd filtru sercowego   & 3 \\
+--- & próg braku oddechu (RMS) & \SI{0.005}{rad} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Oprogramowanie}
+\miejsce{Aplikacja desktopowa (PyQt + pyqtgraph): podgląd na żywo z~czterech
+torów, nagrywanie do CSV i~SQLite, przeglądanie historii. Interfejs CLI
+(\texttt{respi}) do akwizycji wsadowej i~generowania wykresów. Struktura
+pakietu \texttt{respi\_net}. Zrzuty ekranu aplikacji do dodania.}
+
+% =====================================================================
+\chapter{Eksperyment: soczewki dielektryczne i wzmacnianie odbicia}
+\label{chap:soczewki}
+
+\section{Cel i hipotezy}
+Celem eksperymentu było sprawdzenie dwóch hipotez:
+\begin{enumerate}
+  \item wybór soczewki dielektrycznej istotnie wpływa na jakość sygnału
+  oddechowego rejestrowanego przez radar A121,
+  \item naklejenie na klatkę piersiową łaty z~folii aluminiowej
+  (\SI{5}{cm}~$\times$~\SI{5}{cm}) wzmacnia odbicie i~poprawia jakość
+  sygnału.
+\end{enumerate}
+Druga hipoteza jest o~tyle istotna, że sama amplituda odbicia nie jest
+wystarczającym kryterium --- silniejsze odbicie może współwystępować
+z~gorszym stosunkiem sygnału oddechowego do szumu.
+
+Jak opisano w~sekcji~\ref{sec:materialy-radar}, folia jest dla fal
+\SI{60}{GHz} praktycznie nieprzezroczystym przewodnikiem i~silnym reflektorem.
+Nie wynika z~tego jednak, że niewielka łata poprawi pomiar człowieka. Radar już
+otrzymuje rozłożone przestrzennie odbicie od bogatych w~wodę tkanek, a~dodanie
+metalowej powierzchni może zmienić dominującą bramkę, fazę i~tory wielodrogowe.
+Hipotezę należy więc sprawdzać na podstawie SNR i~powtarzalności estymacji,
+a~nie na podstawie samej przewodności aluminium.
+
+\section{Badane soczewki}
+Porównano trzy warianty przesłony czujnika (rys.~\ref{fig:soczewki}):
+soczewkę hiperboliczną (refrakcyjną), soczewkę FZP (dyfrakcyjną płytkę
+strefową Fresnela) oraz płaską pokrywę bez własności skupiających.
+
+\begin{figure}[p]
+    \centering
+    \begin{subfigure}{0.72\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{soczewka_hiperboliczna.jpg}
+        \caption{Soczewka hiperboliczna --- wąska wiązka igłowa, niskie
+        listki boczne.}
+    \end{subfigure}
+    \\[0.8em]
+    \begin{subfigure}{0.72\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{soczewka_fzp.jpg}
+        \caption{Soczewka FZP --- porównywalny zysk, wyraźnie silniejsze
+        listki boczne.}
+    \end{subfigure}
+    \\[0.8em]
+    \begin{subfigure}{0.72\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{soczewka_flat_cover.jpg}
+        \caption{Płaska pokrywa --- brak skupiania, szeroka wiązka.}
+    \end{subfigure}
+    \caption[Charakterystyki promieniowania badanych soczewek]{Badane
+    warianty przesłony czujnika A121 wraz z~charakterystykami promieniowania
+    w~płaszczyznach E i~H (materiały producenta \cite{waveshare_a121}).}
+    \label{fig:soczewki}
+\end{figure}
+
+\section{Metodyka}
+Zrealizowano plan pełny: 3~soczewki $\times$ 2~odległości
+(\SI{50}{cm} i~\SI{100}{cm}) $\times$ 2~stany folii (naklejona / brak)
+$=$ 12~warunków, każdy powtórzony trzykrotnie, co dało \textbf{36~nagrań}
+po \SI{60}{s} (około 1200 ramek każde). Akwizycję prowadzono sterowaną
+procedurą (\texttt{tools/a121\_guided\_experiment.py}), która prowadzi
+operatora przez kolejne warunki.
+
+Radar był zamocowany na fotograficznym statywie Manfrotto. Odległości
+\SI{50}{cm} i~\SI{100}{cm} ustawiano za pomocą dalmierza laserowego
+MILESEEY~D2 w~wariancie \SI{40}{m}; producent deklaruje dla rodziny D2
+dokładność pomiaru odległości $\pm\SI{2}{mm}$ \cite{mileseey_d2}. Plamkę
+lasera wykorzystywano również do orientacyjnej kontroli kierunku osi
+stanowiska, tak aby wypadała na centralnym obszarze klatki piersiowej.
+W~obrębie danej serii nie zmieniano wysokości ani nachylenia statywu.
+
+Badany siedział na krześle w~naturalnej, niewymuszonej pozycji. Oś radaru
+utrzymywano równolegle do podłoża, co kontrolowano poziomnicą pęcherzykową
+wbudowaną w~dalmierz. Ze względu na naturalne pochylenie tułowia oś radaru
+była odchylona o~około \SI{30}{\degree} od normalnej do powierzchni klatki
+piersiowej, czyli kąt padania wynosił w~przybliżeniu \SI{30}{\degree}. W~serii
+z~folią stosowano kwadrat o~wymiarach $\SI{5}{cm}\times\SI{5}{cm}$, umieszczony
+tak, aby jego górna krawędź znajdowała się \SI{5}{cm} poniżej poziomej linii
+łączącej brodawki sutkowe.
+
+Dla każdego nagrania wyznaczono: amplitudę odbicia w~bramkach klatki
+piersiowej, stosunek sygnału oddechowego do szumu (SNR --- maksimum widma
+w~paśmie \SIrange{0.08}{0.60}{Hz} względem mediany tła
+\SIrange{1}{5}{Hz}), wyrazistość piku widmowego, stabilność śledzonej
+odległości celu, amplitudę przemieszczenia oddechowego oraz poziom szumu
+ruchowego w~paśmie \SIrange{4}{8}{Hz}.
+
+\paragraph{Ograniczenie metodyczne.} Kolejność pomiarów nie była
+randomizowana --- wszystkie nagrania z~folią wykonano przed wszystkimi
+nagraniami bez folii, w~dwóch różnych sesjach (13 i~14~lipca~2026).
+Efekt folii jest więc splątany z~efektem sesji (postawa, ustawienie czujnika,
+stan badanego). Porównania między soczewkami są natomiast zrównoważone
+względem sesji i~pozostają wiarygodne.
+
+\section{Wyniki: porównanie soczewek}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{foil_profile_zasiegu.png}
+    \caption[Profile amplitudy w funkcji odległości]{Medianowa amplituda
+    sygnału w~funkcji odległości dla wszystkich 36~nagrań. Soczewki skupiające
+    dają 3--10-krotnie wyższy pik od klatki piersiowej; przy \SI{100}{cm} pik
+    płaskiej pokrywy jest szeroki i~ledwo odróżnialny od tła.}
+    \label{fig:profile}
+\end{figure}
+
+\begin{table}[H]
+\centering
+\caption{Uśrednione metryki dla każdej soczewki i~odległości (n=6: oba stany
+folii $\times$ 3~powtórzenia).}
+\label{tab:soczewki}
+\small
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Odległość & Soczewka & Amplituda & SNR & Odch. std. & Przemieszcz. \\
+ & & [j.u.] & [dB] & odl. [cm] & [mm] \\
+\midrule
+\SI{50}{cm}  & Hiperboliczna & 3100 & 45,3 & 1,0 & 2,20 \\
+             & FZP           & 3020 & 46,6 & 1,2 & 2,45 \\
+             & Płaska pokrywa & 970 & 43,8 & 3,5 & 1,56 \\
+\midrule
+\SI{100}{cm} & Hiperboliczna & 1245 & 45,7 & 2,4 & 2,23 \\
+             & FZP           &  697 & 47,3 & 3,7 & 2,10 \\
+             & Płaska pokrywa & 322 & 45,9 & 8,9 & 1,79 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Wyniki prowadzą do trzech obserwacji:
+
+\paragraph{Amplituda.} Przy \SI{50}{cm} obie soczewki skupiające są
+równoważne (mediana ok. 3000~j.u.) i~około trzykrotnie lepsze od płaskiej
+pokrywy. Przy \SI{100}{cm} soczewka hiperboliczna wyraźnie wygrywa ---
+zachowuje 40\% amplitudy z~\SI{50}{cm}, podczas gdy FZP tylko 23\%, co daje
+jej około 1,8-krotną przewagę. Jest to spójne z~naturą soczewki FZP, której
+ogniskowanie jest zoptymalizowane dla konkretnej odległości ogniskowej,
+podczas gdy soczewka hiperboliczna kolimuje wiązkę.
+
+\paragraph{Stabilność śledzenia celu.} Metryka ta różnicuje soczewki
+najsilniej. Odchylenie standardowe śledzonej odległości piku rośnie od
+\SI{1.0}{cm} (hiperboliczna, \SI{50}{cm}) do \SI{8.9}{cm} (płaska pokrywa,
+\SI{100}{cm}). Przy metrze odległości płaska pokrywa utrzymuje cel
+w~dominującej bramce jedynie w~14--54\% ramek --- szeroka wiązka oświetla
+jednocześnie tors, ramiona i~tło, przez co „najsilniejszy odbłysk” przeskakuje
+między obiektami. Logarytm amplitudy niemal idealnie przewiduje stabilność
+śledzenia ($\rho_{\mathrm{Spearman}} = -0{,}93$).
+
+\paragraph{SNR oddechowy --- brak różnic.} Najistotniejszy wynik: stosunek
+sygnału oddechowego do szumu wynosi 44--47~dB \emph{niezależnie} od soczewki,
+a~amplituda w~ogóle go nie przewiduje ($\rho = 0{,}08$; $p = 0{,}64$). Żadna
+z~par soczewek nie różni się istotnie statystycznie. Przy zapasie SNR rzędu
+40~dB dziesięciokrotna przewaga amplitudy nie przekłada się na wykrywalność
+oddechu.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{foil_widma_fazy.png}
+    \caption[Widma sygnału fazowego]{Widma gęstości mocy sygnału fazowego
+    z~bramek klatki piersiowej. Każde nagranie wykazuje tę samą strukturę:
+    dominujący pik oddechowy w~zacienionym paśmie, harmoniczne oraz szumowe
+    tło. Wybór soczewki niemal nie zmienia odległości piku od tła.}
+    \label{fig:widma}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{foil_metryki.png}
+    \caption[Zestawienie metryk dla wszystkich nagrań]{Wszystkie metryki dla
+    36~nagrań (punkty wypełnione --- folia, puste --- brak folii; lewa/prawa
+    podkolumna --- \SI{50}{cm}/\SI{100}{cm}). Amplituda i~stabilność śledzenia
+    różnicują soczewki o~rząd wielkości; SNR i~wyrazistość piku --- nie.}
+    \label{fig:metryki}
+\end{figure}
+
+Dodatkowo zaobserwowano, że płaska pokrywa \emph{zaniża} amplitudę
+przemieszczenia oddechowego (1,6--1,8~mm wobec 2,1--2,5~mm dla soczewek
+skupiających, $p \leq 0{,}009$) --- szeroka wiązka uśrednia fazę po dużym,
+niejednorodnie poruszającym się obszarze tułowia.
+
+\section{Wyniki: wpływ folii aluminiowej}
+
+\begin{table}[H]
+\centering
+\caption{Parowane różnice (folia $-$ brak folii) dopasowane po soczewce,
+odległości i~numerze powtórzenia (18~par, test Wilcoxona).}
+\label{tab:folia}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Metryka & Mediana różnicy & Folia lepsza & $p$ \\
+\midrule
+Amplituda odbicia & $-0{,}5$~dB & 8/18 & 0,64 \\
+SNR oddechowy & $+2{,}5$~dB & 13/18 & \textbf{0,012} \\
+Szum ruchowy \SIrange{4}{8}{Hz} & $-9{,}1$~\si{\micro\metre} & 1/18 & $<0{,}0001$ \\
+Amplituda przemieszczenia & $-0{,}46$~mm & 4/18 & 0,001 \\
+Stabilność odległości & $-0{,}18$~cm & 6/18 & 0,18 \\
+Wyrazistość piku & $\approx 0$ & 10/18 & 0,87 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{foil_delty_parowane.png}
+    \caption[Parowane różnice dla folii aluminiowej]{Parowane różnice
+    folia~$-$~brak folii. Amplituda oscyluje wokół zera; spadek szumu
+    ruchowego jest jednorodny dla wszystkich soczewek --- sygnatura efektu
+    sesji, a~nie efektu reflektora.}
+    \label{fig:delty}
+\end{figure}
+
+\paragraph{Nie zaobserwowano oczekiwanego wzrostu amplitudy.} Łata z~folii
+miała działać przez zwiększenie odbicia, lecz różnica amplitudy oscyluje wokół
+zera (mediana $-0{,}5$~dB, 8/18~par na korzyść folii, $p = 0{,}64$) dla każdej
+soczewki i~obu odległości. Dane wskazują więc, że na dystansie
+\SIrange{50}{100}{cm} wkład łaty o~boku \SI{5}{cm} nie dał mierzalnego wzrostu
+na tle odbicia od całego tułowia. Ze względu na rozdzielenie sesji nie można
+jednak z~tych danych wyznaczyć czystego efektu folii na SNR.
+
+\paragraph{Znaczenie kąta padania.} Geometria stanowiska mogła dodatkowo
+osłabić oczekiwany efekt metalowej łaty. Przy kącie około
+\SI{30}{\degree} względem normalnej silna składowa zwierciadlana odbicia od
+przewodzącej powierzchni może zostać skierowana poza antenę odbiorczą zamiast
+wrócić do radaru. Folia przylegała do niepłaskiej, poruszającej się powierzchni
+ciała, dlatego nie można traktować jej jak idealnego lustra, ale wynik dotyczy
+właśnie tej realistycznej geometrii siedzącej. Stały sposób ustawienia we
+wszystkich warunkach nie zaburza porównania soczewek, ogranicza natomiast
+uogólnienie wniosku o~folii na padanie prostopadłe.
+
+\paragraph{Pozorna poprawa SNR to prawdopodobnie efekt sesji.} Wzrost SNR
+o~2,5~dB jest istotny statystycznie, ale wynika wyłącznie z~\emph{mianownika}:
+poziom szumu ruchowego w~paśmie \SIrange{4}{8}{Hz} był niższy w~17~z~18~par,
+i~to w~podobnym stopniu dla wszystkich trzech soczewek --- także dla płaskiej
+pokrywy, gdzie fizyka wiązki czyniłaby ewentualny wkład folii najsłabszym.
+Jednocześnie amplituda przemieszczenia oddechowego również była niższa w~sesji
+z~folią. Najprostsze wyjaśnienie: badany siedział spokojniej i~oddychał
+płycej podczas sesji nocnej 13~lipca niż wieczorem 14~lipca. Prawdziwego
+mechanizmu (folia tłumiąca mikroruchy skóry) nie da się całkowicie wykluczyć,
+ale przewidywałby on wzrost amplitudy i~zależność od soczewki --- żadne z~tych
+zjawisk nie występuje.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{foil_przebiegi_oddechu.png}
+    \caption[Przebiegi oddechowe]{40~sekund przefiltrowanego sygnału
+    przemieszczenia klatki piersiowej dla każdego z~12~warunków. Wszystkie
+    przebiegi są czytelne; przebiegi z~płaską pokrywą mają wyraźnie mniejszą
+    amplitudę.}
+    \label{fig:przebiegi}
+\end{figure}
+
+\section{Wnioski z eksperymentu}
+\begin{enumerate}
+  \item Na dystansie \SIrange{0.5}{1.0}{m} system \emph{nie jest ograniczony
+  amplitudą} --- SNR oddechowy wynosi 44--47~dB niezależnie od konfiguracji.
+  Dodatkowa moc odbita przekłada się na \emph{stabilność śledzenia celu},
+  a~nie na wykrywalność oddechu.
+  \item Soczewka hiperboliczna jest najlepszym wyborem domyślnym: najlepiej
+  utrzymuje amplitudę na większym dystansie i~najstabilniej śledzi cel.
+  \item Na dystansie \SIrange{0.5}{1.0}{m} nie wykazano wzrostu amplitudy
+  dzięki folii. Rozdzielenie warunków na dwie sesje uniemożliwia natomiast
+  przypisanie folii zaobserwowanej różnicy SNR. Praktyczna korzyść przy małym
+  zapasie sygnału pozostaje nierozstrzygnięta.
+  \item Wskaźniki pewności wbudowane w~pipeline (\emph{resp\_confidence},
+  \emph{signal\_quality}) osiągają wartości maksymalne we wszystkich 36
+  nagraniach, przez co nie różnicują warunków --- do oceny jakości sygnału
+  konieczne są miary widmowe.
+\end{enumerate}
+
+\todo{Uzupełnić wyniki retestu na dystansie \SI{2}{m}, wykonanego wyłącznie
+z~soczewką hiperboliczną w~układzie $2\times2$: naturalny kąt padania około
+\SI{30}{\degree} względem normalnej oraz padanie prawie prostopadłe, każde
+bez folii i~z~folią. Warunki przeplatać w~jednej sesji i~wykonać po trzy
+powtórzenia.}
+
+% ---------------------------------------------------------------------
+\chapter{Sieci neuronowe do analizy faz oddechu}
+\label{chap:sieci}
+
+\todo{Rozdział jeszcze nie zrealizowany --- kluczowa część pracy,
+do wykonania. Poniżej planowana struktura; zarezerwowano dużo miejsca.}
+
+\section{Sformułowanie zadania}
+\miejsce{Klasyfikacja faz cyklu oddechowego (wdech / wydech / pauza) z~sygnału
+fazowego radaru A121. Alternatywnie: regresja fazy cyklu lub detekcja zdarzeń
+oddechowych.}
+
+\section{Zbiór danych i anotacja}
+\miejsce{Wykorzystanie zgromadzonej bazy nagrań (nagrania sterowane
+i~całonocne). Istniejący moduł \texttt{a121\_breaths} realizuje automatyczną
+wstępną anotację oddechów --- opisać jej zasadę i~sposób weryfikacji ręcznej.
+Podział na zbiór uczący / walidacyjny / testowy (rozłączny względem nagrań).}
+
+\section{Architektura modelu}
+\miejsce{Proponowane architektury: 1D-CNN na oknach sygnału, sieć
+rekurencyjna (LSTM/GRU), ewentualnie model hybrydowy. Wejście: przefiltrowany
+sygnał fazowy i/lub spektrogram. Uzasadnienie wyboru.}
+
+\section{Uczenie i metryki}
+\miejsce{Funkcja straty, augmentacja danych, walidacja krzyżowa po nagraniach.
+Metryki: dokładność klasyfikacji faz, F1, błąd wyznaczenia momentów przejścia.}
+
+\section{Wyniki}
+\miejsce{Tabele i~wykresy wyników; porównanie z~metodą klasyczną
+(baseline oparty na detekcji pików z~rozdziału~\ref{chap:algorytmy}).}
+
+\section{Dyskusja}
+\miejsce{Ograniczenia (jeden badany, ograniczona liczba nagrań), możliwości
+uogólnienia, potencjał zastosowania w~czasie rzeczywistym.}
+
+% =====================================================================
+% =====================================================================
+\part{Część eksperymentalna: zastosowanie systemu}
+\label{part:eksperymenty}
+% =====================================================================
+% =====================================================================
+
+\chapter{Całonocny monitoring snu}
+\label{chap:sen}
+
+\section{Cel badania}
+Docelowym zastosowaniem zbudowanego systemu jest bezkontaktowy monitoring snu.
+W~tej części radar A121 wykorzystano do rejestracji pełnych nocy, a~uzyskane
+przebiegi tętna, oddechu oraz oszacowane fazy snu porównano z~danymi
+z~zegarka Garmin~Fenix~7 traktowanego jako referencja.
+
+\section{Metodyka pomiarów}
+Zarejestrowano serię nagrań całonocnych. Radar umieszczono przy łóżku,
+skierowany na klatkę piersiową śpiącego. Równolegle badany nosił zegarek
+Garmin~Fenix~7, z~którego eksportowano dane w~formacie FIT (tętno, oddech,
+fazy snu). Trzy noce analizowane szczegółowo różniły się soczewką:
+\begin{itemize}
+  \item noc~1 --- soczewka plano-convex,
+  \item noc~2 --- soczewka FZP,
+  \item noc~3 --- płaska pokrywa (efektywnie brak soczewki); nagranie zostało
+  przerwane, przez co jest krótsze.
+\end{itemize}
+
+\todo{Uzupełnić: dokładny opis stanowiska (wysokość, kąt, odległość),
+zdjęcia stanowiska nocnego, procedura synchronizacji czasu radaru z~zegarkiem.}
+
+\section{Estymacja tętna i oddechu przez całą noc}
+\label{sec:trend-nocny}
+Algorytm z~rozdziału~\ref{chap:algorytmy} operuje na oknie kilkudziesięciu
+sekund. Nocne nagranie trwa jednak 7--9~godzin i~zawiera długie okresy ruchu,
+przewracania się oraz nieobecności. Analizę nocną realizuje więc nakładka
+(\texttt{tools/\allowbreak analyze\_a121\_\allowbreak sleep\_vitals\_\allowbreak gated.py}), która przesuwa
+\SI{60}{s} okno analizy z~krokiem \SI{30}{s} i~dla każdego okna wywołuje
+analizator parametrów życiowych, budując trend HR/RR.
+
+Kluczowe jest \textbf{bramkowanie okien}. Każdą ramkę klasyfikuje się na
+podstawie stanu detektora obecności czujnika jako \emph{spoczynek}
+(\texttt{still}), \emph{ruch} (\texttt{movement}) lub \emph{brak obecności}
+(\texttt{no\_presence}). Dla okna liczy się frakcje tych stanów i~odrzuca
+okno, gdy zachodzi którykolwiek z~warunków:
+\begin{itemize}
+  \item ostatnia ramka okna to ruch lub brak obecności (estymata byłaby
+  publikowana w~momencie, gdy badanego już nie ma w~wiązce),
+  \item frakcja braku obecności przekracza 0{,}05,
+  \item okno zawiera ciągły ruch dłuższy niż \SI{30}{s},
+  \item frakcja spoczynku spada poniżej 0{,}65.
+\end{itemize}
+Dodatkowo estymatę tętna przyjmuje się tylko przy pewności $\geq 5$
+i~w~zakresie fizjologicznym \SIrange{42}{120}{ud\per\minute}. Krótkie przerwy
+ruchowe (poniżej \SI{30}{s}) są sklejane, aby pojedyncze drgnięcie nie
+rozbijało ciągłego odcinka snu na fragmenty.
+
+Efektem jest szereg czasowy z~krokiem \SI{30}{s}, zawierający tętno, częstość
+oddechu, frakcje stanów oraz dominujący stan okna --- to on jest wejściem
+klasyfikatora faz snu. Duża część okien nocy jest odrzucana i~to jest
+zachowanie pożądane: lepiej nie podać wartości niż podać wartość wziętą
+z~artefaktu ruchowego.
+
+\section{Algorytm klasyfikacji faz snu}
+\label{sec:algorytm-snu}
+Na podstawie trendu z~sekcji~\ref{sec:trend-nocny} zbudowano heurystyczny
+klasyfikator faz snu (moduł \texttt{a121\_sleep}), rozróżniający czuwanie,
+sen lekki, sen głęboki i~fazę REM. Nie jest to model uczony --- to zestaw
+reguł opartych na znanych korelatach fizjologicznych, które \emph{są}
+dostępne radarowi: tętno, oddech, ich zmienność oraz ruch ciała.
+
+\paragraph{Cechy pochodne.} Z~trendu wyznacza się medianę kroczącą tętna
+i~oddechu w~oknie \SI{5}{min} ($\overline{HR}$, $\overline{RR}$) oraz ich
+odchylenie standardowe w~oknie \SI{10}{min} ($s_{HR}$, $s_{RR}$ --- miary
+zmienności), a~także wygładzoną frakcję ruchu. Progi decyzyjne \emph{nie} są
+stałymi bezwzględnymi, lecz percentylami wyznaczanymi \textbf{indywidualnie
+dla danej nocy} --- inaczej klasyfikator nie przenosiłby się między osobami
+ani między nocami:
+\begin{itemize}
+  \item $HR_{\text{deep}}$ --- mediana tętna podczas snu (percentyl~50),
+  \item $s_{HR}^{70}$ --- percentyl~70 zmienności tętna,
+  \item $s_{RR}^{60},\ s_{RR}^{75}$ --- percentyle 60 i~75 zmienności oddechu,
+  \item $HR_{\text{base}}$, $\mathrm{IQR}_{HR}$ --- mediana i~rozstęp
+  międzykwartylowy tętna podczas snu.
+\end{itemize}
+
+\paragraph{Wykrycie zaśnięcia i~przebudzenia.} Za moment zaśnięcia przyjmuje
+się początek pierwszego okresu, w~którym przez kolejne \SI{30}{min} utrzymuje
+się (w~co najmniej 80\% okien) spoczynek: frakcja spoczynku $\geq 0{,}80$,
+frakcja ruchu $\leq 0{,}20$, brak obecności $\leq 0{,}05$ oraz dostępna
+estymata tętna lub oddechu. Jeżeli wewnątrz tego okresu wystąpi jeszcze silny
+ruch, zaśnięcie przesuwa się za jego koniec. Przebudzenie wykrywa się tylko
+wtedy, gdy nagranie kończy się co najmniej \SI{20}{min} ciągłym okresem
+ruchu/nieobecności; w~przeciwnym razie za moment wybudzenia przyjmuje się
+koniec nagrania --- to jedyna uczciwa interpretacja, bo radar nie ma innej
+przesłanki, że badany wstał.
+
+\paragraph{Reguły decyzyjne.} Dla każdego okna wewnątrz okresu snu:
+\begin{itemize}
+  \item \textbf{Czuwanie} (arousal): frakcja braku obecności $> 0{,}20$ lub
+  frakcja ruchu $> 0{,}35$, albo stan okna wskazuje ruch/nieobecność.
+  \item \textbf{Sen głęboki}: co najmniej \SI{20}{min} od zaśnięcia, ruch
+  $< 0{,}10$, tętno $\overline{HR} \leq HR_{\text{deep}}$ (poniżej mediany
+  nocnej), niska zmienność oddechu $s_{RR} \leq s_{RR}^{60}$ oraz pierwsze
+  70\% nocy. Odzwierciedla to fizjologię: w~śnie wolnofalowym tętno spada,
+  a~oddech staje się regularny; sen głęboki koncentruje się w~pierwszej
+  połowie nocy.
+  \item \textbf{REM}: co najmniej \SI{75}{min} od zaśnięcia i~po 18\% nocy,
+  mały ruch ($< 0{,}15$), ale \emph{podwyższona zmienność} --- $s_{HR} \geq
+  s_{HR}^{70}$ lub $s_{RR} \geq s_{RR}^{75}$. W~REM występuje atonia mięśni
+  (ciało nieruchome), lecz oddech i~tętno stają się nieregularne; to właśnie
+  ta kombinacja odróżnia REM od snu głębokiego, w~którym ciało również jest
+  nieruchome.
+  \item \textbf{Sen lekki} --- przypadek domyślny.
+\end{itemize}
+Gdy reguły snu głębokiego i~REM zostaną spełnione jednocześnie, w~drugiej
+połowie nocy (po 55\% czasu snu) pierwszeństwo ma REM.
+
+\paragraph{Postprzetwarzanie.} Krótkie ,,wysepki'' faz nie-czuwania krótsze
+niż \SI{4}{min} są scalane z~otoczeniem, aby hipnogram był czytelny; epizody
+czuwania \emph{nie} są scalane --- usunięcie ich zatarłoby dowody wybudzeń.
+Osobno wykryto specyficzny przypadek: \emph{spokojne, ale pofragmentowane
+leżenie nad ranem} (np. leżenie w~łóżku z~telefonem po głównym epizodzie snu).
+Mały ruch ciała imituje wtedy REM, dlatego w~ostatnich 12\% okresu snu, jeśli
+utrzymuje się wysoka nieruchomość przy powtarzających się drobnych sygnałach
+ruchu, kandydaci REM są degradowani do snu lekkiego.
+
+\paragraph{Status wyniku: estymacja, nie pomiar.} Trzeba postawić sprawę
+otwarcie: \textbf{wyznaczonych faz snu nie da się w~tej pracy zweryfikować}.
+Jedynym dostępnym odniesieniem był zegarek Garmin~Fenix~7, a~on \emph{sam
+również nie jest metodą referencyjną} --- to urządzenie konsumenckie, które
+fazy snu szacuje heurystycznie z~tętna, HRV, ruchu i~(w~nowszych modelach)
+pulsoksymetrii. Złotym standardem pozostaje polisomnografia (EEG, EOG, EMG),
+której w~tym projekcie nie było. Rozbieżność radar--Garmin \emph{nie dowodzi
+zatem błędu radaru}: mówi tylko tyle, że dwie heurystyki oparte na sygnałach
+zastępczych dały różne wyniki, i~z~samego porównania nie wynika, która z~nich
+jest bliżej prawdy. Ani sen głęboki, ani REM nie są przez ten system
+\emph{mierzone} --- są \emph{estymowane} regułami zebranymi wyżej, opartymi na
+znanych korelatach fizjologicznych (spadek i~stabilizacja tętna w~śnie
+wolnofalowym, wzrost nieregularności tętna i~oddechu przy atonii mięśniowej
+w~REM). Wszystkie liczby dotyczące faz snu w~dalszej części należy czytać
+z~tym zastrzeżeniem.
+
+\miejsce{Miejsce na przegląd literatury o~dokładności faz snu w~urządzeniach
+konsumenckich: badania walidacyjne Garmina (i~pokrewnych: Fitbit, Oura,
+Withings) względem polisomnografii --- typowo wysoka czułość detekcji \emph{snu
+jako takiego} (rzędu 0,9), ale znacznie słabsza zgodność \emph{stadiów},
+w~szczególności notoryczne mylenie snu głębokiego z~lekkim i~zawyżanie/zaniżanie
+REM; podać raportowane wartości $\kappa$ Cohena i~dokładność 4-klasową. To jest
+uzasadnienie, dlaczego Garmin jest w~tej pracy traktowany jako \emph{punkt
+odniesienia}, a~nie jako \emph{prawda}.}
+
+\section{Ocena jakości snu (\emph{sleep score})}
+\label{sec:sleep-score}
+
+\paragraph{Czym ta liczba jest, a~czym nie jest.} Warto zacząć od zastrzeżenia,
+które rzadko pada w~materiałach producentów: \emph{ocena snu} (\emph{sleep
+score}) w~skali 0--100 jest \textbf{metryką wymyśloną przez producentów
+urządzeń}, a~nie wielkością fizjologiczną ani kliniczną. Nie odpowiada jej
+żadna jednostka, żadne badanie referencyjne i~żadna definicja w~medycynie snu
+--- polisomnografia nie zwraca ,,74~punktów''. Każdy producent (Garmin, Fitbit,
+Oura, Withings) liczy ją inaczej i~z~innych składowych, a~konkretne wzory są
+tajemnicą handlową; ta sama noc oceniona dwoma urządzeniami potrafi dać
+istotnie różne wyniki. \textbf{Sama w~sobie liczba ta nic nie znaczy} --- jest
+co najwyżej wygodnym skrótem, który agreguje kilka mierzalnych cech nocy
+(długość, ciągłość, proporcje faz, spokój, parametry witalne) w~jedną wartość
+porównywalną \emph{ze samą sobą} z~nocy na noc.
+
+Mimo to metryka ta jest powszechnie oczekiwana przez użytkownika, dlatego
+--- wyłącznie ze względu na jej popularność i~porównywalność z~zegarkiem
+referencyjnym --- opracowano algorytm, który \emph{z~grubsza odtwarza
+zachowanie} oceny Garmina. Odtworzono \emph{zachowanie}, nie wzór: wzór Garmina
+nie jest publiczny. Charakterystyczne dla ocen konsumenckich (i~odtworzone
+tutaj) są dwie cechy: dominująca rola długości snu oraz nasycanie się składowych
+--- ,,wystarczająco dobra'' wartość cechy daje komplet punktów, a~pogorszenie
+karane jest liniowo.
+
+\paragraph{Konstrukcja.} Ocena jest sumą pięciu składowych, ograniczoną z~góry
+pułapem zależnym od całkowitego czasu snu $T$ (w~minutach):
+\begin{equation}
+  \mathrm{score} = \min\big(D + C + B + R + V,\ \mathrm{cap}(T)\big),
+  \qquad D+C+B+R+V \leq 100 .
+  \label{eq:sleep-score}
+\end{equation}
+Wszystkie składowe zbudowano z~funkcji nasycającej
+$\sigma(x) = \min(\max(x,0),1)$ (obcięcie do przedziału $[0,1]$), co gwarantuje
+ograniczoność i~monotoniczność każdego członu:
+\begin{align}
+  D &= 30\,\sigma\!\left(\frac{T}{480}\right) \cdot
+       \begin{cases}
+         1, & T \leq 540,\\[2pt]
+         \sigma\!\left(1 - \dfrac{T-540}{180}\right), & T > 540,
+       \end{cases}
+       \label{eq:score-d}\\[2pt]
+  C &= 15\,\sigma\!\left(\frac{\eta - 0{,}75}{0{,}18}\right)
+     + 3\,\sigma\!\left(1 - \frac{T_{\text{awake}}}{60}\right)
+     + 2\,\sigma\!\left(1 - \frac{n_{\text{aw}}}{4}\right),
+       \label{eq:score-c}\\[2pt]
+  B &= 10\,Q(p_{\text{deep}};\,4,13,23,33\,\%)
+     + 10\,Q(p_{\text{rem}};\,8,18,27,40\,\%),
+       \label{eq:score-b}\\[2pt]
+  R &= 8\,\sigma\!\left(1 - \frac{\overline{m}}{0{,}08}\right)
+     + 3\,\sigma\!\left(1 - \frac{\overline{u}}{0{,}03}\right)
+     + 4\,\sigma\!\left(1 - \frac{n_{\text{aw}}}{6}\right),
+       \label{eq:score-r}\\[2pt]
+  V &= 7\,\sigma\!\left(1 - \frac{[\widetilde{HR} - 55]_+}{25}\right)
+     + 4\,\sigma\!\left(1 - \frac{[s_{HR} - 4]_+}{8}\right)
+     + 4\,\sigma\!\left(1 - \frac{[s_{RR} - 1{,}2]_+}{3}\right),
+       \label{eq:score-v}
+\end{align}
+gdzie $\eta$ --- efektywność snu (sen/okres snu), $T_{\text{awake}}$ --- minuty
+czuwania, $n_{\text{aw}}$ --- liczba wybudzeń dłuższych niż \SI{1}{min}
+na~godzinę, $\overline{m}$, $\overline{u}$ --- średnia frakcja ruchu
+i~nieobecności, $\widetilde{HR}$ --- mediana tętna we śnie, $s_{HR}$, $s_{RR}$
+--- odchylenia standardowe tętna i~oddechu, $[x]_+ = \max(x,0)$, a~$p_{\text{deep}}$,
+$p_{\text{rem}}$ --- procentowe udziały faz. Sens progów jest następujący:
+pełne \num{30} punktów za długość otrzymuje się dopiero przy \SI{8}{h} snu
+(kara zaczyna się powyżej \SI{9}{h}); efektywność \SI{93}{\%} wysyca składową
+ciągłości; mediana tętna do 55~bpm i~odchylenie tętna do 4~bpm dają komplet
+punktów za regenerację.
+
+Proporcje faz ocenia funkcja plateau $Q$ --- trapez, który daje maksimum
+w~przedziale uznawanym za prawidłowy i~maleje liniowo \emph{po obu stronach},
+karząc zarówno niedobór, jak i~nadmiar danej fazy:
+\begin{equation}
+  Q(p;\,a,b,c,d) =
+  \begin{cases}
+    0, & p \leq a \ \text{lub}\ p \geq d,\\[2pt]
+    \dfrac{p-a}{b-a}, & a < p < b,\\[4pt]
+    1, & b \leq p \leq c,\\[4pt]
+    \dfrac{d-p}{d-c}, & c < p < d .
+  \end{cases}
+  \label{eq:plateau}
+\end{equation}
+Dla snu głębokiego plateau przyjęto na 13--23\%, dla REM na 18--27\% czasu snu.
+
+Kluczowy jest jednak nie sam wzór, lecz \emph{pułap} $\mathrm{cap}(T)$, bo to on
+--- podobnie jak w~zegarkach konsumenckich --- w~praktyce decyduje o~ocenie:
+\begin{equation}
+  \mathrm{cap}(T) =
+  \begin{cases}
+    30 + 30\,\sigma\!\left(\frac{T}{240}\right), & T < \SI{240}{min}\ (\SI{4}{h}),\\[4pt]
+    60 + 20\,\sigma\!\left(\frac{T-240}{180}\right), & \SI{240}{min} \leq T < \SI{420}{min}\ (\SI{7}{h}),\\[4pt]
+    80 + 20\,\sigma\!\left(\frac{T-420}{60}\right), & \SI{420}{min} \leq T < \SI{480}{min},\\[4pt]
+    100, & T \geq \SI{480}{min}\ (\SI{8}{h}).
+  \end{cases}
+  \label{eq:duration-cap}
+\end{equation}
+Krótka noc \emph{nie może} więc zostać oceniona wysoko, choćby była idealnie
+spokojna i~ciągła --- poniżej \SI{4}{h} snu maksimum to 60~punktów. Widać to
+w~zebranych danych: dla wszystkich analizowanych nocy suma składowych
+($\mathrm{raw\ score}$) była wyższa od oceny końcowej, a~ograniczał ją właśnie
+pułap czasu (np. noc~1: składowe 83,8~pkt, pułap 73,8~pkt $\rightarrow$ ocena
+74). Innymi słowy: \emph{ocena mierzy głównie to, ile się spało}, a~pozostałe
+składowe jedynie ją modulują --- co jest zarazem trafną obserwacją o~tym, jak
+działają oceny snu w~urządzeniach komercyjnych.
+
+\begin{table}[H]
+\centering
+\caption[Składowe oceny jakości snu]{Składowe punktowej oceny snu
+(\texttt{score\_radar\_sleep}). Maksimum sumy wynosi 100~punktów, a~dodatkowo
+całość ogranicza pułap zależny od długości snu, wzór~\eqref{eq:duration-cap}.}
+\label{tab:sleep-score}
+\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Składowa} & \textbf{Co ocenia} & \textbf{Maks.} \\
+\midrule
+Długość $D$        & czas snu względem \SI{8}{h}; kara za sen $>\SI{9}{h}$ & 30 \\
+Ciągłość $C$       & efektywność snu, minuty czuwania, liczba wybudzeń/h & 20 \\
+Proporcje faz $B$  & udział snu głębokiego (13--23\%) i~REM (18--27\%) & 20 \\
+Spokój $R$         & średnia frakcja ruchu i~nieobecności, wybudzenia & 15 \\
+Regeneracja $V$    & mediana tętna, stabilność tętna i~oddechu & 15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Etykieta słowna przypisywana jest progowo: $\geq 90$ --- ,,doskonała'',
+$\geq 80$ --- ,,dobra'', $\geq 60$ --- ,,przeciętna'', poniżej --- ,,słaba''.
+Tętno spoczynkowe szacuje się jako 10.~percentyl tętna w~oknach snu o~znikomym
+ruchu.
+
+\paragraph{Czy to rzeczywiście ,,matchuje'' Garmina?} Dla nocy~1 udało się
+odzyskać pełny eksport oceny z~aplikacji Garmin~Connect (\texttt{Sleep.csv}),
+co pozwala zestawić obie metryki bezpośrednio (tab.~\ref{tab:score-garmin}).
+Zgodność samej oceny jest uderzająca: \textbf{74~punkty w~obu przypadkach}
+i~identyczna etykieta jakości, przy niezależnie wyznaczonym czasie snu
+różniącym się o~7~minut. Zgadza się też tętno spoczynkowe --- \SI{52.7}{bpm}
+z~radaru wobec \SI{51}{bpm} z~zegarka --- co zamyka pytanie postawione przy
+opisie estymatora tętna spoczynkowego.
+
+\begin{table}[H]
+\centering
+\caption[Ocena snu i fazy: radar a dwa eksporty Garmina (noc 1)]{Noc~1 ---
+zestawienie wyniku własnego z~\emph{dwoma} źródłami danych z~tego samego
+zegarka: surowym strumieniem \texttt{SLEEP\_DATA} z~pliku FIT (to jego użyto
+w~tab.~\ref{tab:fazy}) oraz podsumowaniem pokazywanym użytkownikowi
+w~aplikacji Garmin~Connect. Oba pochodzą z~tej samej nocy i~tego samego
+urządzenia.}
+\label{tab:score-garmin}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+ & \textbf{Radar} & \textbf{Garmin} & \textbf{Garmin} \\
+ & \textbf{(ta praca)} & \textbf{(FIT)} & \textbf{(Connect)} \\
+\midrule
+Ocena snu [pkt]        & 74 & --- & 74 \\
+Etykieta jakości       & \emph{Fair} & --- & \emph{Fair} \\
+Czas snu [min]         & 364,5 & 326,0 & 357,0 \\
+Sen głęboki [min]      & 78,5 & 57,0 & 82,0 \\
+Sen lekki [min]        & 212,5 & 222,0 & 159,0 \\
+REM [min]              & 73,5 & 47,0 & 116,0 \\
+Czuwanie [min]         & 24,0 & 40,0 & 24,0 \\
+\midrule
+Sen głęboki [\% snu]   & 21,5 & 17,5 & 23,0 \\
+REM [\% snu]           & 20,2 & 14,4 & 32,5 \\
+\midrule
+Tętno spoczynkowe [bpm] & 52,7 & --- & 51 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Dwa Garminy, jedna noc.} Tabela~\ref{tab:score-garmin} ujawnia
+jednak coś, co jest w~tej pracy ważniejsze od samej zgodności oceny:
+\textbf{dwa eksporty z~tego samego zegarka, dotyczące tej samej nocy, podają
+istotnie różne fazy snu}. Surowy strumień FIT przypisuje REM 47~minut,
+a~aplikacja --- 116~minut; sen głęboki odpowiednio 57 i~82~minuty. Różnica
+w~REM jest \emph{dwuipółkrotna}. Nie jest to błąd odczytu: strumień
+\texttt{SLEEP\_DATA} zawiera znaczniki zmian stadium rejestrowane na
+urządzeniu, a~aplikacja pokazuje wynik po własnym (niejawnym)
+postprzetwarzaniu w~chmurze.
+
+Wniosek jest niewygodny, ale nieunikniony: \emph{Garmin nie jest wzorcem,
+skoro nie zgadza się sam ze sobą}. Zależnie od tego, który eksport przyjmiemy
+za odniesienie, radar raz \emph{zawyża} sen głęboki (o~21~min względem FIT),
+a~raz \emph{zaniża} (o~3,5~min względem aplikacji) --- przy dokładnie tych
+samych danych radarowych. To najmocniejszy dostępny w~tej pracy argument za
+tym, że rozbieżności faz snu z~sekcji~\ref{sec:fazy-wyniki} nie wolno
+interpretować jako ,,błędu radaru''.
+
+Sama zgodność oceny (74 vs 74) też nie jest dowodem poprawności --- i~warto
+rozumieć, \emph{dlaczego} wyszła tak dobrze. Ocena jest zdominowana przez czas
+snu (wzór~\eqref{eq:duration-cap}), a~czas snu obie metody mierzą podobnie, bo
+obie wykrywają to samo: brak ruchu i~spadek tętna. Rozjazd ujawnia się dopiero
+tam, gdzie czas snu nie decyduje --- w~proporcjach faz. \textbf{Zgodne oceny
+przy niezgodnych fazach} to dokładna ilustracja tezy tej sekcji: ocena snu
+jest agregatem o~małej rozdzielczości informacyjnej. Jedna noc to zresztą
+anegdota, a~nie walidacja.
+
+\todo{Uzasadnić progi literaturowo (odsetki faz snu u~dorosłych). Rozważyć
+krótki przegląd: jak liczą ocenę snu Garmin/Fitbit/Oura i~dlaczego wyniki nie
+są porównywalne między producentami. Eksport \texttt{Sleep.csv} udało się
+odzyskać tylko dla nocy~1 --- dla pozostałych nocy warto go dociągnąć
+z~Garmin~Connect i~powtórzyć tabelę~\ref{tab:score-garmin}, żeby sprawdzić,
+czy rozjazd FIT~vs~Connect powtarza się co noc.}
+
+\section{Wyniki: podsumowanie radarowe}
+
+\begin{table}[H]
+\centering
+\caption{Podsumowanie snu wyznaczone wyłącznie z~radaru.}
+\label{tab:sensummary}
+\small
+\begin{tabular}{@{}lrrrrl@{}}
+\toprule
+Noc & Ocena & Sen całk. [min] & Efektywność [\%] & Spocz. HR [bpm] & Jakość \\
+\midrule
+1 (plano-convex) & 74 & 364,5 & 93,8 & 52,7 & Przeciętna \\
+2 (FZP)          & 71 & 342,5 & 95,0 & 51,9 & Przeciętna \\
+3 (płaska)       & 49 & 154,0 & 85,8 & 50,8 & Słaba \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Noc~3 wypadła znacznie gorzej głównie dlatego, że nagranie zostało przerwane
+i~jest krótkie --- ocena została ograniczona przez czas snu. Oszacowane tętno
+spoczynkowe pozostało spójne między nocami (nisko w~przedziale 50~bpm).
+
+\section{Wyniki: porównanie tętna z Garmin Fenix 7}
+
+\begin{table}[H]
+\centering
+\caption{Porównanie tętna (okna snu): radar vs Garmin Fenix~7.}
+\label{tab:hr}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Noc & Radar śr. [bpm] & Garmin śr. [bpm] & Obciążenie śr. & Obciążenie med. \\
+\midrule
+1 (plano-convex) & 55,5 & 57,4 & $-1{,}9$ & $-1{,}8$ \\
+2 (FZP)          & 55,1 & 58,3 & $-3{,}3$ & $-2{,}4$ \\
+3 (płaska)       & 53,8 & 53,6 & $+0{,}1$ & $+1{,}3$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Zgodność tętna jest najważniejszym wynikiem praktycznym, ponieważ --- w~
+przeciwieństwie do surowej amplitudy --- jest odporna na problem odbicia od
+krawędzi łóżka. Co ciekawe, noc z~płaską pokrywą wypadła najlepiej, a~obie
+noce z~soczewką zaniżały tętno. Nie dowodzi to wyższości płaskiej pokrywy,
+pokazuje natomiast, że przewaga w~zysku anteny nie przekłada się
+automatycznie na lepszą zgodność fizjologiczną w~danym ustawieniu. Wiarygodną
+hipotezą wyjaśniającą jest geometria pomiaru: soczewki skupiające zawężają
+obszar obserwacji, więc zmiana pozycji śpiącej osoby lub niedokładne utrzymanie
+osi radaru na klatce może usunąć właściwy reflektor z~głównej wiązki. Płaska
+pokrywa obejmuje szerszy obszar i~przy małych odległościach może być bardziej
+odporna na takie przesunięcie, mimo mniejszego zysku. Ponieważ każdy wariant
+soczewki badano innej nocy, zebrane dane nie pozwalają oddzielić wpływu
+soczewki od wpływu ułożenia ciała; jest to interpretacja, a~nie wykazany
+związek przyczynowy.
+
+\section{Wyniki: porównanie częstości oddechu}
+
+\begin{table}[H]
+\centering
+\caption{Porównanie częstości oddechu (okna snu): radar vs Garmin Fenix~7.}
+\label{tab:rr}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Noc & Radar śr. [odd./min] & Garmin śr. & Obciążenie śr. & Obciążenie med. \\
+\midrule
+1 (plano-convex) & 13,6 & 14,0 & $-0{,}4$ & $-0{,}2$ \\
+2 (FZP)          & 14,6 & 14,2 & $+0{,}4$ & $+0{,}5$ \\
+3 (płaska)       & 14,3 & 14,0 & $+0{,}3$ & $+0{,}2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Zgodność częstości oddechu okazała się lepsza niż zgodność tętna --- średnie
+obciążenie nie przekracza pół oddechu na minutę dla żadnej z~nocy. Jest to
+najmocniejszy i~najbardziej stabilny wynik całego badania nocnego.
+
+\section{Wyniki: porównanie faz snu}
+\label{sec:fazy-wyniki}
+
+Zgodnie z~zastrzeżeniem z~sekcji~\ref{sec:algorytm-snu}: poniższe zestawienie
+jest \emph{porównaniem dwóch estymat}, a~nie oceną dokładności względem prawdy.
+Garmin nie jest tu wzorcem --- fazy snu szacuje własną, niejawną heurystyką,
+której zgodność ze stadiami polisomnograficznymi jest w~literaturze umiarkowana.
+Różnica ,,radar $-$ Garmin'' mierzy więc rozjazd dwóch przybliżeń.
+
+\begin{table}[H]
+\centering
+\caption{Sumaryczny czas trwania faz snu. Różnica dodatnia oznacza, że radar
+przypisał danej fazie więcej czasu niż Garmin. Obie kolumny są estymatami ---
+żadna z~nich nie jest odniesieniem polisomnograficznym.}
+\label{tab:fazy}
+\small
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Noc & Źródło & Czuwanie & Sen lekki & Sen głęboki & REM \\
+ & & [min] & [min] & [min] & [min] \\
+\midrule
+1 & Radar    & 24,0 & 212,5 & 78,5 & 73,5 \\
+1 & Garmin   & 40,0 & 222,0 & 57,0 & 47,0 \\
+1 & Różnica  & $-16{,}0$ & $-9{,}5$ & $+21{,}5$ & $+26{,}5$ \\
+\midrule
+2 & Radar    & 18,0 & 191,0 & 58,0 & 93,5 \\
+2 & Garmin   & 5,0  & 211,0 & 18,0 & 117,0 \\
+2 & Różnica  & $+13{,}0$ & $-20{,}0$ & $+40{,}0$ & $-23{,}5$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Względem strumienia FIT radar przypisywał więcej czasu fazie snu głębokiego
+(o~21,5 i~40~minut). Wniosek ten trzeba jednak natychmiast osłabić: jak
+pokazano w~tabeli~\ref{tab:score-garmin}, \emph{drugi} eksport z~tego samego
+zegarka (podsumowanie z~aplikacji Garmin~Connect) podaje dla nocy~1 sen głęboki
+82~minuty --- czyli \emph{więcej} niż radar (78,5~min). Kierunek rozbieżności
+odwraca się więc w~zależności od tego, który eksport Garmina uzna się za
+odniesienie, przy niezmienionych danych radarowych. Ostrożna konkluzja brzmi:
+radar i~Garmin różnią się w~proporcjach faz, ale dane nie pozwalają orzec,
+która heurystyka jest bliżej rzeczywistości.
+
+Istotna obserwacja diagnostyczna dotyczy natomiast \emph{struktury} hipnogramu:
+w~obu nocach klasyfikator radarowy wykazał bezpośrednie przejścia
+REM~$\rightarrow$~sen głęboki (po dwa na noc), podczas gdy Garmin nie wykazał
+żadnego takiego przejścia. Takie przejście jest w~fizjologii snu nietypowe
+(sen głęboki poprzedza zwykle REM w~ramach cyklu, a~wyjście z~REM prowadzi
+przez sen lekki lub wybudzenie), co wskazuje na słabość samej heurystyki
+regułowej --- a~nie na błąd śledzenia tętna i~oddechu, które w~tych samych
+oknach zgadzało się z~zegarkiem.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{sen_noc1_garmin_overlay.png}
+    \caption[Noc 1 --- nałożenie danych radaru i Garmina]{Noc~1 (soczewka
+    plano-convex). Tętno i~oddech z~radaru oraz heurystyczne fazy snu
+    nałożone na dane referencyjne z~Garmina.}
+    \label{fig:noc1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{sen_noc2_garmin_overlay.png}
+    \caption[Noc 2 --- nałożenie danych radaru i Garmina]{Noc~2 (soczewka
+    FZP). Noc o~bardzo wysokiej amplitudzie dominującego odbicia, przy czym
+    najsilniejszy reflektor zwykle \emph{nie} znajdował się na śledzonej
+    odległości celu.}
+    \label{fig:noc2}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{sen_noc3_garmin_overlay.png}
+    \caption[Noc 3 --- nałożenie danych radaru i Garmina]{Noc~3 (płaska
+    pokrywa). Nagranie zostało przerwane, ale zgodność tętna z~Garminem była
+    najlepsza z~trzech nocy.}
+    \label{fig:noc3}
+\end{figure}
+
+\section{Pułapka interpretacyjna: amplituda dominującego odbicia}
+
+\begin{table}[H]
+\centering
+\caption{Amplituda dominującego odbicia a~zgodność z~celem.}
+\label{tab:amplitudy}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Noc & Mediana ampl. & Mediana odl. & Mediana odl. & Udział okien \\
+ & piku [j.u.] & celu [m] & piku [m] & $|\Delta d|\leq$\SI{0.10}{m} \\
+\midrule
+1 & 1665 & 0,37 & 0,15 & 0,316 \\
+2 & 17516 & 0,44 & 0,12 & 0,012 \\
+3 & 23574 & 0,22 & 0,10 & 0,384 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Surowy wykres amplitud (rys.~\ref{fig:amplitudy}) sugeruje dramatyczną
+poprawę między nocami. Tabela~\ref{tab:amplitudy} pokazuje jednak, dlaczego
+nie wolno tego czytać jako „lepszego sygnału z~klatki piersiowej”:
+w~nocy~2 jedynie \textbf{1,2\%} okien miało dominujący pik w~promieniu
+\SI{10}{cm} od śledzonego celu. Silne odbicie pochodziło niemal na pewno
+od krawędzi łóżka lub innego bliskiego reflektora, a~nie od badanego.
+
+Z~tego powodu w~niniejszej pracy przyjęto następującą hierarchię wyników:
+\begin{enumerate}
+  \item zgodność HR/RR z~Garminem --- wynik \textbf{podstawowy},
+  \item zgodność faz snu --- wynik \textbf{drugorzędny},
+  \item surowa amplituda piku --- wyłącznie \textbf{kontekst inżynierski}.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{sen_amplitudy_nocy.png}
+    \caption[Amplituda dominującego odbicia w trzech nocach]{Amplituda
+    dominującego odbicia w~trzech nocach. Wykres jest użyteczny jako kontekst
+    inżynierski, ale nie stanowi miary siły sygnału z~klatki piersiowej.}
+    \label{fig:amplitudy}
+\end{figure}
+
+\section{Dyskusja wyników nocnych}
+Częstość oddechu była zgodna z~wynikiem Garmina lepiej niż tętno. Jest to
+spójne z~większą amplitudą ruchu oddechowego i~mniejszymi wymaganiami na SNR;
+składowa sercowa jest słabsza i~łatwiej ulega zakłóceniu przez ruch całego
+ciała, harmoniczne oddechu oraz zmianę dominującego reflektora.
+
+W~pomiarze nocnym początkowe skierowanie radaru na klatkę nie gwarantuje
+utrzymania tej geometrii przez wiele godzin. Badany zmienia pozycję, a~klatka
+przesuwa się poprzecznie i~obraca względem osi czujnika. Wąska wiązka soczewki
+skupiającej może wtedy dać wysoką amplitudę odbicia od niewłaściwego obiektu,
+podczas gdy szersze pole widzenia płaskiej pokrywy nadal obejmuje część
+tułowia. Taki mechanizm jest zgodny z~najlepszą zgodnością tętna w~nocy
+z~płaską pokrywą oraz z~problemem piku od krawędzi łóżka, ale wymaga osobnego,
+kontrolowanego testu kąta lub przesunięcia poprzecznego.
+
+Najważniejsze ograniczenia badania to jedna osoba, tylko trzy noce, inna
+soczewka każdej nocy i~brak polisomnografii. Garmin jest konsumenckim źródłem
+porównania, a~nie złotym standardem. Z~tego powodu wyników nie należy
+interpretować jako rankingu soczewek ani walidacji klinicznej algorytmu snu.
+
+% ---------------------------------------------------------------------
+\chapter{Dalsze zastosowania i eksperymenty}
+
+\todo{Rozdział rezerwowy --- na kolejne eksperymenty, które powstaną
+w~trakcie pracy.}
+
+\section{Detekcja bezdechów}
+\miejsce{Możliwość wykrywania pauz oddechowych z~sygnału fazowego;
+kryteria (pauza $>$\SI{10}{s}), weryfikacja.}
+
+\section{Pomiar na większych dystansach}
+Wstępny test na dystansie około \SI{2}{m} wykazał, że soczewka
+plano-convex zwiększyła amplitudę tylko o~około 13\%, ale dała znacznie
+bardziej wiarygodną estymatę tętna (54,5 wobec 83,2~bpm dla wariantu bez
+soczewki). Jest to kolejny argument, że amplituda nie jest wystarczającym
+kryterium decyzyjnym. Planowany test granicy zasięgu wykorzystuje jedną
+soczewkę hiperboliczną, stałą konfigurację, oddech \SI{0.2}{Hz} narzucony
+metronomem oraz odcinki wstrzymania oddechu. Granicę użyteczności należy
+zdefiniować przez trafienie zadanej częstości i~SNR, a~nie przez samą
+widoczność przebiegu.
+
+\section{Pomiar przez przeszkody}
+Wyniki literaturowe z~sekcji~\ref{sec:materialy-radar} wskazują, że cienka,
+sucha odzież powinna mieć mniejszy wpływ niż zawilgocona tkanina albo
+wielowarstwowa kołdra. Należy jednak raportować konkretny materiał, grubość,
+wilgotność i~kąt, ponieważ pojęcie ,,penetracji'' bez tych danych jest
+niejednoznaczne. Praktycznym rozwinięciem jest przeplatany pomiar bez
+przeszkody i~przez tę samą suchą kołdrę, oddzielnie dla HB100 i~A121.
+
+\section{Wielu badanych i uogólnialność}
+\miejsce{Wszystkie dotychczasowe wyniki pochodzą od jednego badanego.
+Rozszerzenie na grupę --- kluczowe dla wiarygodności modeli uczonych.}
+
+\section{Zastosowanie sieci neuronowych do klasyfikacji snu}
+\miejsce{Zastąpienie heurystycznego klasyfikatora faz snu modelem uczonym na
+danych z~Garmina jako etykietach; ograniczenia takiego podejścia (etykiety
+referencyjne same są estymatami).}
+
+% =====================================================================
+% ZAKOŃCZENIE
+% =====================================================================
+\chapter{Podsumowanie i wnioski końcowe}
+
+\todo{Zebrać wnioski z~części II i~III, odnieść się do celów postawionych
+w~rozdziale~1.}
+
+Najważniejsze ustalenia inżynierskie uzyskane dotychczas:
+\begin{itemize}
+  \item Zbudowano kompletny tor pomiarowy dla radaru HB100 --- od analogowego
+  wzmacniacza i~filtru ($\approx121\times$) po estymację parametrów witalnych
+  --- oraz zintegrowano radar Acconeer~A121 pracujący na surowych danych
+  Sparse~IQ.
+  \item Na dystansie \SIrange{0.5}{1.0}{m} system nie jest ograniczony
+  amplitudą sygnału: SNR oddechowy wynosi 44--47~dB niezależnie od soczewki
+  i~obecności folii aluminiowej. Zysk anteny przekłada się na stabilność
+  śledzenia celu, a~nie na wykrywalność oddechu.
+  \item Na dystansie \SIrange{0.5}{1.0}{m} folia aluminiowa nie zwiększyła
+  mierzalnie amplitudy odbicia. Z~powodu wykonania warunków w~osobnych sesjach
+  wpływ folii na SNR pozostaje nierozstrzygnięty i~wymaga krótkiego,
+  przeplatanego retestu przy \SI{2}{m}.
+  \item W~pomiarach nocnych zgodność częstości oddechu z~Garmin~Fenix~7
+  mieści się w~granicach $\pm 0{,}5$~oddechu na minutę, a~tętna w~granicach
+  kilku uderzeń na minutę. Rozbieżności w~fazach snu wskazują na ograniczenia
+  heurystycznego klasyfikatora --- co jest bezpośrednią motywacją dla
+  zastosowania sieci neuronowych.
+\end{itemize}
+
+\section{Kierunki dalszych prac}
+\miejsce{Sieci neuronowe do klasyfikacji faz oddechu
+(rozdział~\ref{chap:sieci}), rozszerzenie badania na wielu uczestników,
+walidacja względem polisomnografii.}
+
+% =====================================================================
+\begin{thebibliography}{99}
+\bibitem{acconeer_lens}
+Acconeer AB, \emph{Lens design --- Acconeer docs}, dokumentacja techniczna
+A121, \url{https://docs.acconeer.com/en/latest/integration/lens_design.html}
+(dostęp: 15.07.2026).
+
+\bibitem{acconeer_handbook}
+Acconeer AB, \emph{A121 documentation and software},
+\url{https://developer.acconeer.com/home/a121-docs-software/}
+(dostęp: 15.07.2026).
+
+\bibitem{acconeer_datasheet}
+Acconeer AB, \emph{A121 Pulsed Coherent Radar Sensor Data Sheet}, wersja 1.8,
+\url{https://developer.acconeer.com/download/a121-datasheet/}
+(dostęp: 15.07.2026).
+
+\bibitem{acconeer_sparse_iq}
+Acconeer AB, \emph{Interpreting radar data --- Sparse IQ},
+\url{https://docs.acconeer.com/en/latest/radar_data_and_control/a121/interpreting_radar_data.html}
+(dostęp: 15.07.2026).
+
+\bibitem{waveshare_a121}
+Waveshare, \emph{A121 Range Sensor --- documentation},
+\url{https://www.waveshare.com/wiki/A121_Range_Sensor}
+(dostęp: 15.07.2026).
+
+\bibitem{mileseey_d2}
+MILESEEY, \emph{D2 Laser Distance Meter --- specifications},
+\url{https://mileseeyrussia.ru/dalnomer-mileseey-d2/}
+(dostęp: 15.07.2026).
+
+\bibitem{infineon_fmcw}
+Infineon Technologies, \emph{FMCW Radar Digital Signal Processing}, materiał
+szkoleniowy,
+\url{https://www.infineon.com/dgdl/Infineon-FMCW_RADAR_Digital_Signal_Processing_Handout-Training-v01_00-EN.pdf?fileId=8ac78c8c8929aa4d018a178075b06be9}
+(dostęp: 15.07.2026).
+
+\bibitem{wallace2018}
+J.~W. Wallace, R. Mehmood, M.~A. Jensen, \emph{4--40 GHz Transmission
+Measurement of Indoor Building Materials at Normal Incidence}, 2018 IEEE
+International Symposium on Antennas and Propagation and USNC/URSI National
+Radio Science Meeting, 2018,
+\url{https://doi.org/10.1109/APUSNCURSINRSM.2018.8609395}.
+
+\bibitem{jun2020}
+S.~Y. Jun, D. Caudill, J. Chuang, P.~B. Papazian, A. Bodi, C. Gentile,
+J. Senic, N.~T. Golmie, \emph{Penetration Loss at 60 GHz for
+Indoor-to-Indoor and Outdoor-to-Indoor Mobile Scenarios}, 14th European
+Conference on Antennas and Propagation (EuCAP), 2020,
+\url{https://doi.org/10.23919/EuCAP48036.2020.9135581}.
+
+\bibitem{albrecht2023}
+N.~C. Albrecht, J.~P. Weiland, D. Langer, M. Wenzel, A. Koelpin,
+\emph{Characterization of the Influence of Clothing and Other Materials on
+Human Vital Sign Sensing using mmWave Radar}, 53rd European Microwave
+Conference (EuMC), 2023,
+\url{https://doi.org/10.23919/EuMC58039.2023.10290459}.
+
+\bibitem{landreani2017}
+F. Landreani, A. Martin, C. Casellato, E. Pavan, C. Frigo,
+P.-F. Migeotte, A. Faini, G. Parati, E. Caiani, \emph{Respiratory Frequency
+Estimation from Accelerometric Signals Acquired by Mobile Phone in a
+Controlled Breathing Protocol}, Computing in Cardiology, 2017,
+\url{https://doi.org/10.22489/CinC.2017.137-402}.
+
+\bibitem{nayak2024}
+A. Nayak, M. Bolic, \emph{Smartphone System for Heart Rate and Breathing Rate
+Estimation}, IEEE Open Journal of Instrumentation and Measurement, 2024,
+\url{https://doi.org/10.1109/OJIM.2024.3477572}.
+
+\bibitem{lsm6ds3}
+STMicroelectronics, \emph{LSM6DS3: iNEMO inertial module --- data sheet},
+\url{https://www.st.com/resource/en/datasheet/lsm6ds3.pdf}
+(dostęp: 15.07.2026).
+
+\bibitem{apple_coremotion}
+Apple Inc., \emph{CMMotionManager --- Core Motion documentation},
+\url{https://developer.apple.com/documentation/coremotion/cmmotionmanager}
+(dostęp: 15.07.2026).
+
+\bibitem{apple_coremotion_interval}
+Apple Inc., \emph{deviceMotionUpdateInterval --- Core Motion documentation},
+\url{https://developer.apple.com/documentation/coremotion/cmmotionmanager/devicemotionupdateinterval}
+(dostęp: 15.07.2026).
+
+\bibitem{garmin_sleep}
+\todo{Publikacja o~dokładności szacowania faz snu przez zegarki Garmin
+względem polisomnografii.}
+
+\bibitem{hb100_doc}
+Agilsense / ST Electronics, \emph{HB100 Microwave Sensor Module Data Sheet},
+\url{https://www.theremino.com/wp-content/uploads/files/HB100_Microwave_Sensor_Module_Datasheet.pdf}
+(dostęp: 15.07.2026).
+
+\bibitem{mcp6002}
+Microchip Technology, \emph{MCP6001/2/4 Operational Amplifier Data Sheet}.
+\url{https://ww1.microchip.com/downloads/aemDocuments/documents/MSLD/ProductDocuments/DataSheets/MCP6001-1R-1U-2-4-1-MHz-Low-Power-Op-Amp-DS20001733.pdf}
+(dostęp: 15.07.2026).
+
+\todo{Uzupełnić pozostałą bibliografię do części klinicznej, optycznej,
+UWB i~uczenia maszynowego.}
+\end{thebibliography}
+
+\end{document}
