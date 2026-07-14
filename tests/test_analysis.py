@@ -1,16 +1,21 @@
 from pathlib import Path
+import asyncio
+import importlib
 import struct
+import time
 
 import numpy as np
 import pandas as pd
 import pytest
+from click.testing import CliRunner
 
 from respi_net.a121 import A121_COLUMNS
 from respi_net.a121_vitals import A121LiveTraceProcessor, HeartRateKalmanTracker, analyze_a121_vitals, sample_rate_from_ms
 from respi_net.app import _a121_stats, _detect_sensor
-from respi_net.imu import analyze_imu_csv
-from respi_net.iphone_imu import parse_iphone_imu_packet
-from respi_net.radar import analyze_radar_csv
+from respi_net.cli import cli
+from respi_net.imu import BreathCapture, _sampling_rate, analyze_imu_csv
+from respi_net.iphone_imu import parse_iphone_imu_packet, probe_iphone_imu_device
+from respi_net.radar import RadarCapture, analyze_radar_csv
 
 
 def test_analyze_radar_csv(tmp_path: Path) -> None:
@@ -57,6 +62,29 @@ def test_analyze_imu_csv(tmp_path: Path) -> None:
     assert result.heart_bpm >= 40
 
 
+def test_imu_sampling_rate_uses_median_without_mutating_dataframe() -> None:
+    df = pd.DataFrame({"Time_ms": [0.0, 10.0, 20.0, 1030.0, 1040.0]})
+
+    assert _sampling_rate(df) == pytest.approx(100.0)
+    assert list(df.columns) == ["Time_ms"]
+
+
+def test_radar_sampling_rate_ignores_timestamp_outlier(tmp_path: Path) -> None:
+    timestamps_ms = np.concatenate([np.arange(100) * 10.0, 2000.0 + np.arange(100) * 10.0])
+    csv_path = tmp_path / "radar_raw_outlier.csv"
+    pd.DataFrame(
+        {
+            "Timestamp_ms": timestamps_ms,
+            "RawADC": np.arange(len(timestamps_ms)),
+            "Voltage_mV": np.sin(np.arange(len(timestamps_ms))),
+        }
+    ).to_csv(csv_path, index=False)
+
+    result = analyze_radar_csv(csv_path, output_dir=tmp_path, save_plot=False)
+
+    assert result.sample_rate_hz == pytest.approx(100.0)
+
+
 def test_parse_iphone_imu_packet() -> None:
     payload = struct.pack(
         "<BBH"
@@ -99,6 +127,102 @@ def test_parse_iphone_imu_packet_rejects_bad_length() -> None:
 
     with pytest.raises(ValueError):
         parse_iphone_imu_packet(payload)
+
+
+def test_iphone_probe_timeout_respects_total_sample_duration(monkeypatch: pytest.MonkeyPatch) -> None:
+    iphone_imu = importlib.import_module("respi_net.iphone_imu")
+
+    class Device:
+        name = "RespiPhoneIMU"
+        address = "test-device"
+
+    class FakeScanner:
+        @staticmethod
+        async def find_device_by_filter(_filter, timeout):
+            return Device()
+
+    class FakeClient:
+        commands: list[bytes] = []
+
+        def __init__(self, _device):
+            self.is_connected = True
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def start_notify(self, _uuid, _callback):
+            return None
+
+        async def stop_notify(self, _uuid):
+            return None
+
+        async def write_gatt_char(self, _uuid, payload, response):
+            self.commands.append(payload)
+
+    monkeypatch.setattr(iphone_imu, "_load_bleak", lambda: (FakeScanner, FakeClient))
+    started = time.monotonic()
+
+    result = asyncio.run(probe_iphone_imu_device(sample_seconds=0.3))
+
+    elapsed = time.monotonic() - started
+    assert result.samples == 0
+    assert 0.25 <= elapsed < 0.45
+    assert FakeClient.commands == [b"START", b"STOP"]
+
+
+@pytest.mark.parametrize("capture_class", [BreathCapture, RadarCapture])
+def test_serial_capture_stops_reader_before_closing_port(capture_class) -> None:
+    events: list[str] = []
+
+    class FakeThread:
+        def is_alive(self):
+            return True
+
+        def join(self, timeout):
+            events.append("joined")
+
+    class FakePort:
+        is_open = True
+
+        def close(self):
+            events.append("closed")
+
+    capture = capture_class()
+    capture.running = True
+    capture.read_thread = FakeThread()
+    capture.serial_port = FakePort()
+
+    capture.stop()
+
+    assert events == ["joined", "closed"]
+
+
+def test_capture_cli_reports_short_capture_as_click_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    cli_module = importlib.import_module("respi_net.cli")
+
+    class FakeCapture:
+        def __init__(self, **_kwargs):
+            pass
+
+        def connect(self, _port):
+            return True
+
+        def stop(self):
+            return None
+
+        def save(self):
+            raise ValueError("Not enough samples to save; at least 10 are required.")
+
+    monkeypatch.setattr(cli_module, "BreathCapture", FakeCapture)
+    monkeypatch.setattr(cli_module.time, "sleep", lambda _seconds: (_ for _ in ()).throw(KeyboardInterrupt()))
+
+    result = CliRunner().invoke(cli, ["capture-imu", "--no-plot"])
+
+    assert result.exit_code == 1
+    assert "Error: Not enough samples to save" in result.output
 
 
 def test_a121_csv_detection_and_stats() -> None:
@@ -530,4 +654,3 @@ def test_a121_heart_confidence_can_lock_tracker() -> None:
     assert 68.0 <= analysis.heart_bpm <= 76.0
     assert analysis.heart_confidence >= 1.3
     assert 68.0 <= tracked * 60.0 <= 76.0
-

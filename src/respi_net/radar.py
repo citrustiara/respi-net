@@ -47,7 +47,8 @@ def analyze_radar_csv(
     df = df.sort_values("Timestamp_ms").reset_index(drop=True)
     df["Time_s"] = (df["Timestamp_ms"] - df["Timestamp_ms"].min()) / 1000.0
     time_diffs = df["Time_s"].diff().dropna()
-    fs = float(1.0 / time_diffs.mean()) if not time_diffs.empty and time_diffs.mean() > 0 else 500.0
+    time_diffs = time_diffs[np.isfinite(time_diffs) & (time_diffs > 0)]
+    fs = float(1.0 / time_diffs.median()) if not time_diffs.empty else 500.0
 
     voltage = df["Voltage_mV"].to_numpy()
     voltage_detrended = voltage - np.mean(voltage)
@@ -106,27 +107,29 @@ class RadarCapture:
         self.data_storage: list[list[float]] = []
         self.live_buffer: deque[list[float]] = deque(maxlen=2048)
         self.read_thread: threading.Thread | None = None
+        self._lock = threading.Lock()
 
     def connect(self, port_name: str | None = None) -> bool:
         ports = list_serial_ports()
         if not ports:
-            click_safe_echo("Nie znaleziono portow szeregowych.")
+            click_safe_echo("No serial ports found.")
             return False
 
-        click_safe_echo(f"Dostepne porty: {ports}")
+        click_safe_echo(f"Available ports: {ports}")
         for port in ordered_ports(ports, port_name):
             try:
-                click_safe_echo(f"Proba polaczenia z {port} (baud: {self.baud})...")
+                click_safe_echo(f"Trying {port} (baud: {self.baud})...")
                 self.serial_port = serial.Serial(port, self.baud, timeout=0.1)
                 self.running = True
-                self.data_storage = []
-                self.live_buffer.clear()
+                with self._lock:
+                    self.data_storage = []
+                    self.live_buffer.clear()
                 self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
                 self.read_thread.start()
-                click_safe_echo(f"Polaczono z {port}. Zbieranie danych...")
+                click_safe_echo(f"Connected to {port}. Collecting data...")
                 return True
             except (serial.SerialException, PermissionError) as exc:
-                click_safe_echo(f"Blad polaczenia z {port}: {exc}")
+                click_safe_echo(f"Could not connect to {port}: {exc}")
         return False
 
     def _read_loop(self) -> None:
@@ -141,7 +144,8 @@ class RadarCapture:
                 else:
                     time.sleep(0.0001)
             except Exception as exc:
-                click_safe_echo(f"Blad w petli odczytu: {exc}")
+                if self.running:
+                    click_safe_echo(f"Serial read error: {exc}")
                 self.running = False
 
     def _process_line(self, line: str) -> None:
@@ -150,22 +154,39 @@ class RadarCapture:
         except ValueError:
             return
         if len(parts) == 3:
-            self.data_storage.append(parts)
-            self.live_buffer.append(parts)
+            with self._lock:
+                self.data_storage.append(parts)
+                self.live_buffer.append(parts)
 
     def stop(self) -> None:
         self.running = False
-        if self.serial_port:
-            self.serial_port.close()
+        if self.read_thread and self.read_thread.is_alive() and self.read_thread is not threading.current_thread():
+            self.read_thread.join(timeout=1.0)
+        serial_port, self.serial_port = self.serial_port, None
+        if serial_port and serial_port.is_open:
+            serial_port.close()
 
     def save(self) -> Path:
-        if len(self.data_storage) < 10:
-            raise ValueError("Za malo danych do zapisu.")
+        rows = self.snapshot_data_storage()
+        if len(rows) < 10:
+            raise ValueError("Not enough samples to save; at least 10 are required.")
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         path = self.output_dir / f"radar_raw_{datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
-        pd.DataFrame(self.data_storage, columns=RADAR_COLUMNS).to_csv(path, index=False)
+        pd.DataFrame(rows, columns=RADAR_COLUMNS).to_csv(path, index=False)
         return path
+
+    def data_count(self) -> int:
+        with self._lock:
+            return len(self.data_storage)
+
+    def snapshot_data_storage(self) -> list[list[float]]:
+        with self._lock:
+            return [list(row) for row in self.data_storage]
+
+    def snapshot_live_buffer(self) -> list[list[float]]:
+        with self._lock:
+            return [list(row) for row in self.live_buffer]
 
 
 def click_safe_echo(message: str) -> None:
@@ -175,4 +196,3 @@ def click_safe_echo(message: str) -> None:
         click.echo(message)
     except Exception:
         print(message)
-

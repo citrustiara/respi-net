@@ -14,8 +14,8 @@ import time
 import click
 
 from .imu import BreathCapture, analyze_imu_csv
-from .iphone_imu import IPhoneIMUBluetoothCapture, discover_iphone_imu_devices
-from .paths import DATA_DIR, IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR
+from .iphone_imu import IPhoneIMUBluetoothCapture, discover_iphone_imu_devices, probe_iphone_imu_device
+from .paths import DATA_DIR, IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR, SLEEP_PLOTS_DIR
 from .radar import RadarCapture, analyze_radar_csv
 from .serial_utils import list_serial_ports
 
@@ -127,7 +127,10 @@ def capture_imu(port: str | None, baud: int, output_dir: Path, plot: bool) -> No
         pass
     finally:
         capture.stop()
-    csv_path = capture.save()
+    try:
+        csv_path = capture.save()
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     click.echo(f"Saved: {csv_path}")
     if plot:
         result = analyze_imu_csv(csv_path)
@@ -135,18 +138,58 @@ def capture_imu(port: str | None, baud: int, output_dir: Path, plot: bool) -> No
 
 
 @cli.command("iphone-imu-devices")
-@click.option("--timeout", "timeout_s", default=6.0, show_default=True, type=float, help="BLE scan duration in seconds.")
-def iphone_imu_devices(timeout_s: float) -> None:
-    """Scan for nearby RespiPhoneIMU BLE peripherals."""
+@click.option("--timeout", "timeout_s", default=6.0, show_default=True, type=click.FloatRange(min=0.1), help="BLE scan duration in seconds.")
+@click.option("--all", "include_all", is_flag=True, help="Show all named BLE advertisements, not only RespiPhoneIMU matches.")
+def iphone_imu_devices(timeout_s: float, include_all: bool) -> None:
+    """Scan for nearby BLE peripherals, including RespiPhoneIMU devices."""
     try:
-        devices = asyncio.run(discover_iphone_imu_devices(timeout_s=timeout_s))
+        devices = asyncio.run(discover_iphone_imu_devices(timeout_s=timeout_s, include_all=include_all))
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     if not devices:
-        click.echo("No RespiPhoneIMU devices found. Open the iPhone app and start advertising.")
+        target = "BLE devices" if include_all else "RespiPhoneIMU devices"
+        click.echo(f"No {target} found. Open the iPhone app and start advertising.")
         return
     for device in devices:
-        click.echo(f"{device['name']}  {device['address']}")
+        rssi = f"  RSSI {device['rssi']}" if device.get("rssi") else ""
+        match = "  RespiPhoneIMU" if device.get("matches") == "yes" else ""
+        click.echo(f"{device['name']}  {device['address']}{rssi}{match}")
+
+
+@cli.command("iphone-imu-probe")
+@click.option("-d", "--device", help="Optional BLE device name/address. Defaults to auto-discovering RespiPhoneIMU.")
+@click.option("--scan-timeout", default=8.0, show_default=True, type=click.FloatRange(min=0.1), help="BLE discovery timeout in seconds.")
+@click.option("--seconds", "sample_seconds", default=3.0, show_default=True, type=click.FloatRange(min=0.1), help="How long to listen for IMU data.")
+@click.option("--autostart/--no-autostart", default=True, show_default=True, help="Write START before listening for samples.")
+def iphone_imu_probe(device: str | None, scan_timeout: float, sample_seconds: float, autostart: bool) -> None:
+    """Scan, connect, subscribe, and verify live iPhone IMU BLE samples."""
+    try:
+        result = asyncio.run(
+            probe_iphone_imu_device(
+                selector=device,
+                scan_timeout_s=scan_timeout,
+                sample_seconds=sample_seconds,
+                autostart=autostart,
+            )
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Connected: {result.name}  {result.address}")
+    click.echo(
+        f"Batches: {result.batches} received, {result.dropped_batches} dropped; "
+        f"samples={result.samples}; last_sequence={result.last_sequence}"
+    )
+    if result.first_sample is None:
+        click.echo("No IMU notifications received. In the iPhone app, tap Start streaming and keep advertising on.")
+        return
+    sample = result.first_sample
+    click.echo(
+        "First sample: "
+        f"t={sample.time_ms:.0f}ms "
+        f"ax={sample.ax:.3f} ay={sample.ay:.3f} az={sample.az:.3f} "
+        f"gx={sample.gx:.2f} gy={sample.gy:.2f} gz={sample.gz:.2f}"
+    )
 
 
 @cli.command("capture-iphone-imu")
@@ -157,7 +200,7 @@ def iphone_imu_devices(timeout_s: float) -> None:
     type=click.IntRange(1),
     help="Optional capture length. Omit to capture until Ctrl+C.",
 )
-@click.option("--scan-timeout", default=10.0, show_default=True, type=float, help="BLE discovery timeout in seconds.")
+@click.option("--scan-timeout", default=10.0, show_default=True, type=click.FloatRange(min=0.1), help="BLE discovery timeout in seconds.")
 @click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=RAW_IMU_DIR, show_default=True)
 @click.option("--plot/--no-plot", default=True, show_default=True)
 def capture_iphone_imu(device: str | None, seconds: int | None, scan_timeout: float, output_dir: Path, plot: bool) -> None:
@@ -185,7 +228,10 @@ def capture_iphone_imu(device: str | None, seconds: int | None, scan_timeout: fl
         pass
     finally:
         capture.stop()
-    csv_path = capture.save()
+    try:
+        csv_path = capture.save()
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     click.echo(f"Saved: {csv_path}")
     click.echo(f"Batches: {capture.received_batches} received, {capture.dropped_batches} dropped")
     if plot:
@@ -207,9 +253,6 @@ def _unique_path(output_dir: Path, stem: str, suffix: str = ".csv") -> Path:
         if not candidate.exists():
             return candidate
     raise click.ClickException(f"Could not find an unused output filename for {path}")
-
-
-SLEEP_PLOTS_DIR = DATA_DIR / "plots"
 
 
 def _default_sleep_outputs(trend_csv: Path, *, garmin: bool = False) -> tuple[Path, Path, Path]:
@@ -1046,7 +1089,10 @@ def capture_radar(port: str | None, baud: int, output_dir: Path, plot: bool) -> 
         pass
     finally:
         capture.stop()
-    csv_path = capture.save()
+    try:
+        csv_path = capture.save()
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
     click.echo(f"Saved: {csv_path}")
     if plot:
         result = analyze_radar_csv(csv_path)

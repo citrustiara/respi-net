@@ -43,6 +43,18 @@ class IPhoneImuPacket:
     samples: list[IPhoneImuSample]
 
 
+@dataclass(frozen=True)
+class IPhoneImuProbeResult:
+    name: str
+    address: str
+    connected: bool
+    batches: int
+    samples: int
+    dropped_batches: int
+    first_sample: IPhoneImuSample | None
+    last_sequence: int | None
+
+
 def parse_iphone_imu_packet(payload: bytes | bytearray | memoryview) -> IPhoneImuPacket:
     """Decode a compact BLE IMU notification from the iPhone app.
 
@@ -85,19 +97,105 @@ def parse_iphone_imu_packet(payload: bytes | bytearray | memoryview) -> IPhoneIm
     return IPhoneImuPacket(sequence=int(sequence), samples=samples)
 
 
-async def discover_iphone_imu_devices(timeout_s: float = 6.0) -> list[dict[str, str]]:
-    """Return visible BLE peripherals that look like the RespiPhoneIMU app."""
+async def discover_iphone_imu_devices(timeout_s: float = 6.0, include_all: bool = False) -> list[dict[str, str]]:
+    """Return visible BLE peripherals, preferring devices that look like the iPhone IMU app."""
 
     BleakScanner, _BleakClient = _load_bleak()
-    found = await BleakScanner.discover(timeout=timeout_s, return_adv=True)
-    devices: list[dict[str, str]] = []
     service_uuid = IPHONE_IMU_SERVICE_UUID.lower()
-    for device, advertisement in found.values():
+    found: dict[str, dict[str, str]] = {}
+
+    def on_detect(device: Any, advertisement: Any) -> None:
         name = device.name or advertisement.local_name or ""
         services = [uuid.lower() for uuid in (advertisement.service_uuids or [])]
-        if name == IPHONE_IMU_DEVICE_NAME or service_uuid in services:
-            devices.append({"name": name or "(unnamed)", "address": device.address})
-    return devices
+        matches_iphone_imu = name == IPHONE_IMU_DEVICE_NAME or service_uuid in services
+        if include_all or matches_iphone_imu:
+            rssi = getattr(advertisement, "rssi", None)
+            found[device.address] = {
+                "name": name or "(unnamed)",
+                "address": device.address,
+                "rssi": "" if rssi is None else str(rssi),
+                "matches": "yes" if matches_iphone_imu else "no",
+            }
+
+    scanner = BleakScanner(on_detect)
+    await scanner.start()
+    try:
+        await asyncio.sleep(timeout_s)
+    finally:
+        await scanner.stop()
+    return list(found.values())
+
+
+async def probe_iphone_imu_device(
+    selector: str | None = None,
+    scan_timeout_s: float = 8.0,
+    sample_seconds: float = 3.0,
+    autostart: bool = True,
+) -> IPhoneImuProbeResult:
+    """Find, connect to, and read a few notifications from the iPhone IMU app."""
+
+    BleakScanner, BleakClient = _load_bleak()
+    device = await _find_iphone_device(BleakScanner, selector, scan_timeout_s)
+    if device is None:
+        target = selector or IPHONE_IMU_DEVICE_NAME
+        raise RuntimeError(f"Could not find BLE device '{target}'. Open the iPhone app and start advertising.")
+
+    batches = 0
+    samples = 0
+    dropped_batches = 0
+    first_sample: IPhoneImuSample | None = None
+    last_sequence: int | None = None
+    first_packet = asyncio.Event()
+
+    def on_notification(_sender: Any, payload: bytearray) -> None:
+        nonlocal batches, samples, dropped_batches, first_sample, last_sequence
+        try:
+            packet = parse_iphone_imu_packet(payload)
+        except ValueError:
+            dropped_batches += 1
+            return
+        batches += 1
+        samples += len(packet.samples)
+        last_sequence = packet.sequence
+        if first_sample is None and packet.samples:
+            first_sample = packet.samples[0]
+        first_packet.set()
+
+    async with BleakClient(device) as client:
+        connected = bool(client.is_connected)
+        if not connected:
+            raise RuntimeError("BLE connection failed.")
+
+        await client.start_notify(IPHONE_IMU_DATA_CHARACTERISTIC_UUID, on_notification)
+        try:
+            if autostart:
+                await _write_control_if_available(client, b"START")
+            deadline = asyncio.get_running_loop().time() + max(0.0, sample_seconds)
+            try:
+                await asyncio.wait_for(first_packet.wait(), timeout=max(0.0, sample_seconds))
+            except asyncio.TimeoutError:
+                pass
+            remaining_s = max(0.0, deadline - asyncio.get_running_loop().time())
+            if remaining_s:
+                await asyncio.sleep(remaining_s)
+        finally:
+            if autostart and client.is_connected:
+                await _write_control_if_available(client, b"STOP")
+            try:
+                await client.stop_notify(IPHONE_IMU_DATA_CHARACTERISTIC_UUID)
+            except Exception:
+                pass
+
+    return IPhoneImuProbeResult(
+        name=getattr(device, "name", None) or "(unnamed)",
+        address=device.address,
+        connected=connected,
+        batches=batches,
+        samples=samples,
+        dropped_batches=dropped_batches,
+        first_sample=first_sample,
+        last_sequence=last_sequence,
+    )
 
 
 class IPhoneIMUBluetoothCapture:
@@ -168,7 +266,7 @@ class IPhoneIMUBluetoothCapture:
         with self._lock:
             rows = [list(row) for row in self.data_storage]
         if len(rows) < 10:
-            raise ValueError("Za malo danych do zapisu.")
+            raise ValueError("Not enough samples to save; at least 10 are required.")
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         path = self.output_dir / f"respiratory_6axis_raw_iphone_{datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
@@ -284,5 +382,6 @@ async def _find_iphone_device(BleakScanner: Any, selector: str | None, timeout_s
 async def _write_control_if_available(client: Any, payload: bytes) -> None:
     try:
         await client.write_gatt_char(IPHONE_IMU_CONTROL_CHARACTERISTIC_UUID, payload, response=False)
-    except Exception:
-        pass
+    except Exception as exc:
+        command = payload.decode("ascii", errors="replace")
+        click_safe_echo(f"iPhone IMU control command {command!r} failed: {exc}")

@@ -11,6 +11,7 @@ RAW_A121_DIR = DATA_DIR / "raw" / "a121"
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
 IMU_PLOTS_DIR = OUTPUT_DIR / "plots" / "imu"
 RADAR_PLOTS_DIR = OUTPUT_DIR / "plots" / "radar"
+SLEEP_PLOTS_DIR = OUTPUT_DIR / "plots" / "a121_sleep"
 
 RECORDINGS_DB_FILENAME = "respi_recordings.sqlite3"
 PROJECT_RECORDINGS_DB_PATH = DATA_DIR / RECORDINGS_DB_FILENAME
@@ -45,4 +46,3 @@ def resolve_recordings_db_path() -> Path:
 
 
 DB_PATH = resolve_recordings_db_path()
-

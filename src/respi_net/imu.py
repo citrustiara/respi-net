@@ -30,13 +30,16 @@ class ImuAnalysisResult:
 
 
 def _sampling_rate(df: pd.DataFrame) -> float:
-    if "Time_s" not in df:
-        df["Time_s"] = (df["Time_ms"] - df["Time_ms"].iloc[0]) / 1000.0
+    if "Time_s" in df:
+        time_s = df["Time_s"]
+    else:
+        time_s = (df["Time_ms"] - df["Time_ms"].iloc[0]) / 1000.0
 
-    dt = df["Time_s"].diff().dropna()
-    if dt.empty or dt.mean() <= 0:
+    dt = time_s.diff().dropna()
+    dt = dt[np.isfinite(dt) & (dt > 0)]
+    if dt.empty:
         return 100.0
-    return float(1.0 / dt.mean())
+    return float(1.0 / dt.median())
 
 
 def _pca_project(data: np.ndarray) -> tuple[np.ndarray, float]:
@@ -179,26 +182,28 @@ class BreathCapture:
         self.running = False
         self.data_storage: list[list[float]] = []
         self.read_thread: threading.Thread | None = None
+        self._lock = threading.Lock()
 
     def connect(self, port_name: str | None = None) -> bool:
         ports = list_serial_ports()
         if not ports:
-            click_safe_echo("Nie znaleziono portow szeregowych.")
+            click_safe_echo("No serial ports found.")
             return False
 
-        click_safe_echo(f"Dostepne porty: {ports}")
+        click_safe_echo(f"Available ports: {ports}")
         for port in ordered_ports(ports, port_name):
             try:
-                click_safe_echo(f"Proba polaczenia z {port} (baud: {self.baud})...")
+                click_safe_echo(f"Trying {port} (baud: {self.baud})...")
                 self.serial_port = serial.Serial(port, self.baud, timeout=0.1)
                 self.running = True
-                self.data_storage = []
+                with self._lock:
+                    self.data_storage = []
                 self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
                 self.read_thread.start()
-                click_safe_echo(f"Polaczono z {port}. Zbieranie danych...")
+                click_safe_echo(f"Connected to {port}. Collecting data...")
                 return True
             except (serial.SerialException, PermissionError) as exc:
-                click_safe_echo(f"Blad polaczenia z {port}: {exc}")
+                click_safe_echo(f"Could not connect to {port}: {exc}")
         return False
 
     def _read_loop(self) -> None:
@@ -213,7 +218,8 @@ class BreathCapture:
                 else:
                     time.sleep(0.0001)
             except Exception as exc:
-                click_safe_echo(f"Blad w petli odczytu: {exc}")
+                if self.running:
+                    click_safe_echo(f"Serial read error: {exc}")
                 self.running = False
 
     def _process_line(self, line: str) -> None:
@@ -222,21 +228,34 @@ class BreathCapture:
         except ValueError:
             return
         if len(parts) == 6:
-            self.data_storage.append([time.time() * 1000.0] + parts)
+            with self._lock:
+                self.data_storage.append([time.time() * 1000.0] + parts)
 
     def stop(self) -> None:
         self.running = False
-        if self.serial_port:
-            self.serial_port.close()
+        if self.read_thread and self.read_thread.is_alive() and self.read_thread is not threading.current_thread():
+            self.read_thread.join(timeout=1.0)
+        serial_port, self.serial_port = self.serial_port, None
+        if serial_port and serial_port.is_open:
+            serial_port.close()
 
     def save(self) -> Path:
-        if len(self.data_storage) < 10:
-            raise ValueError("Za malo danych do zapisu.")
+        rows = self.snapshot_data_storage()
+        if len(rows) < 10:
+            raise ValueError("Not enough samples to save; at least 10 are required.")
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         path = self.output_dir / f"respiratory_6axis_raw_{datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
-        pd.DataFrame(self.data_storage, columns=IMU_COLUMNS).to_csv(path, index=False)
+        pd.DataFrame(rows, columns=IMU_COLUMNS).to_csv(path, index=False)
         return path
+
+    def data_count(self) -> int:
+        with self._lock:
+            return len(self.data_storage)
+
+    def snapshot_data_storage(self) -> list[list[float]]:
+        with self._lock:
+            return [list(row) for row in self.data_storage]
 
 
 def click_safe_echo(message: str) -> None:
@@ -246,4 +265,3 @@ def click_safe_echo(message: str) -> None:
         click.echo(message)
     except Exception:
         print(message)
-
