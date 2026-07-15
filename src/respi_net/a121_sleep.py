@@ -186,6 +186,47 @@ def _merge_short_non_awake_segments(phases: list[str], *, min_len: int, sleep_st
     return out
 
 
+def _bridge_direct_deep_rem_transitions(
+    phases: list[str],
+    *,
+    min_len: int,
+    sleep_start: int,
+    sleep_end: int,
+) -> tuple[list[str], list[bool]]:
+    """Insert a short light-sleep bridge between direct deep/REM transitions.
+
+    The radar classifier operates on coarse surrogate features and can otherwise jump directly
+    between deep and REM sleep.  Because the available signals cannot support that abrupt staging
+    decision reliably, an intermediate lighter stage is the more conservative representation.
+    The correction is a structural prior only; it does not use Garmin labels or tune any feature
+    threshold.
+    """
+
+    out = list(phases)
+    corrected = [False] * len(out)
+    if len(out) < 2 or min_len <= 0:
+        return out, corrected
+
+    idx = max(1, sleep_start + 1)
+    last = min(sleep_end, len(out) - 1)
+    while idx <= last:
+        if {out[idx - 1], out[idx]} != {"deep", "rem"}:
+            idx += 1
+            continue
+
+        destination = out[idx]
+        run_end = idx
+        while run_end + 1 <= last and out[run_end + 1] == destination:
+            run_end += 1
+        bridge_end = min(run_end, idx + min_len - 1)
+        for pos in range(idx, bridge_end + 1):
+            out[pos] = "light"
+            corrected[pos] = True
+        idx = bridge_end + 1
+
+    return out, corrected
+
+
 def _detect_sleep_interval(trend: pd.DataFrame, step_s: float) -> tuple[int, int, str, str]:
     state = trend.get("state", pd.Series([""] * len(trend), index=trend.index)).fillna("").astype(str)
     still = _numeric(trend, "still_fraction", 0.0)
@@ -367,6 +408,12 @@ def classify_radar_sleep(trend: pd.DataFrame) -> SleepClassification:
         sleep_start=onset_idx,
         sleep_end=wake_idx,
     )
+    phases, direct_transition_bridge = _bridge_direct_deep_rem_transitions(
+        phases,
+        min_len=max(2, int(round(4.0 * 60.0 / step_s))),
+        sleep_start=onset_idx,
+        sleep_end=wake_idx,
+    )
 
     terminal_rest_start_idx = _detect_terminal_fragmented_rest(
         onset_idx=onset_idx,
@@ -390,6 +437,7 @@ def classify_radar_sleep(trend: pd.DataFrame) -> SleepClassification:
     work["radar_sleep_phase_level"] = [RADAR_PHASE_LEVELS[label] for label in phases]
     work["radar_terminal_fragmented_rest"] = False
     work["radar_rem_downgraded_to_light"] = rem_downgraded
+    work["radar_direct_transition_bridge_to_light"] = direct_transition_bridge
     if terminal_rest_start_idx is not None:
         work.loc[work.index[terminal_rest_start_idx : wake_idx + 1], "radar_terminal_fragmented_rest"] = True
     work["radar_sleep_onset"] = False
@@ -639,7 +687,13 @@ def _plot_step(ax: plt.Axes, times: pd.Series, levels: pd.Series | np.ndarray, *
     ax.step(x, y, where="post", **kwargs)
 
 
-def _plot_garmin_sleep_levels(ax: plt.Axes, data: GarminReferenceData, *, step_s: float) -> None:
+def _plot_garmin_sleep_levels(
+    ax: plt.Axes,
+    data: GarminReferenceData,
+    *,
+    step_s: float,
+    label: str = "Garmin FIT sleep_level (decoded)",
+) -> None:
     levels = data.sleep_levels.copy()
     if levels.empty:
         return
@@ -665,7 +719,7 @@ def _plot_garmin_sleep_levels(ax: plt.Axes, data: GarminReferenceData, *, step_s
         lw=1.7,
         linestyle="--",
         alpha=0.75,
-        label="Garmin FIT sleep_level (decoded)",
+        label=label,
     )
 
 
@@ -729,6 +783,7 @@ def write_sleep_outputs(
             "radar_sleep_efficiency_pct",
             "radar_terminal_fragmented_rest",
             "radar_rem_downgraded_to_light",
+            "radar_direct_transition_bridge_to_light",
             "radar_sleep_onset",
             "radar_wake",
             "radar_hr_smooth_for_phase",
@@ -892,6 +947,7 @@ def create_plot(
         "radar_sleep_efficiency_pct",
         "radar_terminal_fragmented_rest",
         "radar_rem_downgraded_to_light",
+        "radar_direct_transition_bridge_to_light",
         "radar_sleep_onset",
         "radar_wake",
         "radar_hr_smooth_for_phase",

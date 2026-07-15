@@ -160,8 +160,50 @@ uv run respi record-a121-test --port <PORT_A121> --seconds 60 \
 
 ## 3. Zasięg i praktyczny limit HB100/A121
 
-Po pozytywnym teście zakłóceń nagrywać oba radary równocześnie. A121 ma tylko
-soczewkę hiperboliczną; soczewki zaprojektowanej dla około 60 GHz nie należy
+### Wariant minimalny do wykonania teraz
+
+Jeżeli celem jest przed spotkaniem pokazać przede wszystkim, **co da się
+wycisnąć z HB100**, nie trzeba od razu wykonywać pełnej serii do 4 m. Najkrótszy
+zestaw, który zachowuje sens metodyczny, wygląda następująco:
+
+1. Zamocować HB100 i A121 obok siebie, z odległością środków apertur nie większą
+   niż około 5–10 cm, na wysokości mostka i z osiami możliwie równoległymi.
+   A121 pozostawić z płaską pokrywą: w tym badaniu jest równoległym torem
+   porównawczym, a nie przedmiotem kolejnego testu soczewek.
+2. W pustej, nieruchomej scenie wykonać po 30 s: A121 przy wyłączonym HB100,
+   oba radary włączone oraz HB100 przy wyłączonym A121. Jest to tylko szybki
+   test przesiewowy zakłóceń. Gdy pojawi się nowa linia widmowa, wzrost tła
+   ponad 3 dB albo utrata ramek, podejrzaną parę powtórzyć z osobnymi portami
+   USB/zasilaniem; przy braku różnicy przejść od razu do pomiarów wspólnych.
+3. Wykonać wspólne nagrania przy 30 cm (jedno nagranie kontrolne), 60 cm (dwa
+   powtórzenia) i 100 cm (dwa powtórzenia). Nie zmieniać wzmocnienia toru HB100
+   między dystansami i zapisać, czy ADC nie ulega nasyceniu.
+4. Jeżeli 100 cm spełnia kryterium użyteczności, wykonać jedno nagranie przy
+   150 cm. Po sukcesie zwiększać dystans co 50 cm aż do pierwszego
+   niepowodzenia. Powtórzyć tylko najdalszy dystans zaliczony oraz pierwszy
+   niezaliczony; to wystarcza do podania przedziału praktycznej granicy bez
+   rozbudowanej macierzy.
+
+Każde nagranie powinno trwać 90 s i powtarzać już użyty protokół A121:
+10 s oddechu swobodnego, 7 cykli po 5 s (wdech 2 s, wydech 3 s), 15 s
+wstrzymania po wydechu oraz 6 kolejnych cykli. Na początku wspólnego zapisu
+wykonać trzy krótkie ruchy tułowia do późniejszego wyrównania osi czasu.
+Warunek zalicza się dla HB100, gdy pik przy 0,20 ± 0,02 Hz jest obecny w obu
+częściach oddychania, ma co najmniej 6 dB nad tłem i wyraźnie zanika podczas
+wstrzymania. A121 służy do sprawdzenia, czy w tym samym czasie rzeczywiście
+zarejestrowano zadany przebieg; nie jest wzorcem klinicznym.
+
+Taki wariant zajmuje około 10–15 minut czystego nagrywania plus zmiany
+dystansu. Daje najlepszy przypadek, dwa powtórzenia przy odległościach
+praktycznych oraz przedział granicy zasięgu. Dodatkowe dystanse i pełne
+odwrócenie kolejności mają sens dopiero wtedy, gdy ta seria działa i ma zostać
+użyta do mocniejszego wniosku ilościowego.
+
+### Wariant rozszerzony z pełną krzywą dystansu
+
+Po pozytywnym teście zakłóceń nagrywać oba radary równocześnie. W tym
+rozszerzonym wariancie A121 ma tylko soczewkę hiperboliczną; soczewki
+zaprojektowanej dla około 60 GHz nie należy
 zakładać na HB100 pracujący przy 10,525 GHz. Radary ustawić na wysokości
 mostka, równolegle, bez zmiany statywów w całej serii.
 

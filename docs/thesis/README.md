@@ -42,6 +42,10 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
   commity `7924d95`, `9d2130a` („vital signals fix”) i `bf82a08`.
 - Algorytm snu: `src/respi_net/a121_sleep.py` (reguły faz, ocena 0–100) oraz
   `tools/analyze_a121_sleep_vitals_gated.py` (okna 60 s / krok 30 s, bramkowanie).
+- Rozdzielone wykresy faz, tętna i oddechu dla stanowiska przy krawędzi łóżka
+  oraz trzech pełnych nocy z płaską pokrywą nad łóżkiem odtwarza
+  `tools/plot_a121_sleep_thesis.py` z plików `*_gated_sleep_vitals.csv` w
+  lokalnym archiwum. Skrypt celowo nie łączy długich luk odrzuconych estymat.
 - Porównanie oceny snu i faz z Garminem (noc 1): archiwum pomiarowe
   `data/archive/measurements_2026-07-14/` (nie w gicie, 12,4 GiB) —
   `e_drive/a121/garmin_reference_*/Sleep.csv` (podsumowanie z Garmin Connect)
