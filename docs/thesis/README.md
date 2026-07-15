@@ -29,6 +29,12 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
 ## Skąd pochodzą liczby
 
 - Eksperyment soczewki/folia: `data/raw/a121/guided/analysis_metrics.csv` (36 nagrań).
+- Retest A121 przy 2 m (folia × geometria): skrypt
+  `tools/analyze_a121_foil_2m.py` odczytuje najnowszą sesję
+  `data/raw/a121/guided/guided_foil2m_*`, zapisuje lokalnie
+  `analysis_2m_metrics.csv` i `analysis_2m_summary.json` oraz odtwarza cztery
+  rysunki `docs/thesis/figures/foil2m_*.png`. Surowe CSV i katalog sesji są
+  celowo ignorowane przez Git.
 - Wyniki nocne i porównanie z Garminem: `docs/reports/a121_sleep_lens_report.tex`
   oraz pliki `*_radar_sleep_score.json` w `data/plots/`.
 - Rozdział o algorytmach: `src/respi_net/a121_vitals.py` (wzory, progi, pasma).

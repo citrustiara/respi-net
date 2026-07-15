@@ -1378,11 +1378,22 @@ względem sesji i~pozostają wiarygodne.
     \centering
     \includegraphics[width=\textwidth]{foil_profile_zasiegu.png}
     \caption[Profile amplitudy w funkcji odległości]{Medianowa amplituda
-    sygnału w~funkcji odległości dla wszystkich 36~nagrań. Soczewki skupiające
-    dają 3--10-krotnie wyższy pik od klatki piersiowej; przy \SI{100}{cm} pik
-    płaskiej pokrywy jest szeroki i~ledwo odróżnialny od tła.}
+    sygnału w~funkcji odległości dla wszystkich 36~nagrań. Kolumny odpowiadają
+    soczewkom, a~wiersze odległościom \SI{50}{cm} i~\SI{100}{cm}. Każda cienka
+    krzywa jest medianą po czasie z~jednego nagrania (po trzy powtórzenia);
+    linia ciągła oznacza folię, przerywana jej brak, a~pionowa kropkowana ---
+    odległość nominalną. Logarytmiczna oś pionowa pokazuje jednocześnie pik
+    klatki i~słabsze odbicia tła. Soczewki skupiające dają 3--10-krotnie
+    wyższy pik; przy \SI{100}{cm} pik płaskiej pokrywy jest szeroki i~słabo
+    oddzielony od sąsiednich bramek.}
     \label{fig:profile}
 \end{figure}
+
+Na rysunku~\ref{fig:profile} nie należy porównywać wyłącznie wysokości
+najwyższego punktu. Wąski, powtarzalny pik oznacza, że energia wraca z~tego
+samego fragmentu tułowia, natomiast szeroki profil może obejmować kilka
+części ciała i~tło. To wyjaśnia, dlaczego płaska pokrywa przy \SI{100}{cm}
+może nadal rejestrować oddech, a~zarazem niestabilnie wybierać bramkę celu.
 
 \begin{table}[H]
 \centering
@@ -1436,19 +1447,36 @@ oddechu.
     \centering
     \includegraphics[width=\textwidth]{foil_widma_fazy.png}
     \caption[Widma sygnału fazowego]{Widma gęstości mocy sygnału fazowego
-    z~bramek klatki piersiowej. Każde nagranie wykazuje tę samą strukturę:
-    dominujący pik oddechowy w~zacienionym paśmie, harmoniczne oraz szumowe
-    tło. Wybór soczewki niemal nie zmienia odległości piku od tła.}
+    z~bramek klatki piersiowej; układ paneli i~rodzaje linii są takie jak na
+    rys.~\ref{fig:profile}, a~każda krzywa odpowiada jednemu nagraniu.
+    Zacieniono pasmo oddechowe \SIrange{0.10}{0.50}{Hz}; jego główny pik leży
+    zwykle w~okolicy \SIrange{0.20}{0.27}{Hz}, a~słabszy składnik w~pobliżu
+    dwukrotności tej częstotliwości jest harmoniczną niesinusoidalnego ruchu
+    klatki. Oś mocy jest logarytmiczna. Wybór soczewki niemal nie zmienia
+    odległości piku od lokalnego tła widmowego.}
     \label{fig:widma}
 \end{figure}
+
+Wysokość krzywej na rys.~\ref{fig:widma} opisuje zmienność \emph{fazy}, a~nie
+bezpośrednio moc odbitego echa z~rys.~\ref{fig:profile}. Dlatego słabsza
+amplituda IQ może współistnieć z~wyraźnym pikiem oddechu. Składowych w~okolicy
+\SIrange{1}{1.5}{Hz} nie interpretowano jako pewnego tętna bez niezależnego
+wzorca; mogą zawierać zarówno mikroruch sercowy, jak i~harmoniczne oraz ruch.
+Wykres kończy się przy \SI{3}{Hz}, natomiast mianownik raportowanego SNR
+wyznaczano osobno z~pasma \SIrange{4}{8}{Hz}.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{foil_metryki.png}
     \caption[Zestawienie metryk dla wszystkich nagrań]{Wszystkie metryki dla
-    36~nagrań (punkty wypełnione --- folia, puste --- brak folii; lewa/prawa
-    podkolumna --- \SI{50}{cm}/\SI{100}{cm}). Amplituda i~stabilność śledzenia
-    różnicują soczewki o~rząd wielkości; SNR i~wyrazistość piku --- nie.}
+    36~nagrań. Każdy punkt oznacza jedną próbę; punkty wypełnione --- folię,
+    puste --- brak folii, a~lewa/prawa podkolumna w~obrębie soczewki ---
+    odpowiednio \SI{50}{cm}/\SI{100}{cm}. Pozioma kreska jest średnią dla
+    danego dystansu z~obu stanów folii i~trzech powtórzeń. W~panelach amplitudy,
+    SNR, wyrazistości piku i~przemieszczenia większa wartość oznacza silniejszą
+    składową; dla odchylenia odległości i~szumu \SIrange{4}{8}{Hz} korzystna
+    jest wartość mniejsza. Amplituda i~stabilność śledzenia wyraźnie różnicują
+    soczewki, natomiast SNR i~wyrazistość piku --- nie.}
     \label{fig:metryki}
 \end{figure}
 
@@ -1483,9 +1511,14 @@ Wyrazistość piku & $\approx 0$ & 10/18 & 0,87 \\
     \centering
     \includegraphics[width=\textwidth]{foil_delty_parowane.png}
     \caption[Parowane różnice dla folii aluminiowej]{Parowane różnice
-    folia~$-$~brak folii. Amplituda oscyluje wokół zera; spadek szumu
-    ruchowego jest jednorodny dla wszystkich soczewek --- sygnatura efektu
-    sesji, a~nie efektu reflektora.}
+    folia~$-$~brak folii po dopasowaniu soczewki, dystansu i~numeru
+    powtórzenia. Każdy punkt jest jedną parą; punkty wypełnione oznaczają
+    \SI{50}{cm}, puste \SI{100}{cm}, pozioma kreska --- medianę dla soczewki,
+    a~linia zera --- brak zmiany. Dodatnia wartość oznacza wzrost danej
+    metryki z~folią; w~panelu szumu wartość ujemna jest więc korzystna.
+    Amplituda oscyluje wokół zera, natomiast podobny dla wszystkich soczewek
+    spadek szumu jest sygnaturą różnicy sesji, a~nie selektywnego działania
+    reflektora.}
     \label{fig:delty}
 \end{figure}
 
@@ -1523,9 +1556,12 @@ zjawisk nie występuje.
     \centering
     \includegraphics[width=\textwidth]{foil_przebiegi_oddechu.png}
     \caption[Przebiegi oddechowe]{40~sekund przefiltrowanego sygnału
-    przemieszczenia klatki piersiowej dla każdego z~12~warunków. Wszystkie
-    przebiegi są czytelne; przebiegi z~płaską pokrywą mają wyraźnie mniejszą
-    amplitudę.}
+    przemieszczenia klatki piersiowej (fragment \SIrange{10}{50}{s}) z~pierwszego
+    powtórzenia każdego z~12~warunków. Wiersze odpowiadają soczewkom, kolumny
+    dystansom, linia ciągła oznacza folię, a~przerywana jej brak. Przebiegi
+    przesunięto pionowo, aby się nie nakładały, dlatego ich poziom zerowy nie
+    ma znaczenia; porównywać należy amplitudę i~regularność. Wszystkie są
+    czytelne, lecz płaska pokrywa daje wyraźnie mniejszą amplitudę ruchu.}
     \label{fig:przebiegi}
 \end{figure}
 
@@ -1547,11 +1583,224 @@ zjawisk nie występuje.
   konieczne są miary widmowe.
 \end{enumerate}
 
-\todo{Uzupełnić wyniki retestu na dystansie \SI{2}{m}, wykonanego wyłącznie
-z~soczewką hiperboliczną w~układzie $2\times2$: naturalny kąt padania około
-\SI{30}{\degree} względem normalnej oraz padanie prawie prostopadłe, każde
-bez folii i~z~folią. Warunki przeplatać w~jednej sesji i~wykonać po trzy
-powtórzenia.}
+\section{Retest folii i kąta padania na dystansie 2 m}
+\label{sec:folia-2m}
+
+\subsection{Plan pomiaru}
+
+Retest wykonano 15~lipca~2026 wyłącznie z~soczewką hiperboliczną, ponieważ
+poprzedni eksperyment wskazał ją jako najpewniejszy wariant na większy
+dystans. Zastosowano układ $2\times2$: naturalna pozycja siedząca z~osią
+radaru poziomą (około \SI{30}{\degree} od normalnej do klatki) oraz ustawienie
+prawie prostopadłe, każde bez folii i~z~folią. Warunki oznaczono odpowiednio
+\texttt{N0}, \texttt{NF}, \texttt{P0} i~\texttt{PF}. Każdy z~nich powtórzono
+trzykrotnie, uzyskując 12~zaakceptowanych nagrań po \SI{90}{s}
+(1801--1802~ramek, około \SI{20}{Hz}). Radar obejmował zakres
+\SIrange{1.5}{2.5}{m}, używał profilu~3, HWAAS~32 i~ośmiu przemiatań na
+ramkę.
+
+Odległość nominalną \SI{2}{m} ustawiono dalmierzem MILESEEY~D2. W~pozycji
+naturalnej poziome ustawienie osi kontrolowano poziomnicą pęcherzykową.
+W~pozycji prawie prostopadłej kąt weryfikowano zwrotem plamki lasera na
+kartkę odniesienia przy dalmierzu: powrót w~pobliże punktu emisji oznaczał,
+że normalna do lokalnego fragmentu powierzchni była zbliżona do osi radaru.
+Nie jest to laboratoryjny pomiar kąta płaskiej próbki --- klatka i~przylegająca
+folia są zakrzywione --- lecz kontrola usuwa główny błąd polegający na
+skierowaniu odbicia zwierciadlanego poza odbiornik. Łata miała ponownie
+wymiary $\SI{5}{cm}\times\SI{5}{cm}$, a~jej górna krawędź znajdowała się
+\SI{5}{cm} poniżej linii łączącej brodawki sutkowe.
+
+Najpierw wykonano wszystkie próby z~folią, a~następnie wszystkie bez folii,
+aby przykleić i~zdjąć łatę tylko raz. Dokładna kolejność wynosiła
+\texttt{NF, PF, PF, NF, NF, PF, P0, N0, N0, P0, P0, N0}; geometrie były więc
+przeplatane wewnątrz każdego bloku, ale stan folii pozostaje całkowicie
+splątany z~czasem sesji. Wyniki folii są z~tego powodu opisowe, natomiast
+porównanie kąta jest znacznie lepiej zabezpieczone przed monotonicznym dryfem.
+
+Każde nagranie zawierało ten sam protokół: \SI{10}{s} oddechu swobodnego,
+7~cykli sterowanych (wdech \SI{2}{s}, wydech \SI{3}{s}), \SI{15}{s}
+wstrzymania oddechu po wydechu i~6~kolejnych cykli sterowanych. Zadana
+częstość wynosiła więc dokładnie \SI{0.20}{Hz}, czyli
+12~oddechów/min.
+
+\subsection{Rekonstrukcja sygnału i synchronizacja komend}
+
+Dla każdego nagrania wyznaczono medianowy profil amplitudy IQ i~bramkę celu.
+W~otoczeniu $\pm\SI{20}{cm}$ od celu zachowano bramki o~medianowej amplitudzie
+co najmniej 25\% lokalnego maksimum, rozpleciono ich fazę, usunięto trend
+liniowy i~obliczono średnią ważoną amplitudą. Fazę przeliczono na ruch
+radialny zależnością $x=\lambda\varphi/(4\pi)$ dla częstotliwości
+\SI{60.5}{GHz}, po czym zastosowano zerofazowy filtr Butterwortha drugiego
+rzędu \SIrange{0.10}{0.50}{Hz}.
+
+Znaczników z~aplikacji nie nałożono bezpośrednio na czas ramek. Dla odcinków
+sterowanych utworzono trójkątny wzorzec: faza maleje podczas wdechu i~rośnie
+podczas wydechu. Następnie dla każdej próby szukano przesunięcia w~kroku
+\SI{25}{ms}, które maksymalizowało korelację Pearsona między wzorcem
+i~sygnałem. Oszacowane łączne opóźnienie komenda--zarejestrowany ruch mieściło
+się w~zakresie \SIrange{0.275}{0.625}{s}, z~medianą \SI{0.375}{s}. Maksima
+rozpoczynające wdech występowały medianowo \SI{0.273}{s} po komendzie, a~minima
+kończące wdech --- \SI{0.499}{s} po komendzie. Różnica wskazuje, że oddech nie
+jest jedynie idealnym wzorcem przesuniętym w~czasie: badany reaguje szybko,
+ale domyka ruch wdechowy nieco później.
+
+Oszacowanie obejmuje łącznie reakcję człowieka, opóźnienie akwizycji
+i~przetwarzanie A121. Pliki nie zawierają wspólnego sprzętowego znacznika
+komendy i~emisji ramki, dlatego tych składowych nie można rozdzielić.
+Zerofazowy filtr użyty offline nie wnosi natomiast dodatkowego przesunięcia
+fazowego. Na rys.~\ref{fig:foil2m-przebiegi} granice faz przesunięto osobno
+dla każdego nagrania o~jego oszacowane $\delta$.
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=\textwidth]{foil2m_przebiegi_fazy.png}
+    \caption[Przebiegi A121 przy 2 m z fazami komend]{Wszystkie 12~przebiegów
+    przemieszczenia oddechowego przy \SI{2}{m}. Wiersze odpowiadają warunkom,
+    a~kolumny numerom powtórzeń; nad panelem podano numer w~kolejności sesji,
+    indywidualne przesunięcie $\delta$ i~korelację $r$. Tło niebieskie oznacza
+    wdech, pomarańczowe wydech, a~szare wstrzymanie. Wspólna skala pionowa
+    ujawnia zarówno różnice głębokości oddechu, jak i~silny zanik ruchu
+    w~środkowej części wstrzymania.}
+    \label{fig:foil2m-przebiegi}
+\end{figure}
+
+\subsection{Wyniki retestu}
+
+\begin{table}[H]
+\centering
+\caption{Mediany z~trzech powtórzeń każdego warunku przy \SI{2}{m}.
+$\sigma_d$ jest odchyleniem standardowym położenia dominującego piku,
+$A_{\mathrm{od}}$ --- połową zakresu między 5. i~95. percentylem ruchu
+w~odcinkach sterowanych, a~\emph{hold} --- $20\log_{10}$ ilorazu RMS fazy
+oddechowej w~środkowych \SI{9}{s} wstrzymania i~RMS podczas oddychania.}
+\label{tab:folia-2m}
+\small
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Warunek & Echo & Bramka & $\sigma_d$ & $r$ & $\delta$ & $A_{\mathrm{od}}$ & Hold \\
+ & [j.u.] & [m] & [cm] & [--] & [s] & [mm] & [dB] \\
+\midrule
+\texttt{N0} &  501 & 2,002 & 5,31 & 0,951 & 0,375 & 4,78 & $-23{,}7$ \\
+\texttt{NF} &  543 & 2,012 & 5,37 & 0,952 & 0,425 & 3,76 & $-24{,}3$ \\
+\texttt{P0} & 2247 & 1,872 & 1,06 & 0,926 & 0,475 & 4,83 & $-20{,}0$ \\
+\texttt{PF} & 2068 & 1,842 & 1,25 & 0,927 & 0,325 & 3,18 & $-23{,}6$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{foil2m_profile_i_echo.png}
+    \caption[Profile i amplituda echa przy 2 m]{Profile zasięgowe i~echo przy
+    \SI{2}{m}. W~lewym panelu cienka krzywa jest medianą po czasie z~jednej
+    próby, a~gruba medianą trzech prób; linie niebieskie oznaczają pozycję
+    naturalną, pomarańczowe prawie prostopadłą, ciągłe folię, a~przerywane jej
+    brak. Linia pionowa wskazuje dystans nominalny ustawiony dalmierzem.
+    Środkowy panel pokazuje medianową amplitudę dominującego piku, prawy jego
+    położenie; punkty to próby, a~czarne kreski mediany warunków.}
+    \label{fig:foil2m-profile}
+\end{figure}
+
+\paragraph{Kąt padania zdominował amplitudę echa.} Po sparowaniu po numerze
+powtórzenia przejście z~ustawienia naturalnego do prawie prostopadłego
+zwiększało amplitudę o~medianę \SI{11.06}{dB} bez folii i~\SI{11.62}{dB}
+z~folią, czyli odpowiednio około 3,6 i~3,8~raza w~skali amplitudowej IQ.
+Wynik nie ogranicza się do wysokości piku: mediana $\sigma_d$ zmalała
+z~około \SI{5.3}{cm} w~pozycji naturalnej do \SIrange{1.1}{1.3}{cm}
+w~pozycji prostopadłej. Właściwe skierowanie wąskiej wiązki dawało zatem
+silniejsze i~stabilniej zlokalizowane echo.
+
+Dominująca bramka przesunęła się jednocześnie z~około \SI{2.01}{m} do
+\SIrange{1.84}{1.87}{m}. Dystans z~A121 nie jest tym samym pomiarem co odczyt
+dalekomierza do zaznaczonego punktu: po zmianie osi radaru maksimum może
+pochodzić z~innego fragmentu zakrzywionego tułowia, a~bezwzględne położenie
+bramki zależy też od profilu czujnika. Z~tego powodu wzrostu o~\SI{11}{dB}
+nie należy przypisywać wyłącznie idealnemu prawu odbicia od tej samej płaskiej
+powierzchni. Jest to łączny, lecz praktycznie istotny efekt poprawnego
+wycelowania stanowiska.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{foil2m_efekty_parowane.png}
+    \caption[Parowane efekty kąta i folii przy 2 m]{Zmiana medianowej amplitudy
+    echa po sparowaniu warunków po numerze powtórzenia. Lewy panel pokazuje
+    efekt ustawienia prostopadłego względem naturalnego, prawy --- efekt folii
+    względem braku folii. Każdy punkt jest jednym powtórzeniem, kreska jego
+    medianą dla danej geometrii lub stanu folii. Kąt daje duży efekt o~zgodnym
+    znaku; niewielki efekt folii zmienia znak między geometriami.}
+    \label{fig:foil2m-efekty}
+\end{figure}
+
+\paragraph{Folia nie dała powtarzalnego wzmocnienia.} W~pozycji naturalnej
+parowane zmiany amplitudy wyniosły $+1{,}71$, $-1{,}28$ i~$+1{,}68$~dB
+(mediana $+1{,}68$~dB). W~ustawieniu prawie prostopadłym, w~którym powrót
+zwierciadlany powinien najbardziej sprzyjać metalowej łacie, wszystkie trzy
+zmiany były ujemne: $-2{,}77$, $-0{,}72$ i~$-0{,}78$~dB (mediana
+$-0{,}78$~dB). Nie ma więc zgodnego efektu folii między dwiema geometriami.
+Ponieważ cały blok z~folią poprzedzał blok bez folii, nie można utożsamiać
+małych różnic z~czystym skutkiem materiału; można natomiast odrzucić
+praktycznie duże, jednoznaczne wzmocnienie oczekiwane od reflektora.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{foil2m_metryki_sygnalu.png}
+    \caption[Metryki sygnału oddechowego A121 przy 2 m]{Metryki sygnału
+    oddechowego przy \SI{2}{m}; punkty oznaczają próby, kreski mediany,
+    wypełnienie punktu folię, a~pusty punkt jej brak. Korelacja dotyczy
+    trójkątnego wzorca po korekcie $\delta$. Amplituda jest miarą głębokości
+    zarejestrowanego oddechu, nie siły echa. W~prawym dolnym panelu bardziej
+    ujemna wartość oznacza silniejszy zanik ruchu podczas wstrzymania.}
+    \label{fig:foil2m-metryki}
+\end{figure}
+
+\paragraph{Oddech był użyteczny we wszystkich 12 próbach.} Korelacja ze
+wzorcem po korekcie opóźnienia wynosiła od $0{,}908$ do $0{,}967$. Częstość
+wyznaczona z~odstępów między maksimami mieściła się w~zakresie
+11,86--12,10~oddechów/min, bardzo blisko zadanych 12~oddechów/min. Amplituda
+radialnego ruchu oddechowego wynosiła
+\SIrange{3.16}{5.32}{mm}. W~środkowych \SI{9}{s} wstrzymania RMS w~paśmie
+oddechowym malał o~\SIrange{14.0}{26.3}{dB}, czyli od około 5 do 21~razy
+w~skali amplitudy. Zanik jest widoczny w~każdej próbie, a~trzysekundowe
+marginesy od granic wstrzymania ograniczają wpływ reakcji badanego i~dzwonienia
+filtru wokół gwałtownej zmiany ruchu.
+
+Większe echo nie przełożyło się wprost na większą zgodność faz oddechu.
+Mediany $r$ wynosiły $0{,}951$--$0{,}952$ w~pozycji naturalnej i~
+$0{,}926$--$0{,}927$ w~prostopadłej, mimo około czterokrotnie większej
+amplitudy IQ w~drugiej geometrii. Przy zaledwie trzech powtórzeniach nie jest
+to dowód przewagi pozycji naturalnej, lecz potwierdzenie wcześniejszej
+obserwacji: po przekroczeniu progu użyteczności siła echa i~wierność przebiegu
+są różnymi cechami.
+
+W~zapisanym strumieniu aplikacja referencyjna A121 podawała mediany
+11,41--12,12~oddechów/min; niezerowy wynik był dostępny
+w~54,8--83,2\% ramek, co obejmuje czas początkowego ustalania celu i~celowe
+wstrzymanie. Dla próby \texttt{P0}, powtórzenie~2, podsumowanie wykonane po
+zakończeniu zapisało 0~BPM, ponieważ ostatnie ramki przeszły do stanu
+\texttt{DETERMINE\_DISTANCE\_ESTIMATE}. Nie oznaczało to utraty oddechu:
+mediana wartości zapisanych wcześniej wynosiła 11,82~oddechów/min,
+korelacja offline $0{,}938$, a~częstość z~ekstremów 11,98~oddechów/min.
+Przypadek pokazuje, że pojedynczy stan
+końcowy aplikacji nie powinien zastępować analizy całego przebiegu.
+
+\subsection{Wnioski z retestu}
+
+\begin{enumerate}
+  \item A121 z~soczewką hiperboliczną rejestrował sterowany oddech i~jego
+  zatrzymanie z~dystansu \SI{2}{m} we wszystkich czterech warunkach.
+  \item Prawie prostopadłe ustawienie zwiększało echo o~około \SI{11}{dB}
+  i~stabilizowało położenie piku. Dokładne wycelowanie radaru jest zatem
+  ważniejsze niż dodanie niewielkiej metalowej łaty.
+  \item Nie wykazano użytecznego wzmocnienia przez folię ani przy naturalnym,
+  ani przy prawie prostopadłym padaniu. Wniosek o~małym efekcie jest zgodny
+  z~testem \SIrange{0.5}{1.0}{m}, choć jego dokładną wartość nadal ogranicza
+  blokowa kolejność sesji.
+  \item Do odpowiedzi na pytanie praktyczne nie była potrzebna mechaniczna
+  szyna pozycjonująca. Statyw, dalmierz, kontrola poziomu i~zwrotu lasera
+  wystarczyły do wykazania dużego efektu geometrii; w~ewentualnym dalszym
+  teście folii ważniejsza byłaby randomizacja lub powtórzenie całych bloków
+  w~odwróconej kolejności.
+\end{enumerate}
 
 % ---------------------------------------------------------------------
 \chapter{Sieci neuronowe do analizy faz oddechu}

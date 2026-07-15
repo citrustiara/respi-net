@@ -26,6 +26,7 @@ import re
 import sys
 import threading
 import time
+from collections import Counter
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
 from pathlib import Path
@@ -85,7 +86,22 @@ class ExperimentStep:
     patch: str
     patch_label: str
     distance_cm: float
+    condition_id: str = ""
+    geometry: str = ""
+    geometry_label: str = ""
     instruction: str = "Keep still and breathe normally."
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class BreathingCue:
+    start_s: float
+    end_s: float
+    cue: str
+    detail: str
+    kind: str
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -150,45 +166,195 @@ def load_config(path: Path) -> dict[str, Any]:
     return merged
 
 
+def _make_experiment_step(
+    raw: dict[str, Any],
+    *,
+    run_number: int,
+    condition_number: int,
+    repeat_number: int,
+    repeat_total: int,
+    condition_id: str = "",
+) -> ExperimentStep:
+    lens = str(raw.get("lens", "")).strip()
+    patch = str(raw.get("patch", "")).strip()
+    if not lens or not patch:
+        raise ValueError(f"Condition {condition_number} needs both 'lens' and 'patch'.")
+    try:
+        distance_cm = float(raw["distance_cm"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"Condition {condition_number} needs numeric 'distance_cm'.") from exc
+    if distance_cm <= 0:
+        raise ValueError(f"Condition {condition_number} distance must be positive.")
+
+    geometry = str(raw.get("geometry", "")).strip()
+    geometry_label = str(raw.get("geometry_label") or geometry.replace("_", " ").title()).strip()
+    return ExperimentStep(
+        number=run_number,
+        condition_number=condition_number,
+        repeat_number=repeat_number,
+        repeat_total=repeat_total,
+        lens=lens,
+        lens_label=str(raw.get("lens_label") or LENS_LABELS.get(lens, lens)),
+        patch=patch,
+        patch_label=str(raw.get("patch_label") or PATCH_LABELS.get(patch, patch)),
+        distance_cm=distance_cm,
+        condition_id=condition_id,
+        geometry=geometry,
+        geometry_label=geometry_label,
+        instruction=str(raw.get("instruction") or "Keep still and breathe normally."),
+    )
+
+
 def parse_steps(payload: dict[str, Any]) -> list[ExperimentStep]:
-    steps: list[ExperimentStep] = []
+    raw_conditions = payload["steps"]
+    for condition_number, raw in enumerate(raw_conditions, start=1):
+        if not isinstance(raw, dict):
+            raise ValueError(f"Condition {condition_number} must be a JSON object.")
+
+    run_sequence = payload.get("run_sequence")
+    if run_sequence is not None:
+        if not isinstance(run_sequence, list) or not run_sequence:
+            raise ValueError("run_sequence must be a non-empty list of condition IDs.")
+        conditions_by_id: dict[str, tuple[int, dict[str, Any]]] = {}
+        for condition_number, raw in enumerate(raw_conditions, start=1):
+            condition_id = str(raw.get("condition_id", "")).strip()
+            if not condition_id:
+                raise ValueError(
+                    f"Condition {condition_number} needs 'condition_id' when run_sequence is used."
+                )
+            if condition_id in conditions_by_id:
+                raise ValueError(f"Duplicate condition_id in config: {condition_id}")
+            conditions_by_id[condition_id] = (condition_number, raw)
+
+        sequence = [str(item).strip() for item in run_sequence]
+        unknown = sorted({condition_id for condition_id in sequence if condition_id not in conditions_by_id})
+        if unknown:
+            raise ValueError(f"run_sequence contains unknown condition IDs: {', '.join(unknown)}")
+        repeat_totals = Counter(sequence)
+        repeats_seen: Counter[str] = Counter()
+        steps: list[ExperimentStep] = []
+        for run_number, condition_id in enumerate(sequence, start=1):
+            repeats_seen[condition_id] += 1
+            condition_number, raw = conditions_by_id[condition_id]
+            steps.append(
+                _make_experiment_step(
+                    raw,
+                    run_number=run_number,
+                    condition_number=condition_number,
+                    repeat_number=repeats_seen[condition_id],
+                    repeat_total=repeat_totals[condition_id],
+                    condition_id=condition_id,
+                )
+            )
+        return steps
+
+    steps = []
     run_number = 1
     default_repeats = int(payload.get("repeats_per_condition", 1))
     if default_repeats < 1:
         raise ValueError("repeats_per_condition must be at least 1.")
-    for condition_number, raw in enumerate(payload["steps"], start=1):
-        if not isinstance(raw, dict):
-            raise ValueError(f"Condition {condition_number} must be a JSON object.")
-        lens = str(raw.get("lens", "")).strip()
-        patch = str(raw.get("patch", "")).strip()
-        if not lens or not patch:
-            raise ValueError(f"Condition {condition_number} needs both 'lens' and 'patch'.")
-        try:
-            distance_cm = float(raw["distance_cm"])
-        except (KeyError, TypeError, ValueError) as exc:
-            raise ValueError(f"Condition {condition_number} needs numeric 'distance_cm'.") from exc
-        if distance_cm <= 0:
-            raise ValueError(f"Condition {condition_number} distance must be positive.")
+    for condition_number, raw in enumerate(raw_conditions, start=1):
         repeat_total = int(raw.get("repeats", default_repeats))
         if repeat_total < 1:
             raise ValueError(f"Condition {condition_number} repeats must be at least 1.")
         for repeat_number in range(1, repeat_total + 1):
             steps.append(
-                ExperimentStep(
-                    number=run_number,
+                _make_experiment_step(
+                    raw,
+                    run_number=run_number,
                     condition_number=condition_number,
                     repeat_number=repeat_number,
                     repeat_total=repeat_total,
-                    lens=lens,
-                    lens_label=str(raw.get("lens_label") or LENS_LABELS.get(lens, lens)),
-                    patch=patch,
-                    patch_label=str(raw.get("patch_label") or PATCH_LABELS.get(patch, patch)),
-                    distance_cm=distance_cm,
-                    instruction=str(raw.get("instruction") or "Keep still and breathe normally."),
+                    condition_id=str(raw.get("condition_id", "")).strip(),
                 )
             )
             run_number += 1
     return steps
+
+
+def _positive_float(value: Any, description: str) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{description} must be numeric.") from exc
+    if result <= 0:
+        raise ValueError(f"{description} must be positive.")
+    return result
+
+
+def parse_breathing_protocol(payload: dict[str, Any]) -> list[BreathingCue]:
+    blocks = payload.get("breathing_protocol")
+    if blocks in (None, []):
+        return []
+    if not isinstance(blocks, list):
+        raise ValueError("breathing_protocol must be a list.")
+
+    cues: list[BreathingCue] = []
+    cursor = 0.0
+
+    def append_cue(kind: str, duration_s: float, cue: str, detail: str) -> None:
+        nonlocal cursor
+        cues.append(
+            BreathingCue(
+                start_s=cursor,
+                end_s=cursor + duration_s,
+                cue=cue,
+                detail=detail,
+                kind=kind,
+            )
+        )
+        cursor += duration_s
+
+    for block_number, raw in enumerate(blocks, start=1):
+        if not isinstance(raw, dict):
+            raise ValueError(f"Breathing protocol block {block_number} must be a JSON object.")
+        kind = str(raw.get("kind", "")).strip().lower()
+        if kind == "paced":
+            try:
+                cycles = int(raw.get("cycles", 0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Breathing protocol block {block_number} cycles must be an integer.") from exc
+            if cycles < 1:
+                raise ValueError(f"Breathing protocol block {block_number} needs at least one cycle.")
+            inhale_s = _positive_float(raw.get("inhale_seconds"), f"Block {block_number} inhale_seconds")
+            exhale_s = _positive_float(raw.get("exhale_seconds"), f"Block {block_number} exhale_seconds")
+            inhale_cue = str(raw.get("inhale_cue") or "WDECH")
+            exhale_cue = str(raw.get("exhale_cue") or "WYDECH")
+            inhale_detail = str(raw.get("inhale_detail") or "Spokojny, równy wdech.")
+            exhale_detail = str(raw.get("exhale_detail") or "Spokojny, równy wydech.")
+            for _ in range(cycles):
+                append_cue("inhale", inhale_s, inhale_cue, inhale_detail)
+                append_cue("exhale", exhale_s, exhale_cue, exhale_detail)
+            continue
+
+        if not kind:
+            raise ValueError(f"Breathing protocol block {block_number} needs 'kind'.")
+        duration_s = _positive_float(raw.get("duration_seconds"), f"Block {block_number} duration_seconds")
+        default_cues = {
+            "normal": "ODDYCHAJ SWOBODNIE",
+            "hold": "WSTRZYMAJ ODDECH",
+        }
+        cue = str(raw.get("cue") or default_cues.get(kind, kind.upper()))
+        detail = str(raw.get("detail") or "")
+        append_cue(kind, duration_s, cue, detail)
+
+    measurement_seconds = _positive_float(payload.get("measurement_seconds", 60), "measurement_seconds")
+    if abs(cursor - measurement_seconds) > 0.05:
+        raise ValueError(
+            "Expanded breathing protocol lasts "
+            f"{cursor:g} s, but measurement_seconds is {measurement_seconds:g} s."
+        )
+    return cues
+
+
+def breathing_cue_at(cues: list[BreathingCue], elapsed_s: float) -> tuple[BreathingCue, float] | None:
+    if not cues:
+        return None
+    elapsed_s = max(0.0, float(elapsed_s))
+    for index, cue in enumerate(cues):
+        if elapsed_s < cue.end_s or index == len(cues) - 1:
+            return cue, max(0.0, cue.end_s - elapsed_s)
+    return None
 
 
 def make_a121_config(payload: dict[str, Any]) -> A121Config:
@@ -242,12 +408,15 @@ def summarize_measurement(
     summary: dict[str, Any] = {
         "step": step.number,
         "condition_number": step.condition_number,
+        "condition_id": step.condition_id,
         "repeat_number": step.repeat_number,
         "repeat_total": step.repeat_total,
         "lens": step.lens,
         "lens_label": step.lens_label,
         "patch": step.patch,
         "patch_label": step.patch_label,
+        "geometry": step.geometry,
+        "geometry_label": step.geometry_label,
         "distance_cm": step.distance_cm,
         "port": port,
         "csv_path": str(path),
@@ -305,6 +474,10 @@ def format_summary(summary: dict[str, Any]) -> str:
         f"Signal quality: {value('analysis_signal_quality', 3)}",
         f"Saved: {summary.get('csv_path', '')}",
     ]
+    condition_id = str(summary.get("condition_id") or "")
+    geometry_label = str(summary.get("geometry_label") or "")
+    if condition_id or geometry_label:
+        lines.insert(1, f"Condition: {condition_id or 'n/a'}  |  geometry: {geometry_label or 'n/a'}")
     if summary.get("analysis_error"):
         lines.append(f"Analysis warning: {summary['analysis_error']}")
     return "\n".join(lines)
@@ -347,6 +520,7 @@ class MeasurementWorker(QObject):
     def _abort(self) -> None:
         self.status_changed.emit("Measurement interrupted; discarding current capture…")
         self._stop_capture()
+        self.output_path.unlink(missing_ok=True)
         self.aborted.emit()
 
     @Slot()
@@ -416,7 +590,10 @@ class MeasurementWorker(QObject):
             measurement_seconds = max(1.0, float(self.config.get("measurement_seconds", 60)))
             start_index = self.capture.data_count()
             started = time.monotonic()
-            self.status_changed.emit("Measuring now. Stay still and breathe normally.")
+            if self.config.get("breathing_protocol"):
+                self.status_changed.emit("Measuring now. Follow the breathing cue shown below.")
+            else:
+                self.status_changed.emit("Measuring now. Stay still and breathe normally.")
             while True:
                 if self.abort_event.is_set():
                     self._abort()
@@ -431,18 +608,30 @@ class MeasurementWorker(QObject):
                     self._abort()
                     return
 
+            if self.abort_event.is_set():
+                self._abort()
+                return
             self.status_changed.emit("Stopping capture and preparing the review summary…")
             self.capture.stop()
+            if self.abort_event.is_set():
+                self._abort()
+                return
             rows = self.capture.snapshot_data_since(start_index)
             if len(rows) < 10:
                 raise RuntimeError(f"Only {len(rows)} usable frames were captured; measurement was not saved.")
             write_rows_csv(rows, self.output_path)
+            if self.abort_event.is_set():
+                self._abort()
+                return
             summary = summarize_measurement(
                 self.output_path,
                 self.step,
                 self.resolved_port,
                 measurement_seconds,
             )
+            if self.abort_event.is_set():
+                self._abort()
+                return
             self.finished.emit(summary)
         except Exception as exc:
             if self.abort_event.is_set():
@@ -459,6 +648,7 @@ class GuidedExperimentWindow(QWidget):
         *,
         config: dict[str, Any],
         steps: list[ExperimentStep],
+        breathing_cues: list[BreathingCue],
         a121_config: A121Config,
         start_step: int,
         end_step: int,
@@ -468,6 +658,7 @@ class GuidedExperimentWindow(QWidget):
         super().__init__()
         self.config = config
         self.steps = steps
+        self.breathing_cues = breathing_cues
         self.a121_config = a121_config
         self.current_index = start_step - 1
         self.end_index = end_step - 1
@@ -477,11 +668,12 @@ class GuidedExperimentWindow(QWidget):
         self.active_thread: QThread | None = None
         self.active_worker: MeasurementWorker | None = None
         self.pending_summary: dict[str, Any] | None = None
+        self.current_cue_key: tuple[float, float] | None = None
         self.manifest_path = self.session_dir / "manifest.json"
         self.manifest = self._load_or_create_manifest()
 
         self.setWindowTitle(str(config.get("experiment_name", "A121 guided experiment")))
-        self.resize(780, 620)
+        self.resize(820, 760)
         self._build_ui()
         self.show_step()
 
@@ -501,6 +693,7 @@ class GuidedExperimentWindow(QWidget):
             "created_at": datetime.now(timezone.utc).isoformat(),
             "config": self.config,
             "steps": [step.as_dict() for step in self.steps],
+            "breathing_cues": [cue.as_dict() for cue in self.breathing_cues],
             "measurements": [],
         }
         self._save_manifest(manifest)
@@ -536,6 +729,23 @@ class GuidedExperimentWindow(QWidget):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
+        self.cue_box = QGroupBox("Polecenie oddechowe")
+        cue_layout = QVBoxLayout(self.cue_box)
+        self.cue_label = QLabel("PRZYGOTUJ SIĘ")
+        self.cue_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cue_label.setStyleSheet("font-size: 32px; font-weight: bold; padding: 12px;")
+        self.cue_detail = QLabel()
+        self.cue_detail.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cue_detail.setWordWrap(True)
+        self.cue_countdown = QLabel()
+        self.cue_countdown.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cue_countdown.setStyleSheet("font-size: 18px; font-weight: bold;")
+        cue_layout.addWidget(self.cue_label)
+        cue_layout.addWidget(self.cue_detail)
+        cue_layout.addWidget(self.cue_countdown)
+        self.cue_box.setVisible(bool(self.breathing_cues))
+        layout.addWidget(self.cue_box)
+
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         layout.addWidget(self.progress)
@@ -550,23 +760,50 @@ class GuidedExperimentWindow(QWidget):
 
         buttons = QHBoxLayout()
         self.start_button = QPushButton("Start measurement")
+        self.abort_button = QPushButton("Przerwij i odrzuć (Esc)")
         self.accept_button = QPushButton("Good — accept and continue")
         self.redo_button = QPushButton("Redo measurement")
         self.quit_button = QPushButton("Quit")
         self.start_button.clicked.connect(self.start_measurement)
+        self.abort_button.clicked.connect(self.abort_current_measurement)
         self.accept_button.clicked.connect(self.accept_measurement)
         self.redo_button.clicked.connect(self.redo_measurement)
         self.quit_button.clicked.connect(self.close)
         buttons.addWidget(self.start_button)
+        buttons.addWidget(self.abort_button)
         buttons.addWidget(self.accept_button)
         buttons.addWidget(self.redo_button)
         buttons.addStretch(1)
         buttons.addWidget(self.quit_button)
         layout.addLayout(buttons)
 
-        keyboard = QLabel("Keyboard: Esc interrupts the active measurement and discards it.")
+        self.abort_button.setEnabled(False)
+        self.abort_button.setStyleSheet(
+            "QPushButton { color: #991b1b; font-weight: bold; }"
+            "QPushButton:enabled { background: #fee2e2; border: 1px solid #dc2626; padding: 5px; }"
+        )
+
+        keyboard = QLabel(
+            "Esc lub przycisk „Przerwij i odrzuć” zatrzymuje aktywny pomiar i nie zachowuje nagrania."
+        )
         keyboard.setStyleSheet("color: #666;")
         layout.addWidget(keyboard)
+
+    def _set_cue_display(self, cue: str, detail: str, countdown: str, kind: str) -> None:
+        colors = {
+            "inhale": ("#dbeafe", "#1d4ed8"),
+            "exhale": ("#dcfce7", "#15803d"),
+            "hold": ("#fee2e2", "#b91c1c"),
+            "normal": ("#f3f4f6", "#374151"),
+        }
+        background, foreground = colors.get(kind, colors["normal"])
+        self.cue_label.setText(cue)
+        self.cue_label.setStyleSheet(
+            "font-size: 32px; font-weight: bold; padding: 12px; "
+            f"background: {background}; color: {foreground}; border-radius: 6px;"
+        )
+        self.cue_detail.setText(detail)
+        self.cue_countdown.setText(countdown)
 
     def current_step(self) -> ExperimentStep | None:
         if 0 <= self.current_index < len(self.steps) and self.current_index <= self.end_index:
@@ -576,10 +813,19 @@ class GuidedExperimentWindow(QWidget):
     def show_step(self, status_text: str | None = None) -> None:
         step = self.current_step()
         self.pending_summary = None
+        self.current_cue_key = None
         self.accept_button.setEnabled(False)
         self.redo_button.setEnabled(False)
+        self.abort_button.setEnabled(False)
         self.progress.setValue(0)
         self.summary.clear()
+        if self.breathing_cues:
+            self._set_cue_display(
+                "PO STARCIE: ODDYCHAJ SWOBODNIE",
+                "Program następnie poprowadzi wdech, wydech i wstrzymanie oddechu.",
+                "",
+                "normal",
+            )
         if step is None:
             self.step_label.setText("Experiment complete")
             self.instructions.setText(
@@ -589,13 +835,16 @@ class GuidedExperimentWindow(QWidget):
             self.start_button.setEnabled(False)
             return
 
+        condition_id = f" [{step.condition_id}]" if step.condition_id else ""
         self.step_label.setText(
-            f"Run {step.number}/{len(self.steps)} — condition {step.condition_number}/{self.condition_count}, "
-            f"repeat {step.repeat_number}/{step.repeat_total}"
+            f"Run {step.number}/{len(self.steps)} — condition {step.condition_number}/{self.condition_count}"
+            f"{condition_id}, repeat {step.repeat_number}/{step.repeat_total}"
         )
+        geometry_line = f"Geometry: {step.geometry_label}\n" if step.geometry_label else ""
         self.instructions.setText(
             f"Lens: {step.lens_label}\n"
             f"Patch condition: {step.patch_label}\n"
+            f"{geometry_line}"
             f"Distance: {step.distance_cm:g} cm\n\n"
             f"This is repeat {step.repeat_number} of {step.repeat_total} for this condition.\n"
             f"{step.instruction}\n\n"
@@ -605,9 +854,11 @@ class GuidedExperimentWindow(QWidget):
         self.start_button.setEnabled(True)
 
     def output_path_for_step(self, step: ExperimentStep) -> Path:
+        condition_id = f"_{safe_filename(step.condition_id).lower()}" if step.condition_id else ""
+        geometry = f"_{safe_filename(step.geometry)}" if step.geometry else ""
         filename = (
-            f"condition_{step.condition_number:02d}_repeat_{step.repeat_number:02d}_"
-            f"run_{step.number:02d}_{safe_filename(step.patch)}_"
+            f"condition_{step.condition_number:02d}{condition_id}_repeat_{step.repeat_number:02d}_"
+            f"run_{step.number:02d}_{safe_filename(step.patch)}{geometry}_"
             f"{safe_filename(str(step.distance_cm).replace('.', 'p'))}cm_"
             f"{safe_filename(step.lens)}.csv"
         )
@@ -623,10 +874,12 @@ class GuidedExperimentWindow(QWidget):
             old_path.unlink()
 
         self.start_button.setEnabled(False)
+        self.abort_button.setEnabled(True)
         self.accept_button.setEnabled(False)
         self.redo_button.setEnabled(False)
         self.summary.clear()
         self.status.setText("Starting…")
+        self.current_cue_key = None
         self.progress.setValue(0)
 
         worker = MeasurementWorker(
@@ -657,32 +910,62 @@ class GuidedExperimentWindow(QWidget):
     @Slot(int)
     def on_prep_changed(self, remaining: int) -> None:
         self.status.setText(f"Preparation: {remaining} seconds remaining. Hold still.")
+        if self.breathing_cues:
+            self._set_cue_display(
+                "PRZYGOTUJ SIĘ",
+                "Usiądź nieruchomo. Pierwsze 10 sekund nagrania to swobodny oddech.",
+                f"Start za {remaining} s",
+                "normal",
+            )
         self.progress.setValue(0)
 
     @Slot(float, float)
     def on_measurement_changed(self, elapsed: float, total: float) -> None:
-        self.status.setText(f"Measuring: {elapsed:.1f}/{total:.0f} seconds. Stay still.")
+        cue_state = breathing_cue_at(self.breathing_cues, elapsed)
+        if cue_state is not None:
+            cue, remaining = cue_state
+            cue_key = (cue.start_s, cue.end_s)
+            if cue_key != self.current_cue_key:
+                self.current_cue_key = cue_key
+                if bool(self.config.get("audible_cues", True)):
+                    QApplication.beep()
+            self._set_cue_display(
+                cue.cue,
+                cue.detail,
+                f"Jeszcze {remaining:.1f} s  •  pomiar {elapsed:.1f}/{total:.0f} s",
+                cue.kind,
+            )
+            self.status.setText(f"Measuring: {elapsed:.1f}/{total:.0f} seconds. Follow the cue.")
+        else:
+            self.status.setText(f"Measuring: {elapsed:.1f}/{total:.0f} seconds. Stay still.")
         self.progress.setValue(int(round(100.0 * elapsed / max(total, 1e-9))))
 
     @Slot(object)
     def on_measurement_finished(self, summary: object) -> None:
         self.pending_summary = dict(summary)  # type: ignore[arg-type]
+        self.abort_button.setEnabled(False)
         self.progress.setValue(100)
         self.summary.setPlainText(format_summary(self.pending_summary))
         self.status.setText("Review the result. Accept it or redo it before continuing.")
+        if self.breathing_cues:
+            self._set_cue_display("KONIEC", "Oddychaj swobodnie.", "Nagranie gotowe do oceny.", "normal")
         self.accept_button.setEnabled(True)
         self.redo_button.setEnabled(True)
 
     @Slot(str)
     def on_measurement_failed(self, message: str) -> None:
+        self.abort_button.setEnabled(False)
         self.status.setText(f"Measurement failed: {message}")
         self.summary.setPlainText("No accepted recording was created. Fix the setup and click Start again.")
         self.start_button.setEnabled(True)
 
     @Slot()
     def on_measurement_aborted(self) -> None:
+        self.abort_button.setEnabled(False)
         self.status.setText("Current measurement discarded. Click Start measurement to redo it.")
         self.summary.setPlainText("Interrupted capture was not saved.")
+        if self.breathing_cues:
+            self._set_cue_display("ODRZUCONO", "Oddychaj swobodnie.", "Uruchom ponownie, gdy będziesz gotowy.", "hold")
         self.start_button.setEnabled(True)
 
     @Slot()
@@ -690,6 +973,7 @@ class GuidedExperimentWindow(QWidget):
         thread = self.active_thread
         self.active_worker = None
         self.active_thread = None
+        self.abort_button.setEnabled(False)
         if thread is not None:
             thread.deleteLater()
 
@@ -697,6 +981,7 @@ class GuidedExperimentWindow(QWidget):
     def abort_current_measurement(self) -> None:
         if self.active_worker is None:
             return
+        self.abort_button.setEnabled(False)
         self.status.setText("Interrupt requested; stopping and discarding the current measurement…")
         self.active_worker.request_abort()
 
@@ -745,9 +1030,17 @@ class GuidedExperimentWindow(QWidget):
         event.accept()
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH, help="JSON experiment configuration.")
+def build_parser(
+    default_config_path: Path = DEFAULT_CONFIG_PATH,
+    *,
+    description: str | None = None,
+    enable_default_config_write: bool = True,
+) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=description or __doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--config", type=Path, default=default_config_path, help="JSON experiment configuration.")
     parser.add_argument("--port", help="A121 Interface A serial port. Omit to auto-detect the WCH device.")
     parser.add_argument("--start-step", type=int, default=1, help="1-based expanded measurement run to start at.")
     parser.add_argument("--end-step", type=int, help="1-based expanded measurement run to stop after, inclusive.")
@@ -755,7 +1048,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--duration", type=float, help="Override measurement_seconds from the config.")
     parser.add_argument("--prep-seconds", type=int, help="Override prep_seconds from the config.")
     parser.add_argument("--output-dir", type=Path, help="Override output_dir from the config.")
-    parser.add_argument("--write-default-config", action="store_true", help="Write the built-in default JSON config and exit.")
+    if enable_default_config_write:
+        parser.add_argument(
+            "--write-default-config",
+            action="store_true",
+            help="Write the built-in default JSON config and exit.",
+        )
     parser.add_argument("--dry-run", action="store_true", help="Validate and print the sequence without opening the GUI or sensor.")
     return parser
 
@@ -771,10 +1069,19 @@ def apply_overrides(config: dict[str, Any], args: argparse.Namespace) -> dict[st
     return result
 
 
-def main() -> int:
-    parser = build_parser()
+def main(
+    *,
+    default_config_path: Path = DEFAULT_CONFIG_PATH,
+    description: str | None = None,
+    enable_default_config_write: bool = True,
+) -> int:
+    parser = build_parser(
+        default_config_path,
+        description=description,
+        enable_default_config_write=enable_default_config_write,
+    )
     args = parser.parse_args()
-    if args.write_default_config:
+    if getattr(args, "write_default_config", False):
         args.config.parent.mkdir(parents=True, exist_ok=True)
         with args.config.open("w", encoding="utf-8") as handle:
             json.dump(default_config(), handle, indent=2, ensure_ascii=False)
@@ -784,6 +1091,7 @@ def main() -> int:
     try:
         config = apply_overrides(load_config(args.config), args)
         steps = parse_steps(config)
+        breathing_cues = parse_breathing_protocol(config)
         a121_config = make_a121_config(config)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
@@ -800,10 +1108,16 @@ def main() -> int:
         print(f"A121 config: {a121_config}")
         print(f"Port: {args.port or discover_a121_port() or 'auto-detect failed'}")
         for step in steps[args.start_step - 1 : end_step]:
+            condition_id = f" [{step.condition_id}]" if step.condition_id else ""
+            geometry = f" | {step.geometry_label}" if step.geometry_label else ""
             print(
-                f"{step.number:02d}. {step.patch_label} | {step.distance_cm:g} cm | "
-                f"{step.lens_label} | {step.instruction}"
+                f"{step.number:02d}.{condition_id} {step.patch_label}{geometry} | {step.distance_cm:g} cm | "
+                f"{step.lens_label} | repeat {step.repeat_number}/{step.repeat_total} | {step.instruction}"
             )
+        if breathing_cues:
+            print("Breathing protocol:")
+            for cue in breathing_cues:
+                print(f"  {cue.start_s:5.1f}–{cue.end_s:5.1f} s  {cue.cue}")
         return 0
 
     output_dir = Path(config.get("output_dir", "data/raw/a121/guided"))
@@ -811,7 +1125,8 @@ def main() -> int:
         output_dir = ROOT / output_dir
     session_dir = args.session_dir
     if session_dir is None:
-        session_dir = output_dir / f"guided_{datetime.now():%Y-%m-%d_%H-%M-%S}"
+        session_prefix = safe_filename(str(config.get("session_prefix", "guided")))
+        session_dir = output_dir / f"{session_prefix}_{datetime.now():%Y-%m-%d_%H-%M-%S}"
     elif not session_dir.is_absolute():
         session_dir = ROOT / session_dir
 
@@ -819,6 +1134,7 @@ def main() -> int:
     window = GuidedExperimentWindow(
         config=config,
         steps=steps,
+        breathing_cues=breathing_cues,
         a121_config=a121_config,
         start_step=args.start_step,
         end_step=end_step,

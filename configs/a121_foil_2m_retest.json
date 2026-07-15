@@ -1,0 +1,103 @@
+{
+  "experiment_name": "A121 — retest folii i kąta przy 2 m",
+  "prep_seconds": 10,
+  "measurement_seconds": 90,
+  "reconnect_delay_seconds": 5,
+  "connect_attempts": 2,
+  "audible_cues": true,
+  "session_prefix": "guided_foil2m",
+  "output_dir": "data/raw/a121/guided",
+  "a121": {
+    "start_m": 1.5,
+    "end_m": 2.5,
+    "profile": 3,
+    "hwaas": 32,
+    "sweeps_per_frame": 8,
+    "frame_rate_hz": 20.0,
+    "step_length": 1
+  },
+  "breathing_protocol": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "cue": "ODDYCHAJ SWOBODNIE",
+      "detail": "Ustabilizuj pozycję i nie wykonuj dodatkowych ruchów."
+    },
+    {
+      "kind": "paced",
+      "cycles": 7,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3,
+      "inhale_cue": "WDECH",
+      "exhale_cue": "WYDECH",
+      "inhale_detail": "Spokojny wdech przez 2 sekundy.",
+      "exhale_detail": "Spokojny wydech przez 3 sekundy."
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 15,
+      "cue": "WSTRZYMAJ ODDECH",
+      "detail": "Zatrzymaj po zakończonym wydechu. Nie forsuj — przy dyskomforcie naciśnij Esc."
+    },
+    {
+      "kind": "paced",
+      "cycles": 6,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3,
+      "inhale_cue": "WDECH",
+      "exhale_cue": "WYDECH",
+      "inhale_detail": "Spokojny wdech przez 2 sekundy.",
+      "exhale_detail": "Spokojny wydech przez 3 sekundy."
+    }
+  ],
+  "steps": [
+    {
+      "condition_id": "N0",
+      "lens": "hyperbolic",
+      "lens_label": "Soczewka hiperboliczna",
+      "patch": "unglued",
+      "patch_label": "Bez folii",
+      "geometry": "natural",
+      "geometry_label": "Naturalna — około 30° od normalnej",
+      "distance_cm": 200,
+      "instruction": "Blok bez folii: nie przyklejaj jej ponownie. Usiądź naturalnie i ustaw radar według wcześniej zaznaczonego położenia N: równolegle do podłoża, z osią skierowaną w oznaczone miejsce na klatce."
+    },
+    {
+      "condition_id": "NF",
+      "lens": "hyperbolic",
+      "lens_label": "Soczewka hiperboliczna",
+      "patch": "foil",
+      "patch_label": "Folia 5 × 5 cm",
+      "geometry": "natural",
+      "geometry_label": "Naturalna — około 30° od normalnej",
+      "distance_cm": 200,
+      "instruction": "Blok z folią: folia 5 × 5 cm pozostaje przyklejona przez wszystkie próby 1–6. Jej górna krawędź ma być 5 cm poniżej linii łączącej brodawki sutkowe. Usiądź naturalnie, a radar ustaw poziomo według oznaczenia N."
+    },
+    {
+      "condition_id": "P0",
+      "lens": "hyperbolic",
+      "lens_label": "Soczewka hiperboliczna",
+      "patch": "unglued",
+      "patch_label": "Bez folii",
+      "geometry": "perpendicular",
+      "geometry_label": "Prawie prostopadła — około 0° od normalnej",
+      "distance_cm": 200,
+      "instruction": "Blok bez folii: nie przyklejaj jej ponownie. Jeżeli to pierwsza próba P0 (run 7), ZDEJMIJ FOLIĘ TERAZ i nie ruszaj radaru po ostatniej próbie PF. W kolejnych P0 użyj zaznaczonego położenia P głowicy statywu."
+    },
+    {
+      "condition_id": "PF",
+      "lens": "hyperbolic",
+      "lens_label": "Soczewka hiperboliczna",
+      "patch": "foil",
+      "patch_label": "Folia 5 × 5 cm",
+      "geometry": "perpendicular",
+      "geometry_label": "Prawie prostopadła — około 0° od normalnej",
+      "distance_cm": 200,
+      "instruction": "Blok z folią: nie odklejaj jej między próbami. Zweryfikuj powrót odbitego punktu lasera na kartkę przy dalmierzu, zablokuj głowicę i zaznacz położenie P, aby odtworzyć je później bez folii."
+    }
+  ],
+  "run_sequence": [
+    "NF", "PF", "PF", "NF", "NF", "PF",
+    "P0", "N0", "N0", "P0", "P0", "N0"
+  ]
+}

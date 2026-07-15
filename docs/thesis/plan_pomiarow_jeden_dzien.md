@@ -209,6 +209,11 @@ podstawową.
 
 ## 4. Retest folii przy 2 m: geometria naturalna i prostopadła
 
+**Status: wykonano 15 lipca 2026.** Zarejestrowano komplet 12 prób w sesji
+`guided_foil2m_2026-07-15_16-26-15`. Analizę odtwarza
+`tools/analyze_a121_foil_2m.py`; wyniki i wnioski wpisano do sekcji
+„Retest folii i kąta padania na dystansie 2 m” pracy.
+
 Celem retestu jest rozdzielenie dwóch możliwych wyjaśnień dotychczasowego
 wyniku: folia rzeczywiście nie poprawia pomiaru albo przy naturalnym kącie
 odbicie zwierciadlane jest kierowane poza radar.
@@ -220,7 +225,11 @@ Ustawienia wspólne:
 - pozycja siedząca na tym samym krześle i ta sama warstwa odzieży;
 - łata 5 × 5 cm; jej górna krawędź 5 cm poniżej poziomej linii łączącej
   brodawki sutkowe;
-- każde nagranie 60 s: oddech 12/min oraz końcowy odcinek wstrzymania oddechu.
+- każde nagranie 90 s według identycznych komunikatów programu:
+  0–10 s oddech swobodny, 10–45 s siedem cykli 12/min (wdech 2 s, wydech
+  3 s), 45–60 s wstrzymanie po wydechu i 60–90 s sześć kolejnych cykli
+  12/min. Wstrzymania nie forsować; przy dyskomforcie przerwać i odrzucić
+  próbę.
 
 Badane są dwa ustawienia geometryczne:
 
@@ -253,22 +262,36 @@ Dla każdego ustawienia wykonywane są nagrania z folią i bez folii:
 4. Zablokować głowicę i zaznaczyć pozycję krzesła. Ustawienie opisać jako
    „prawie prostopadłe”, ponieważ pofałdowana folia i krzywizna klatki nie
    tworzą idealnej płaszczyzny.
-5. Dla warunku P0 zdjąć folię bez zmiany statywu i możliwie bez zmiany pozycji
-   ciała. Przed kolejnym blokiem ponownie sprawdzić ustawienie z folią.
+5. Zaznaczyć dwa powtarzalne położenia głowicy statywu: N (naturalne) i P
+   (prawie prostopadłe). W bloku z folią przełączać wyłącznie położenie
+   statywu, nie odklejając łaty.
+6. Po szóstej próbie, zakończonej w warunku PF, zdjąć folię jeden raz bez
+   zmiany statywu ani krzesła i od razu wykonać P0. W całym drugim bloku
+   odtwarzać N i P z oznaczeń, bez ponownego przyklejania folii.
 
-Każdy z czterech warunków wykonać trzy razy, w przeplatanej kolejności:
+Każdy z czterech warunków wykonać trzy razy. Folia jest przyklejana tylko raz
+przed próbą 1 i zdejmowana tylko raz między próbą 6 a 7. Kolejność geometrii
+jest odwrócona w drugim bloku:
 
-- blok 1: `N0 → NF → P0 → PF`,
-- blok 2: `PF → P0 → NF → N0`,
-- blok 3: `N0 → NF → PF → P0`.
+- blok z folią: `NF → PF → PF → NF → NF → PF`,
+- blok bez folii: `P0 → N0 → N0 → P0 → P0 → N0`.
+
+Taki układ eliminuje odklejanie i ponowne przyklejanie łaty, ale nie rozdziela
+w pełni efektu folii od dryfu w czasie: wszystkie pomiary z folią są wykonane
+wcześniej. Wynik należy więc opisać jako pilotażowy, a spójny spadek lub wzrost
+wszystkich metryk w drugim bloku traktować również jako możliwy efekt sesji.
 
 Daje to 12 nagrań i po trzy realizacje każdego warunku. Przykładowa komenda:
 
 ```bash
-uv run respi record-a121-test --port <PORT_A121> --seconds 60 \
-  --label foil2m-pf-b1 --start-m 1.5 --end-m 2.5 \
-  --profile 3 --hwaas 32 --sweeps-per-frame 8 --frame-rate-hz 20
+uv run python tools/a121_foil_2m_experiment.py
 ```
+
+Runner sam realizuje powyższą kolejność i wyraźnie wskazuje moment jednorazowego
+zdjęcia folii. Pokazuje duże komunikaty `WDECH`,
+`WYDECH` i `WSTRZYMAJ ODDECH`, odlicza czas do zmiany oraz zapisuje rozwiniętą
+oś poleceń w manifeście sesji. `Esc` lub czerwony przycisk przerywa aktywną
+próbę i usuwa jej plik; ten sam warunek pozostaje wtedy gotowy do ponowienia.
 
 Najpierw policzyć efekt folii osobno dla obu geometrii:
 
