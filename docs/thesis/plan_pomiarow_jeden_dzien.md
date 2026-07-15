@@ -8,11 +8,11 @@ W ciągu jednego dnia zebrać mały, ale metodologicznie czytelny zestaw danych,
 który pozwoli odpowiedzieć na cztery pytania:
 
 1. Czy sygnał oddechowy z aplikacji iPhone i z LSM6DS3 jest użyteczny w
-   pozycji siedzącej i leżącej?
+   podstawowym wariancie leżenia na plecach?
 2. Czy HB100 i A121 mogą pracować jednocześnie bez widocznego wzajemnego
    zakłócania?
-3. Gdzie w praktyce kończy się wykrywanie oddechu przez A121 i HB100 przy
-   niezmienionej metodzie analizy?
+3. Gdzie w praktyce kończy się użyteczny sygnał oddechowy HB100, gdy A121
+   pracuje równolegle jako tor porównawczy?
 4. Czy folia daje jakąkolwiek korzyść przy 2 m i czy wynik zależy od tego,
    czy radar pada na klatkę pod naturalnym kątem, czy niemal prostopadle?
 
@@ -69,10 +69,10 @@ ograniczenie czasowe.
 | Czas | Zadanie | Wynik |
 |---|---|---|
 | 08:30–09:30 | timestamp LSM6DS3, test 60 s obu urządzeń nieruchomo | poprawna oś czasu lub jawny fallback |
-| 09:30–10:45 | iPhone + LSM6DS3: siedząc i leżąc | 8 wspólnych nagrań po 60 s |
+| 09:30–10:15 | iPhone + LSM6DS3: leżenie na plecach | 4 wspólne nagrania po 60 s |
 | 10:45–11:30 | test zakłóceń HB100–A121 | decyzja: razem czy osobno |
 | 11:30–13:00 | przerwa i przygotowanie stanowiska dystansowego | geometria i lista dystansów |
-| 13:00–14:30 | zasięg A121; równolegle HB100, jeśli test zakłóceń przeszedł | krzywa trafień/SNR względem dystansu |
+| 13:00–14:30 | zasięg HB100; równolegle A121, jeśli test zakłóceń przeszedł | krzywa trafień/SNR względem dystansu |
 | 14:30–15:45 | retest folii przy 2 m: geometria naturalna i prostopadła, tylko soczewka hiperboliczna | układ 2×2: kąt × folia |
 | 15:45–16:30 | opcjonalny test odchylenia od osi A121, jeżeli wcześniejsze bloki skończą się poprawnie | sprawdzenie hipotezy o szerokości pola widzenia |
 | 16:30–18:00 | kontrola plików, analiza, wykresy, kopia danych | materiał do pracy i dla promotora |
@@ -88,17 +88,19 @@ Macierz minimalna:
 
 | ID | Pozycja | Oddech | Powtórzenia | Czas |
 |---|---|---:|---:|---:|
-| IMU-S-N | siedząca | swobodny + końcowe wstrzymanie | 2 | 60 s |
-| IMU-S-12 | siedząca | 12/min + końcowe wstrzymanie | 2 | 60 s |
 | IMU-L-N | na plecach | swobodny + końcowe wstrzymanie | 2 | 60 s |
 | IMU-L-12 | na plecach | 12/min + końcowe wstrzymanie | 2 | 60 s |
 
-Łącznie: 8 minut czystego nagrania. Nie rozszerzać tego dnia macierzy o bok,
-brzuch, stanie i wiele lokalizacji — te warianty są dobre na później, jeżeli
-podstawowy sygnał okaże się użyteczny. Zestaw siedzenie/leżenie jest
-wystarczający, jeżeli w pracy wniosek ograniczy się do użyteczności sygnału
-w tych dwóch pozycjach. Dodatkowe nachylenia byłyby potrzebne dopiero do
-obrony mocniejszej tezy, że PCA uniezależnia wynik od dowolnej orientacji.
+Łącznie: 4 minuty czystego nagrania. Telefon i moduł położyć obok siebie na
+górnej części klatki piersiowej i nie zmieniać ich orientacji między
+powtórzeniami. Tego dnia nie rozszerzać macierzy o siedzenie, bok, brzuch,
+stanie ani wiele lokalizacji. Wynik ma odpowiedzieć wyłącznie na pytanie, czy
+oba tory dają użyteczny sygnał w najprostszym wariancie na plecach.
+
+**TODO po teście podstawowym:** jeżeli oba urządzenia spełnią kryterium
+użyteczności, wykonać osobną serię w pozycji siedzącej, a dopiero później
+sprawdzić bok, różne ułożenia telefonu i odporność PCA na orientację. Bez tych
+danych nie formułować wniosku o niezależności metody od postawy.
 
 Komendy uruchamiane w dwóch terminalach:
 
@@ -117,7 +119,7 @@ Raportować osobno dla przyspieszenia i żyroskopu/PCA:
   odbiornik zachowuje ostatni numer, ale nie zlicza jeszcze przeskoków),
 - częstotliwość dominującą i błąd względem 0,20 Hz w próbach z metronomem,
 - SNR piku oddechowego i jego spadek podczas wstrzymania oddechu,
-- stabilność wyniku w pozycji siedzącej i leżącej,
+- stabilność wyniku między powtórzeniami w pozycji na plecach,
 - udział wariancji wyjaśniony przez pierwszą składową PCA.
 
 Robocze kryterium użyteczności: pik przy 0,20 Hz z błędem nie większym niż
@@ -134,8 +136,9 @@ przyjąć z góry, że zakłóceń nie ma: szósta harmoniczna HB100 wypada przy
 63,15 GHz, czyli wewnątrz pasma A121, a zakłócenie może też wejść przez wspólne
 zasilanie USB lub przewody.
 
-Ustawić oba radary tak jak w pomiarze docelowym: obok siebie, w odległości
-około 10–20 cm, równolegle. Wykonać po dwa powtórzenia:
+Ustawić oba radary tak jak w pomiarze docelowym: obok siebie, z osiami
+równoległymi i środkami apertur oddalonymi o około 5–10 cm. Wykonać jeden
+krótki zapis każdego warunku:
 
 | Warunek | A121 | HB100 | Scena |
 |---|---|---|---|
@@ -143,7 +146,7 @@ około 10–20 cm, równolegle. Wykonać po dwa powtórzenia:
 | INT-B | nagrywa | włączony i nagrywa | pusty, nieruchomy pokój |
 | INT-C | wyłączony z zasilania | nagrywa | pusty, nieruchomy pokój |
 
-Każde nagranie: 60 s. Dla A121 porównać amplitudę tła i widmo szumu fazowego w
+Każde nagranie: 30 s. Dla A121 porównać amplitudę tła i widmo szumu fazowego w
 tej samej bramce; dla HB100 — RMS i widmo napięcia w pasmach 0,1–0,6 Hz oraz
 0,6–5 Hz. Zmiana większa niż 3 dB, nowa stała linia widmowa albo wyraźna utrata
 ramek jest sygnałem ostrzegawczym. Wtedy powtórzyć jedną parę z osobnymi
@@ -153,12 +156,12 @@ Przykładowe terminale dla warunku wspólnego:
 
 ```bash
 uv run respi capture-radar --port <PORT_HB100> --no-plot
-uv run respi record-a121-test --port <PORT_A121> --seconds 60 \
+uv run respi record-a121-test --port <PORT_A121> --seconds 30 \
   --label int-b-both --start-m 0.2 --end-m 1.5 \
   --profile 3 --hwaas 32 --sweeps-per-frame 8 --frame-rate-hz 20
 ```
 
-## 3. Zasięg i praktyczny limit HB100/A121
+## 3. Praktyczny limit HB100 z równoległym zapisem A121
 
 ### Wariant minimalny do wykonania teraz
 
@@ -383,7 +386,7 @@ soczewek.
 
 ## Wykresy do zrobienia tego samego dnia
 
-1. iPhone i LSM6DS3: sygnał + PSD dla siedzenia i leżenia oraz histogram `Δt`.
+1. iPhone i LSM6DS3: sygnał + PSD dla leżenia na plecach oraz histogram `Δt`.
 2. Trafienie 0,20 Hz i SNR względem dystansu dla A121 i HB100.
 3. HB100: energia składowej podstawowej 0,20 Hz oraz harmonicznej 0,40 Hz w
    każdym powtórzeniu.
@@ -397,11 +400,13 @@ soczewek.
 Nawet gdy część prób zawiedzie, dzień jest udany, jeżeli powstaną:
 
 - jawny wniosek o jakości timestampów i BLE,
-- tabela „siedząc/leżąc × iPhone/LSM6DS3” z kryteriami użyteczności,
+- tabela „iPhone/LSM6DS3 × oddech swobodny/narzucony” dla pozycji na plecach,
+  z kryteriami użyteczności,
 - test wykluczający albo ujawniający zakłócenia HB100–A121,
 - empiryczna granica odległości z warunkiem trafienia, a nie oceną „na oko”,
-- uczciwy pilotaż folii przy 2 m wykonany w jednej przeplatanej sesji, osobno
-  dla naturalnego kąta i padania prawie prostopadłego.
+- uczciwy pilotaż folii przy 2 m wykonany w dwóch kolejnych blokach (najpierw
+  wszystkie próby z folią, następnie wszystkie bez niej), osobno dla
+  naturalnego kąta i padania prawie prostopadłego.
 
 Test kąta jest dodatkiem o dużej wartości interpretacyjnej, ale nie jest
 warunkiem minimalnego wyniku dnia.

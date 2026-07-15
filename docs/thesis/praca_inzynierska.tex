@@ -713,9 +713,10 @@ co umożliwia ponowne wykonanie całej analizy offline.
 Czujniki inercyjne tworzą w~tej pracy osobny nurt pomiarowy. Rejestrują ruch
 obudowy spoczywającej na tułowiu, podczas gdy radar rejestruje zmianę drogi
 propagacji fali. Zgodność częstości wyznaczonej z~obu metod może być użyteczną
-kontrolą spójności, ale sama nie czyni IMU wzorcem dla radaru. Ocena dotyczy
-tego, czy sygnał inercyjny jest dostatecznie czytelny w~pozycji siedzącej
-i~leżącej oraz czy prosty tor z~telefonem może zastąpić osobny moduł sprzętowy.
+kontrolą spójności, ale sama nie czyni IMU wzorcem dla radaru. Pierwszy test
+ograniczono do najprostszego wariantu: pomiaru w~pozycji na plecach. Jego celem
+jest sprawdzenie, czy oba tory dają czytelny sygnał oddechowy; uogólnienie na
+inne postawy wymaga osobnych danych.
 
 \section{Moduł LSM6DS3 z ESP32}
 LSM6DS3 zawiera trójosiowy akcelerometr i~trójosiowy żyroskop. Wykorzystany
@@ -742,8 +743,9 @@ Osobna ścieżka łączy żyroskop z~kierunkiem grawitacji filtrem komplementarn
 i~tworzy sygnał kąta oddechowego. Składowa sercowa jest poszukiwana w~paśmie
 \SIrange{0.65}{4.00}{Hz}. PCA redukuje zależność od wyboru pojedynczej osi,
 ale nie gwarantuje niezmienności względem postawy, miejsca położenia czujnika
-ani przesunięcia podczas pomiaru. To założenie wymaga sprawdzenia osobno dla
-pozycji siedzącej i~leżącej.
+ani przesunięcia podczas pomiaru. W~serii podstawowej nie testuje się tej
+niezmienności: urządzenia pozostają w~stałej orientacji na klatce osoby
+leżącej na plecach.
 
 \section{Aplikacja iOS i transmisja BLE}
 Aplikacja \emph{RespiPhoneIMU} korzysta z~\texttt{CMDeviceMotion}. Użytkownik
@@ -776,12 +778,18 @@ i~obsłużyć go po stronie komputera. iPhone ma już czas per próbka, lecz nad
 trzeba sprawdzić histogram $\Delta t$, luki numerów sekwencyjnych i~rzeczywistą
 liczbę próbek na sekundę.
 
-Podstawowy eksperyment obejmuje dla obu urządzeń pozycję siedzącą i~leżącą,
+Podstawowy eksperyment obejmuje dla obu urządzeń wyłącznie leżenie na plecach,
 oddech swobodny, oddech narzucony metronomem oraz krótki odcinek wstrzymania
-oddechu. Porównywane powinny być: dominująca częstotliwość, SNR widmowy,
+oddechu. Każdy wariant należy powtórzyć dwukrotnie. Porównywane powinny być:
+dominująca częstotliwość, SNR widmowy,
 prominencja piku, stabilność wyniku w~kolejnych oknach oraz udział wariancji
 wyjaśniony przez PCA. Wniosek ma dotyczyć użyteczności każdego toru, nie jego
 zgodności z~rzekomym wzorcem radarowym.
+
+\todo{Po potwierdzeniu użyteczności w~leżeniu wykonać osobny eksperyment
+w~pozycji siedzącej. Następnie, jeśli zakres pracy na to pozwoli, sprawdzić
+leżenie na boku, różne miejsca i~orientacje telefonu oraz odporność PCA na
+zmianę postawy.}
 
 % ---------------------------------------------------------------------
 \chapter{Algorytmy estymacji oddechu i tętna}
@@ -1862,18 +1870,25 @@ a~nie jako wzorzec kliniczny.
 
 \section{Metodyka pomiarów}
 Zarejestrowano serię nagrań całonocnych w~dwóch ustawieniach stanowiska.
-Równolegle badany nosił zegarek Garmin~Fenix~7, z~którego --- jeżeli eksport
-zachował się dla danej nocy --- odczytywano tętno, częstość oddechu i~fazy snu
-w~formacie FIT. Pierwsze trzy nagrania służyły pilotażowemu porównaniu
-przesłon:
+Równolegle badany nosił zegarek Garmin~Fenix~7. W~lokalnym archiwum
+zweryfikowano zestawy FIT dla nocy z~8, 9, 10, 11 i~13~czerwca; każdy z~nich
+zawiera pliki \texttt{WELLNESS}, \texttt{SLEEP\_DATA} oraz pozostałe metryki
+snu. Do głównego porównania wybrano trzy \emph{pełne} nagrania, dla których
+dostępne są jednocześnie dane A121 i~Garmina:
 \begin{itemize}
-  \item noc~1 --- soczewka plano-convex,
-  \item noc~2 --- soczewka FZP,
-  \item noc~3 --- płaska pokrywa (efektywnie brak soczewki); nagranie zostało
-  przerwane, przez co jest krótsze.
+  \item 8~czerwca --- soczewka plano-convex, radar przy krawędzi łóżka,
+  \item 9~czerwca --- soczewka FZP, radar przy krawędzi łóżka,
+  \item 13~czerwca --- płaska pokrywa (efektywnie brak soczewki), radar na
+  wysięgniku nad łóżkiem.
 \end{itemize}
 
-W~nocach~1 i~2 radar znajdował się przy bocznej krawędzi łóżka, około
+Niepełnego zapisu z~10~czerwca nie użyto w~wynikach, ponieważ tę samą
+konfigurację płaskiej pokrywy reprezentuje pełna i~lepiej udokumentowana noc
+z~13~czerwca. Dla dodatkowych pełnych nocy z~15 i~16~czerwca zachowały się
+dane radarowe, lecz w~archiwum nie ma odpowiadających im eksportów FIT;
+wykorzystano je wyłącznie do oceny powtarzalności stanowiska.
+
+W~nocach z~8 i~9~czerwca radar znajdował się przy bocznej krawędzi łóżka, około
 \SI{10}{cm} nad górną powierzchnią materaca, a~jego oś była równoległa do
 podłoża. Takie ustawienie jest zbliżone do prostopadłego względem klatki tylko
 wtedy, gdy badany leży na boku i~pozostaje na wysokości czujnika. Po obrocie na
@@ -2247,17 +2262,19 @@ anegdota, a~nie walidacja.
 
 \todo{Uzasadnić progi literaturowo (odsetki faz snu u~dorosłych). Rozważyć
 krótki przegląd: jak liczą ocenę snu Garmin/Fitbit/Oura i~dlaczego wyniki nie
-są porównywalne między producentami. Eksport \texttt{Sleep.csv} udało się
-odzyskać tylko dla nocy~1 --- dla pozostałych nocy warto go dociągnąć
-z~Garmin~Connect i~powtórzyć tabelę~\ref{tab:score-garmin}, żeby sprawdzić,
-czy rozjazd FIT~vs~Connect powtarza się co noc.}
+są porównywalne między producentami. Podsumowanie \texttt{Sleep.csv}
+z~Garmin~Connect udało się odzyskać tylko dla nocy z~8~czerwca --- dla
+pozostałych nocy głównego porównania warto je dociągnąć i~powtórzyć
+tabelę~\ref{tab:score-garmin}, żeby sprawdzić, czy rozjazd FIT~vs~Connect
+powtarza się co noc. Surowe eksporty FIT dla 8, 9 i~13~czerwca są dostępne.}
 
 \section{Wyniki: podsumowanie radarowe}
 
 \begin{table}[H]
 \centering
-\caption{Podsumowanie snu wyznaczone wyłącznie z~radaru. Trzy ostatnie
-wiersze dotyczą pełnych nocy z~płaską pokrywą i~czujnikiem nad łóżkiem.}
+\caption{Podsumowanie snu wyznaczone wyłącznie z~radaru. Pierwsze trzy
+wiersze tworzą główny zestaw porównawczy z~eksportem Garmina; dwa ostatnie
+pokazują powtarzalność stanowiska z~płaską pokrywą nad łóżkiem.}
 \label{tab:sensummary}
 \small
 \resizebox{\textwidth}{!}{%
@@ -2265,25 +2282,58 @@ wiersze dotyczą pełnych nocy z~płaską pokrywą i~czujnikiem nad łóżkiem.}
 \toprule
 Nagranie / konfiguracja & Ocena & Sen całk. [min] & Efektywność [\%] & Spocz. HR [bpm] & Jakość \\
 \midrule
-1 (plano-convex, krawędź) & 74 & 364,5 & 93,8 & 52,7 & Przeciętna \\
-2 (FZP, krawędź)          & 71 & 342,5 & 95,0 & 51,9 & Przeciętna \\
-3 (płaska, zapis przerwany)& 49 & 154,0 & 85,8 & 50,8 & Słaba \\
-13.06 (płaska, nad łóżkiem)& 93 & 485,0 & 97,1 & 49,7 & Doskonała \\
-15.06 (płaska, nad łóżkiem)& 78 & 454,5 & 89,4 & 51,1 & Przeciętna \\
-16.06 (płaska, nad łóżkiem)& 91 & 551,0 & 97,6 & 50,5 & Doskonała \\
+08.06 (plano-convex, krawędź) & 74 & 364,5 & 93,8 & 52,7 & Przeciętna \\
+09.06 (FZP, krawędź)          & 71 & 342,5 & 95,0 & 51,9 & Przeciętna \\
+13.06 (płaska, nad łóżkiem)   & 93 & 485,0 & 97,1 & 49,7 & Doskonała \\
+15.06 (płaska, nad łóżkiem)   & 78 & 454,5 & 89,4 & 51,1 & Przeciętna \\
+16.06 (płaska, nad łóżkiem)   & 91 & 551,0 & 97,6 & 50,5 & Doskonała \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
 
-Noc~3 wypadła znacznie gorzej głównie dlatego, że nagranie zostało przerwane
-i~jest krótkie --- ocena została ograniczona przez czas snu. Oszacowane tętno
-spoczynkowe pozostało spójne między nocami (około 50--53~bpm). Trzy późniejsze
-pełne noce pokazują, że w~ustawieniu nad łóżkiem z~płaską pokrywą można
-powtarzalnie uzyskać wielogodzinne, w~dużej części ciągłe trendy radarowe.
-Nie potwierdza to jednak poprawności etykiet faz ani samo w~sobie nie dowodzi
-przewagi tej przesłony: punktowa ocena rośnie przede wszystkim z~długością
-i~ciągłością zapisu.
+Wszystkie pokazane zapisy są pełnymi nocami. Oszacowane tętno spoczynkowe
+pozostało spójne (około 50--53~bpm), a~trzy noce z~płaską pokrywą pokazują,
+że stanowisko nad łóżkiem może powtarzalnie dostarczać wielogodzinne trendy.
+Wyższej oceny z~13~czerwca nie należy jednak utożsamiać z~walidacją faz:
+punktowa metryka silnie zależy od długości i~ciągłości zapisu.
+
+\section{Wyniki: jakość techniczna trzech konfiguracji}
+
+Ponieważ surowa amplituda może pochodzić od krawędzi łóżka, porównanie
+konfiguracji oparto również na odsetku okien zaakceptowanych przez bramkowanie,
+dostępności HR/RR oraz błędzie bezwzględnym względem równoległego trendu
+Garmina. Tabela~\ref{tab:sen-jakosc} dotyczy trzech pełnych nocy głównego
+porównania.
+
+\begin{table}[H]
+\centering
+\caption{Techniczna użyteczność trendów dla trzech pełnych nocy. ,,Ważne
+okna'' oznaczają status \texttt{valid}, dostępność HR/RR dotyczy
+nieinterpolowanych estymat, a~MAE jest średnim błędem bezwzględnym
+w~sparowanych oknach snu.}
+\label{tab:sen-jakosc}
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Konfiguracja & Ważne okna [\%] & HR dostępne [\%] &
+RR dostępne [\%] & HR MAE [bpm] & RR MAE [odd./min] \\
+\midrule
+08.06, plano-convex przy krawędzi & 89,9 & 70,5 & 89,9 & 3,9 & 2,0 \\
+09.06, FZP przy krawędzi          & 91,8 & 80,8 & 91,8 & 3,9 & 1,6 \\
+13.06, płaska nad łóżkiem         & 94,5 & 77,6 & 94,5 & 3,8 & 1,3 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Ustawienie z~płaską pokrywą uzyskało największy udział zaakceptowanych okien
+i~najmniejszy MAE oddechu. Dostępność tętna była natomiast największa dla FZP,
+a~różnica HR MAE między konfiguracjami jest mała. Wynik nie pozwala więc
+stwierdzić, że płaska pokrywa jest lepszą anteną; pokazuje, że kompletne
+stanowisko \emph{płaska pokrywa + wysięgnik nad tułowiem} było bardziej
+użyteczne niż dwa początkowe stanowiska przy krawędzi.
 
 \section{Wyniki: porównanie tętna z Garmin Fenix 7}
 
@@ -2297,9 +2347,8 @@ i~ciągłością zapisu.
 \toprule
 Noc & Radar śr. [bpm] & Garmin śr. [bpm] & Obciążenie śr. & Obciążenie med. \\
 \midrule
-1 (plano-convex) & 55,5 & 57,4 & $-1{,}9$ & $-1{,}8$ \\
-2 (FZP)          & 55,1 & 58,3 & $-3{,}3$ & $-2{,}4$ \\
-3 (płaska)       & 53,8 & 53,6 & $+0{,}1$ & $+1{,}3$ \\
+08.06 (plano-convex, krawędź) & 55,5 & 57,4 & $-1{,}9$ & $-1{,}8$ \\
+09.06 (FZP, krawędź)          & 55,1 & 58,3 & $-3{,}3$ & $-2{,}4$ \\
 13.06 (płaska, nad łóżkiem) & 52,5 & 52,7 & $-0{,}1$ & $+0{,}4$ \\
 \bottomrule
 \end{tabular}%
@@ -2308,8 +2357,9 @@ Noc & Radar śr. [bpm] & Garmin śr. [bpm] & Obciążenie śr. & Obciążenie me
 
 Zgodność tętna jest najważniejszym wynikiem praktycznym, ponieważ --- w~
 przeciwieństwie do surowej amplitudy --- jest odporna na problem odbicia od
-krawędzi łóżka. Co ciekawe, noc z~płaską pokrywą wypadła najlepiej, a~obie
-noce z~soczewką zaniżały tętno. Nie dowodzi to wyższości płaskiej pokrywy,
+krawędzi łóżka. Noc z~płaską pokrywą miała najmniejsze średnie obciążenie HR
+($-0{,}1$~bpm), podczas gdy ustawienia przy krawędzi zaniżały tętno średnio
+o~\SI{1.9}{bpm} i~\SI{3.3}{bpm}. Nie dowodzi to wyższości płaskiej pokrywy,
 pokazuje natomiast, że przewaga w~zysku anteny nie przekłada się
 automatycznie na lepszą zgodność fizjologiczną w~danym ustawieniu. Wiarygodną
 hipotezą wyjaśniającą jest geometria pomiaru: soczewki skupiające zawężają
@@ -2319,9 +2369,8 @@ pokrywa obejmuje szerszy obszar i~przy małych odległościach może być bardzi
 odporna na takie przesunięcie, mimo mniejszego zysku. Ponieważ każdy wariant
 soczewki badano innej nocy, zebrane dane nie pozwalają oddzielić wpływu
 soczewki od wpływu ułożenia ciała i~mocowania; jest to interpretacja, a~nie
-wykazany związek przyczynowy. Pełna noc z~13~czerwca, już w~ustawieniu nad
-łóżkiem, również miała praktycznie zerowe średnie obciążenie HR względem
-Garmina. Dla nocy z~15 i~16~czerwca eksport zegarka nie był dostępny, dlatego
+wykazany związek przyczynowy. Dla nocy z~15 i~16~czerwca eksport zegarka nie
+był dostępny, dlatego
 nie dopisano im pozornej ,,referencji'' i~pokazano jedynie przebiegi radarowe.
 
 \section{Wyniki: porównanie częstości oddechu}
@@ -2336,20 +2385,20 @@ nie dopisano im pozornej ,,referencji'' i~pokazano jedynie przebiegi radarowe.
 \toprule
 Noc & Radar śr. [odd./min] & Garmin śr. & Obciążenie śr. & Obciążenie med. \\
 \midrule
-1 (plano-convex) & 13,6 & 14,0 & $-0{,}4$ & $-0{,}2$ \\
-2 (FZP)          & 14,6 & 14,2 & $+0{,}4$ & $+0{,}5$ \\
-3 (płaska)       & 14,3 & 14,0 & $+0{,}3$ & $+0{,}2$ \\
+08.06 (plano-convex, krawędź) & 13,6 & 14,0 & $-0{,}4$ & $-0{,}2$ \\
+09.06 (FZP, krawędź)          & 14,6 & 14,2 & $+0{,}4$ & $+0{,}5$ \\
 13.06 (płaska, nad łóżkiem) & 14,5 & 13,7 & $+0{,}7$ & $+0{,}6$ \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
 
-Zgodność częstości oddechu okazała się lepsza niż zgodność tętna --- średnie
-obciążenie w~pierwszych trzech nocach nie przekraczało pół oddechu na minutę,
-a~w~pełnej nocy nad łóżkiem wyniosło około 0,7~oddechu/min. Jest to
-najbardziej stabilny wynik badania nocnego, choć nadal stanowi porównanie
-z~urządzeniem konsumenckim, a~nie walidację kliniczną.
+Średnie obciążenie częstości oddechu nie przekroczyło
+0{,}7~oddechu/min w~żadnej z~trzech pełnych nocy. Ustawienie
+z~płaską pokrywą miało nieco większe obciążenie średnie, ale najmniejszy MAE
+okienny (tab.~\ref{tab:sen-jakosc}), dlatego pojedyncza średnia nie powinna
+zastępować oceny całego przebiegu. Nadal jest to porównanie z~urządzeniem
+konsumenckim, a~nie walidacja kliniczna.
 
 \section{Wyniki: porównanie faz snu}
 \label{sec:fazy-wyniki}
@@ -2372,19 +2421,26 @@ przypisał danej fazie więcej czasu niż Garmin. Obie kolumny są estymatami --
 Noc & Źródło & Czuwanie & Sen lekki & Sen głęboki & REM \\
  & & [min] & [min] & [min] & [min] \\
 \midrule
-1 & Radar    & 24,0 & 224,5 & 70,5 & 69,5 \\
-1 & Garmin   & 40,0 & 222,0 & 57,0 & 47,0 \\
-1 & Różnica  & $-16{,}0$ & $+2{,}5$ & $+13{,}5$ & $+22{,}5$ \\
+08.06 & Radar    & 24,0 & 224,5 & 70,5 & 69,5 \\
+08.06 & Garmin   & 40,0 & 222,0 & 57,0 & 47,0 \\
+08.06 & Różnica  & $-16{,}0$ & $+2{,}5$ & $+13{,}5$ & $+22{,}5$ \\
 \midrule
-2 & Radar    & 18,0 & 207,0 & 50,0 & 85,5 \\
-2 & Garmin   & 5,0  & 211,0 & 18,0 & 117,0 \\
-2 & Różnica  & $+13{,}0$ & $-4{,}0$ & $+32{,}0$ & $-31{,}5$ \\
+09.06 & Radar    & 18,0 & 207,0 & 50,0 & 85,5 \\
+09.06 & Garmin   & 5,0  & 211,0 & 18,0 & 117,0 \\
+09.06 & Różnica  & $+13{,}0$ & $-4{,}0$ & $+32{,}0$ & $-31{,}5$ \\
+\midrule
+13.06 & Radar   & 14,5 & 245,5 & 120,5 & 119,0 \\
+13.06 & Garmin  & 51,0 & 284,0 & 31,0  & 115,0 \\
+13.06 & Różnica & $-36{,}5$ & $-38{,}5$ & $+89{,}5$ & $+4{,}0$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Względem strumienia FIT radar przypisywał więcej czasu fazie snu głębokiego
-(o~13,5 i~32~minuty). Wniosek ten trzeba jednak natychmiast osłabić: jak
+we wszystkich trzech nocach (o~13,5, 32 i~89,5~minuty). Największy rozjazd
+wystąpił właśnie 13~czerwca, mimo dobrej ciągłości HR/RR. Pokazuje to, że
+stabilny pomiar parametrów życiowych nie jest równoznaczny z~poprawnym
+rozpoznaniem stadiów. Wniosek trzeba dodatkowo osłabić: jak
 pokazano w~tabeli~\ref{tab:score-garmin}, \emph{drugi} eksport z~tego samego
 zegarka (podsumowanie z~aplikacji Garmin~Connect) podaje dla nocy~1 sen głęboki
 82~minuty --- czyli \emph{więcej} niż radar (70,5~min). Kierunek rozbieżności
@@ -2394,45 +2450,42 @@ radar i~Garmin różnią się w~proporcjach faz, ale dane nie pozwalają orzec,
 która heurystyka jest bliżej rzeczywistości.
 
 Istotna obserwacja diagnostyczna dotyczyła \emph{struktury} hipnogramu.
-Pierwsza wersja klasyfikatora wykazała w~obu nocach po dwa bezpośrednie
-przejścia REM~$\rightarrow$~sen głęboki, podczas gdy Garmin nie wykazał
-żadnego. Zamiast dostrajać progi do zegarka, wprowadzono opisany wcześniej,
-niezależny od Garmina warunek przejścia przez sen lekki. W~wyniku końcowym
-bezpośrednich przejść REM~$\leftrightarrow$~sen głęboki już nie ma; w~nocy~1
-przeniesiono do snu lekkiego łącznie 12~minut, a~w~nocy~2 --- 16~minut.
+Pierwsza wersja klasyfikatora dopuszczała w~analizowanych nocach bezpośrednie
+przejścia REM~$\leftrightarrow$~sen głęboki. Zamiast dostrajać progi do
+zegarka, wprowadzono opisany wcześniej, niezależny od Garmina warunek przejścia
+przez sen lekki. W~wyniku końcowym
+bezpośrednich przejść REM~$\leftrightarrow$~sen głęboki już nie ma; w~zapisach
+z~8, 9 i~13~czerwca przeniesiono do snu lekkiego odpowiednio 12, 16 i~28~minut.
 Jest to naprawa niespójności reguł, nie dowód poprawności pozostałych etykiet.
 
 \begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth]{sen_krawedz_fazy.png}
-    \caption[Fazy snu w pierwszych trzech nocach]{Estymowane fazy snu
-    w~pierwszych trzech nagraniach. Linia fioletowa oznacza wynik A121,
-    przerywana --- estymatę Garmina, a~jasne żółte pola --- okna, w~których
-    reguła strukturalna wstawiła sen lekki między REM i~snem głębokim. Nocy~3
-    nie należy porównywać czasowo z~pozostałymi, ponieważ zapis został
-    przerwany.}
-    \label{fig:sen-krawedz-fazy}
+    \includegraphics[width=\textwidth]{sen_porownanie_konfiguracji_fazy.png}
+    \caption[Fazy snu w trzech pełnych nocach]{Estymowane fazy snu dla
+    plano-convex przy krawędzi, FZP przy krawędzi i~płaskiej pokrywy nad
+    łóżkiem. Dla wszystkich trzech nocy dostępny jest eksport Garmina. Linia
+    fioletowa oznacza wynik A121, przerywana --- estymatę Garmina, a~jasne
+    żółte pola --- okna skorygowane regułą przejścia przez sen lekki.}
+    \label{fig:sen-porownanie-fazy}
 \end{figure}
 
 \begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth]{sen_krawedz_tetno.png}
-    \caption[Tętno w pierwszych trzech nocach]{Tętno w~pierwszych trzech
-    nocach: A121 i~Garmin Fenix~7. Linia A121 łączy wyłącznie ważne okna oraz
-    krótkie przerwy ruchowe; długie luki pozostawiono celowo, aby nie
-    sugerować ciągłości pomiaru tam, gdzie estymata została odrzucona.}
-    \label{fig:sen-krawedz-hr}
+    \includegraphics[width=\textwidth]{sen_porownanie_konfiguracji_tetno.png}
+    \caption[Tętno w trzech pełnych nocach]{Tętno A121 i~Garmin Fenix~7 dla
+    trzech pełnych nocy głównego porównania. Linia A121 łączy wyłącznie ważne
+    okna i~krótkie przerwy ruchowe; długich luk nie interpolowano.}
+    \label{fig:sen-porownanie-hr}
 \end{figure}
 
 \begin{figure}[p]
     \centering
-    \includegraphics[width=\textwidth]{sen_krawedz_oddech.png}
-    \caption[Częstość oddechu w pierwszych trzech nocach]{Częstość oddechu
-    w~pierwszych trzech nocach. Zgodność trendów jest wyraźnie lepsza niż dla
-    tętna, zwłaszcza w~spokojnych odcinkach nocy. Widoczne krótkie odchylenia
-    i~luki należy interpretować razem z~odrzucaniem okien po ruchu, a~nie jako
-    pewne zmiany fizjologiczne.}
-    \label{fig:sen-krawedz-rr}
+    \includegraphics[width=\textwidth]{sen_porownanie_konfiguracji_oddech.png}
+    \caption[Częstość oddechu w trzech pełnych nocach]{Częstość oddechu A121
+    i~Garmin Fenix~7. Ustawienie z~płaską pokrywą nad łóżkiem daje najbardziej
+    ciągły przebieg, ale widoczne krótkie odchylenia nadal należy interpretować
+    razem z~odrzucaniem okien po ruchu.}
+    \label{fig:sen-porownanie-rr}
 \end{figure}
 
 \begin{figure}[p]
@@ -2473,24 +2526,27 @@ Jest to naprawa niespójności reguł, nie dowód poprawności pozostałych etyk
 \caption{Amplituda dominującego odbicia a~zgodność z~celem.}
 \label{tab:amplitudy}
 \small
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lrrrr@{}}
 \toprule
 Noc & Mediana ampl. & Mediana odl. & Mediana odl. & Udział okien \\
  & piku [j.u.] & celu [m] & piku [m] & $|\Delta d|\leq$\SI{0.10}{m} \\
 \midrule
-1 & 1665 & 0,37 & 0,15 & 0,316 \\
-2 & 17516 & 0,44 & 0,12 & 0,012 \\
-3 & 23574 & 0,22 & 0,10 & 0,384 \\
+08.06, plano-convex przy krawędzi & 1665  & 0,37 & 0,15 & 0,316 \\
+09.06, FZP przy krawędzi          & 17516 & 0,44 & 0,12 & 0,012 \\
+13.06, płaska nad łóżkiem         & 23133 & 0,30 & 0,10 & 0,224 \\
+11.06, hiperboliczna, zły kąt     & 811   & 1,62 & 1,98 & 0,094 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
-Surowy wykres amplitud (rys.~\ref{fig:amplitudy}) sugeruje dramatyczną
-poprawę między nocami. Tabela~\ref{tab:amplitudy} pokazuje jednak, dlaczego
-nie wolno tego czytać jako „lepszego sygnału z~klatki piersiowej”:
-w~nocy~2 jedynie \textbf{1,2\%} okien miało dominujący pik w~promieniu
-\SI{10}{cm} od śledzonego celu. Silne odbicie pochodziło niemal na pewno
-od krawędzi łóżka lub innego bliskiego reflektora, a~nie od badanego.
+Tabela~\ref{tab:amplitudy} pokazuje, dlaczego nie wolno utożsamiać wysokości
+dominującego piku z~jakością sygnału z~klatki. Dla FZP jedynie
+\textbf{1,2\%} porównywalnych okien miało pik w~promieniu \SI{10}{cm} od
+śledzonego celu. Nawet w~dobrej nocy z~płaską pokrywą mediana piku leżała przy
+\SI{0.10}{m}, a~celu przy \SI{0.30}{m}. Wysokie amplitudy mogły więc pochodzić
+od krawędzi łóżka, pościeli albo obudowy, a~nie bezpośrednio od klatki.
 
 Z~tego powodu w~niniejszej pracy przyjęto następującą hierarchię wyników:
 \begin{enumerate}
@@ -2499,14 +2555,15 @@ Z~tego powodu w~niniejszej pracy przyjęto następującą hierarchię wyników:
   \item surowa amplituda piku --- wyłącznie \textbf{kontekst inżynierski}.
 \end{enumerate}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\textwidth]{sen_amplitudy_nocy.png}
-    \caption[Amplituda dominującego odbicia w trzech nocach]{Amplituda
-    dominującego odbicia w~trzech nocach. Wykres jest użyteczny jako kontekst
-    inżynierski, ale nie stanowi miary siły sygnału z~klatki piersiowej.}
-    \label{fig:amplitudy}
-\end{figure}
+\paragraph{Negatywny przypadek geometrii.} Noc z~11~czerwca, z~soczewką
+hiperboliczną i~medianą celu \SI{1.62}{m}, potraktowano jako ilustrację
+wrażliwości na ustawienie. Przy odchyleniu osi o~ponad \SI{60}{\degree} od
+normalnej dostępność surowego HR spadła do 51,4\%, a~MAE względem Garmina
+wzrósł do \SI{6.4}{bpm}; dla oddechu MAE wyniósł około
+3,0~oddechy/min. Wynik jest wyraźnie gorszy od trzech konfiguracji
+z~tabeli~\ref{tab:sen-jakosc}. Nie jest to kontrolowany dowód przeciw soczewce
+hiperbolicznej, lecz praktyczny przykład, że duży dystans połączony ze złym
+kątem może zniweczyć korzyść z~węższej wiązki.
 
 \section{Dyskusja wyników nocnych}
 Częstość oddechu była zgodna z~wynikiem Garmina lepiej niż tętno. Jest to
@@ -2519,8 +2576,8 @@ utrzymania tej geometrii przez wiele godzin. Badany zmienia pozycję, a~klatka
 przesuwa się poprzecznie i~obraca względem osi czujnika. Wąska wiązka soczewki
 skupiającej może wtedy dać wysoką amplitudę odbicia od niewłaściwego obiektu,
 podczas gdy szersze pole widzenia płaskiej pokrywy nadal obejmuje część
-tułowia. Taki mechanizm jest zgodny zarówno z~najlepszą zgodnością tętna
-w~nocy~3, jak i~z~ciągłymi przebiegami trzech późniejszych nocy nad łóżkiem.
+tułowia. Taki mechanizm jest zgodny zarówno z~najmniejszym średnim obciążeniem
+tętna 13~czerwca, jak i~z~ciągłymi przebiegami trzech nocy nad łóżkiem.
 Nie wolno jednak przypisać całej poprawy samej pokrywie: jednocześnie zmieniono
 położenie radaru z~boku łóżka na wysięgnik nad tułowiem. Wynik pokazuje
 przewagę \emph{konkretnej pary} szeroka wiązka--tolerancyjna geometria, a~nie
@@ -2531,14 +2588,14 @@ nocami, brak eksportu Garmina dla dwóch z~trzech pełnych nocy nad łóżkiem o
 brak polisomnografii. Garmin jest konsumenckim źródłem porównania, a~nie
 złotym standardem. Z~tego powodu wyników nie należy interpretować jako
 rankingu soczewek ani walidacji klinicznej algorytmu snu. Noc z~soczewką
-hiperboliczną przy medianie \SI{1.62}{m} pozostaje świadomie wyłączona z~tych
-wniosków, ponieważ ponad \SI{60}{\degree} odchylenia od normalnej czyniło
-geometrię nieporównywalną.
+hiperboliczną przy medianie \SI{1.62}{m} pozostaje świadomie wyłączona
+z~rankingu soczewek, ponieważ ponad \SI{60}{\degree} odchylenia od normalnej
+czyniło geometrię nieporównywalną. Może służyć jedynie jako negatywny przypadek
+pokazujący wagę wycelowania.
 
-\todo{Powtórzyć pełną noc z~soczewką hiperboliczną z~większego dystansu,
-ustawiając oś możliwie prostopadle do klatki i~dokumentując dystans oraz kąt.
-Porównać ją z~płaską pokrywą przy tym samym mocowaniu nad łóżkiem; nie używać
-nieudanego nagrania ukośnego jako wyniku ujemnego soczewki.}
+\todo{Powtórzyć noc z~soczewką hiperboliczną przy większym dystansie,
+utrzymując oś możliwie prostopadle do klatki. Udokumentować kąt i~dystans oraz
+porównać z~płaską pokrywą na tym samym mocowaniu.}
 
 % ---------------------------------------------------------------------
 \chapter{Dalsze zastosowania i eksperymenty}
@@ -2596,15 +2653,16 @@ Najważniejsze ustalenia inżynierskie uzyskane dotychczas:
   amplitudą sygnału: SNR oddechowy wynosi 44--47~dB niezależnie od soczewki
   i~obecności folii aluminiowej. Zysk anteny przekłada się na stabilność
   śledzenia celu, a~nie na wykrywalność oddechu.
-  \item Na dystansie \SIrange{0.5}{1.0}{m} folia aluminiowa nie zwiększyła
-  mierzalnie amplitudy odbicia. Z~powodu wykonania warunków w~osobnych sesjach
-  wpływ folii na SNR pozostaje nierozstrzygnięty i~wymaga krótkiego,
-  przeplatanego retestu przy \SI{2}{m}.
-  \item W~pomiarach nocnych zgodność częstości oddechu z~Garmin~Fenix~7
-  mieści się w~granicach $\pm 0{,}5$~oddechu na minutę, a~tętna w~granicach
-  kilku uderzeń na minutę. Rozbieżności w~fazach snu wskazują na ograniczenia
-  heurystycznego klasyfikatora --- co jest bezpośrednią motywacją dla
-  zastosowania sieci neuronowych.
+  \item Retest na dystansie \SI{2}{m} potwierdził, że folia aluminiowa nie
+  daje powtarzalnego wzmocnienia. Zmiana geometrii z~naturalnej na prawie
+  prostopadłą zwiększyła natomiast echo o~około \SI{11}{dB}; właściwe
+  wycelowanie radaru miało więc znacznie większe znaczenie niż metalowa łata.
+  \item W~trzech pełnych nocach średnie obciążenie częstości oddechu względem
+  Garmin~Fenix~7 nie przekroczyło $0{,}7$~oddechu/min, choć okienny MAE
+  wynosił 1,3--2,0~oddechu/min; dla tętna MAE wynosił 3,8--3,9~bpm.
+  Rozbieżności w~fazach snu wskazują na ograniczenia heurystycznego
+  klasyfikatora i~motywują jego dalszą walidację lub zastąpienie modelem
+  uczonym.
 \end{itemize}
 
 \section{Kierunki dalszych prac}
