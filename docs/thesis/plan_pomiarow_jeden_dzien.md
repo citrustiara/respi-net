@@ -181,8 +181,11 @@ zestaw, który zachowuje sens metodyczny, wygląda następująco:
 4. Jeżeli 100 cm spełnia kryterium użyteczności, wykonać jedno nagranie przy
    150 cm. Po sukcesie zwiększać dystans co 50 cm aż do pierwszego
    niepowodzenia. Powtórzyć tylko najdalszy dystans zaliczony oraz pierwszy
-   niezaliczony; to wystarcza do podania przedziału praktycznej granicy bez
-   rozbudowanej macierzy.
+   niezaliczony. W powtórzeniu nieudanego warunku ponownie usiąść albo
+   przesunąć krzesło radialnie o 1–2 cm, ponieważ jedokanałowy HB100 może
+   znaleźć się w punkcie małej czułości fazowej. Dopiero niepowodzenie obu
+   ustawień uznać za granicę; to wystarcza do podania jej praktycznego
+   przedziału bez rozbudowanej macierzy.
 
 Każde nagranie powinno trwać 90 s i powtarzać już użyty protokół A121:
 10 s oddechu swobodnego, 7 cykli po 5 s (wdech 2 s, wydech 3 s), 15 s
