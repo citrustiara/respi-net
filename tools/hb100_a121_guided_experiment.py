@@ -225,9 +225,10 @@ def build_initial_steps(*, include_interference: bool, hb100_only: bool) -> list
                     repeat_number=repeat,
                     repeat_total=2,
                     instruction=(
-                        "Ustaw środki apertur HB100 i A121 5–10 cm od siebie, na wysokości mostka, "
-                        "z równoległymi osiami. A121 ma płaską pokrywę. Zachowaj nieruchomą pozycję "
-                        "i wykonuj komunikaty oddechowe programu."
+                        "Ustaw środki apertur HB100 i A121 15 cm od siebie, na wysokości mostka, "
+                        "z jednakowym nachyleniem i taką samą odległością obu radarów od tułowia. "
+                        "A121 ma płaską pokrywę. Zachowaj nieruchomą pozycję i wykonuj komunikaty "
+                        "oddechowe programu."
                         if not hb100_only
                         else "Ustaw HB100 na wysokości mostka i wykonuj komunikaty oddechowe programu."
                     ),

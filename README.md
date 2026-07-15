@@ -10,6 +10,9 @@ The IMU path is still present as a secondary comparison channel, but the main ex
 
 Current Progress:
 - **HB100 10.525 GHz analog radar integrated** with custom amplification and filtering.
+- A guided simultaneous HB100/A121 comparison records common breathing cues,
+  empty-scene interference controls, and paired 30/60/100 cm runs; the
+  reproducible offline analysis is in `tools/analyze_hb100_a121_comparison.py`.
 - ESP32 ADC firmware captures raw radar voltage at high serial throughput.
 - Click CLI supports serial capture, batch processing, and chart generation.
 - Unified Qt desktop app (`respi app`) combines HB100 radar, Acconeer A121 radar, ESP32 IMU, and iPhone BLE IMU live viewing, controls, history browsing, CSV recording, and SQLite recording.
@@ -143,7 +146,13 @@ uv run respi batch-imu
 uv run respi capture-imu --port COM6
 uv run respi iphone-imu-devices
 uv run respi capture-iphone-imu --seconds 60
+uv run python tools/imu_lsm6ds3_iphone_guided_experiment.py --lsm-port /dev/cu.usbserial-XXXX
 ```
+
+The last command runs the four planned supine comparison trials with the
+LSM6DS3 and iPhone fixed side by side on the upper chest.  It requires the
+timestamped LSM6DS3 firmware, writes the device clock/counter into its CSV,
+records shared breathing cues and discards an interrupted trial on Esc.
 
 ## Repository Structure
 

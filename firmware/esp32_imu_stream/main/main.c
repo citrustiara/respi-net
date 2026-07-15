@@ -4,6 +4,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -19,9 +20,12 @@
 #define LSM6DS3_WHO_AM_I_REG 0x0F
 #define LSM6DS3_CTRL1_XL 0x10
 #define LSM6DS3_CTRL2_G  0x11
+#define LSM6DS3_CTRL3_C  0x12
 #define LSM6DS3_STATUS_REG 0x1E
 #define LSM6DS3_OUTX_L_G 0x22
-#define LSM6DS3_OUTX_L_XL 0x28
+
+#define LSM6DS3_ODR_104_HZ 0x40
+#define LSM6DS3_BDU_IF_INC 0x44
 
 static const char *TAG = "IMU_STREAM";
 
@@ -69,46 +73,56 @@ void app_main(void) {
   ESP_ERROR_CHECK(lsm6ds3_register_read(LSM6DS3_WHO_AM_I_REG, &who_am_i, 1));
   ESP_LOGI(TAG, "WHO_AM_I: 0x%02X", who_am_i);
 
-    // LSM6DS3 init
-    // CTRL1_XL: 0x70 = 1.66kHz ODR (XL), 2G scale
-    ESP_ERROR_CHECK(lsm6ds3_register_write_byte(LSM6DS3_CTRL1_XL, 0x70));
-    // CTRL2_G: 0x70 = 1.66kHz ODR (G), 250 dps
-    ESP_ERROR_CHECK(lsm6ds3_register_write_byte(LSM6DS3_CTRL2_G, 0x70));
-    ESP_LOGI(TAG, "LSM6DS3 configured for 1.66kHz");
+  // CTRL1_XL: 104 Hz ODR, +/-2 g. CTRL2_G: 104 Hz ODR, +/-245 dps.
+  ESP_ERROR_CHECK(
+      lsm6ds3_register_write_byte(LSM6DS3_CTRL1_XL, LSM6DS3_ODR_104_HZ));
+  ESP_ERROR_CHECK(
+      lsm6ds3_register_write_byte(LSM6DS3_CTRL2_G, LSM6DS3_ODR_104_HZ));
+  // Block Data Update keeps a complete sample stable during the 12-byte read;
+  // IF_INC enables sequential register addressing.
+  ESP_ERROR_CHECK(
+      lsm6ds3_register_write_byte(LSM6DS3_CTRL3_C, LSM6DS3_BDU_IF_INC));
+  ESP_LOGI(TAG, "LSM6DS3 configured for 104 Hz");
 
-  uint8_t data_xl[6];
-  uint8_t data_g[6];
+  uint8_t data[12];
   int16_t ax, ay, az, gx, gy, gz;
+  uint32_t sample_index = 0;
 
   ESP_LOGI(TAG, "Starting 6-axis stream...");
 
   while (1) {
     uint8_t status;
-    lsm6ds3_register_read(LSM6DS3_STATUS_REG, &status, 1);
+    if (lsm6ds3_register_read(LSM6DS3_STATUS_REG, &status, 1) != ESP_OK) {
+      vTaskDelay(pdMS_TO_TICKS(1));
+      continue;
+    }
 
     if ((status & 0x03) == 0x03) { // Both XL and G data ready
-      if (lsm6ds3_register_read(LSM6DS3_OUTX_L_XL, data_xl, 6) == ESP_OK &&
-          lsm6ds3_register_read(LSM6DS3_OUTX_L_G, data_g, 6) == ESP_OK) {
-        
-        ax = (int16_t)((data_xl[1] << 8) | data_xl[0]);
-        ay = (int16_t)((data_xl[3] << 8) | data_xl[2]);
-        az = (int16_t)((data_xl[5] << 8) | data_xl[4]);
+      if (lsm6ds3_register_read(LSM6DS3_OUTX_L_G, data, sizeof(data)) ==
+          ESP_OK) {
+        const int64_t device_time_us = esp_timer_get_time();
 
-        gx = (int16_t)((data_g[1] << 8) | data_g[0]);
-        gy = (int16_t)((data_g[3] << 8) | data_g[2]);
-        gz = (int16_t)((data_g[5] << 8) | data_g[4]);
+        gx = (int16_t)((data[1] << 8) | data[0]);
+        gy = (int16_t)((data[3] << 8) | data[2]);
+        gz = (int16_t)((data[5] << 8) | data[4]);
+        ax = (int16_t)((data[7] << 8) | data[6]);
+        ay = (int16_t)((data[9] << 8) | data[8]);
+        az = (int16_t)((data[11] << 8) | data[10]);
 
-        // Print: ax,ay,az,gx,gy,gz
+        // Print: sample_index,device_time_us,ax,ay,az,gx,gy,gz
         // XL scale: 2G (0.061 mg/LSB)
-        // G scale: 250 dps (8.75 mdps/LSB)
-        printf("%.4f,%.4f,%.4f,%.3f,%.3f,%.3f\n", 
+        // G scale: 245 dps (8.75 mdps/LSB)
+        printf("%" PRIu32 ",%" PRId64 ",%.4f,%.4f,%.4f,%.3f,%.3f,%.3f\n",
+               sample_index, device_time_us,
                (float)ax * 0.061 / 1000.0,
-               (float)ay * 0.061 / 1000.0, 
+               (float)ay * 0.061 / 1000.0,
                (float)az * 0.061 / 1000.0,
                (float)gx * 8.75 / 1000.0,
                (float)gy * 8.75 / 1000.0,
                (float)gz * 8.75 / 1000.0);
+        sample_index++;
       }
     }
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }

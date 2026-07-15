@@ -223,6 +223,10 @@ class IPhoneIMUBluetoothCapture:
         self.read_thread: threading.Thread | None = None
         self.received_batches = 0
         self.dropped_batches = 0
+        self.invalid_batches = 0
+        self.missing_batches = 0
+        self.duplicate_batches = 0
+        self.sequence_resets = 0
         self.last_sequence: int | None = None
 
         self._lock = threading.Lock()
@@ -240,6 +244,10 @@ class IPhoneIMUBluetoothCapture:
         self.data_storage = []
         self.received_batches = 0
         self.dropped_batches = 0
+        self.invalid_batches = 0
+        self.missing_batches = 0
+        self.duplicate_batches = 0
+        self.sequence_resets = 0
         self.last_sequence = None
         self._host_time_offset_ms = None
         self._failed_message = None
@@ -284,6 +292,17 @@ class IPhoneIMUBluetoothCapture:
     def snapshot_data_since(self, start_index: int) -> list[list[float]]:
         with self._lock:
             return [list(row) for row in self.data_storage[start_index:]]
+
+    def counter_snapshot(self) -> dict[str, int]:
+        with self._lock:
+            return {
+                "received_batches": int(self.received_batches),
+                "dropped_batches": int(self.dropped_batches),
+                "invalid_batches": int(self.invalid_batches),
+                "missing_batches": int(self.missing_batches),
+                "duplicate_batches": int(self.duplicate_batches),
+                "sequence_resets": int(self.sequence_resets),
+            }
 
     def _thread_main(self) -> None:
         try:
@@ -330,10 +349,26 @@ class IPhoneIMUBluetoothCapture:
         try:
             packet = parse_iphone_imu_packet(payload)
         except ValueError:
-            self.dropped_batches += 1
+            with self._lock:
+                self.invalid_batches += 1
+                self.dropped_batches += 1
             return
         if not packet.samples:
             return
+
+        with self._lock:
+            previous_sequence = self.last_sequence
+            if previous_sequence is not None:
+                delta = (packet.sequence - previous_sequence) & 0xFFFF
+                if delta == 0:
+                    self.duplicate_batches += 1
+                    return
+                if delta < 0x8000:
+                    missing = max(0, delta - 1)
+                    self.missing_batches += missing
+                    self.dropped_batches += missing
+                else:
+                    self.sequence_resets += 1
 
         host_now_ms = time.time() * 1000.0
         if self._host_time_offset_ms is None:

@@ -17,6 +17,18 @@ from .paths import IMU_PLOTS_DIR, RAW_IMU_DIR
 from .serial_utils import list_serial_ports, ordered_ports
 
 IMU_COLUMNS = ["Time_ms", "ax", "ay", "az", "gx", "gy", "gz"]
+LSM6DS3_CAPTURE_COLUMNS = [
+    "Time_ms",
+    "HostTime_ms",
+    "DeviceTime_us",
+    "SampleIndex",
+    "ax",
+    "ay",
+    "az",
+    "gx",
+    "gy",
+    "gz",
+]
 
 
 @dataclass(frozen=True)
@@ -29,11 +41,22 @@ class ImuAnalysisResult:
     heart_bpm: float
 
 
+def _measurement_time_ms(df: pd.DataFrame) -> pd.Series:
+    """Prefer the device clock when a complete, monotonic LSM6DS3 axis is present."""
+
+    if "DeviceTime_us" in df:
+        device_us = pd.to_numeric(df["DeviceTime_us"], errors="coerce")
+        if len(device_us) >= 2 and device_us.notna().all() and (device_us.diff().dropna() > 0).all():
+            return device_us / 1000.0
+    return pd.to_numeric(df["Time_ms"], errors="coerce")
+
+
 def _sampling_rate(df: pd.DataFrame) -> float:
     if "Time_s" in df:
         time_s = df["Time_s"]
     else:
-        time_s = (df["Time_ms"] - df["Time_ms"].iloc[0]) / 1000.0
+        time_ms = _measurement_time_ms(df)
+        time_s = (time_ms - time_ms.iloc[0]) / 1000.0
 
     dt = time_s.diff().dropna()
     dt = dt[np.isfinite(dt) & (dt > 0)]
@@ -65,7 +88,8 @@ def analyze_imu_csv(
     if len(df) < 10:
         raise ValueError(f"Not enough samples in {csv_path}")
 
-    df["Time_s"] = (df["Time_ms"] - df["Time_ms"].iloc[0]) / 1000.0
+    measurement_time_ms = _measurement_time_ms(df)
+    df["Time_s"] = (measurement_time_ms - measurement_time_ms.iloc[0]) / 1000.0
     fs = _sampling_rate(df)
     t = df["Time_s"].to_numpy()
 
@@ -181,23 +205,36 @@ class BreathCapture:
         self.serial_port: serial.Serial | None = None
         self.running = False
         self.data_storage: list[list[float]] = []
+        self.capture_storage: list[list[float]] = []
         self.read_thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._device_to_host_offset_ms: float | None = None
+        self._last_device_time_us: int | None = None
+        self.malformed_lines = 0
 
-    def connect(self, port_name: str | None = None) -> bool:
+    def connect(self, port_name: str | None = None, *, exact_port: bool = False) -> bool:
         ports = list_serial_ports()
         if not ports:
             click_safe_echo("No serial ports found.")
             return False
 
         click_safe_echo(f"Available ports: {ports}")
-        for port in ordered_ports(ports, port_name):
+        if exact_port and port_name:
+            candidates = [port_name] if port_name in ports else []
+        else:
+            candidates = ordered_ports(ports, port_name)
+        for port in candidates:
             try:
                 click_safe_echo(f"Trying {port} (baud: {self.baud})...")
                 self.serial_port = serial.Serial(port, self.baud, timeout=0.1)
+                self.serial_port.reset_input_buffer()
                 self.running = True
                 with self._lock:
                     self.data_storage = []
+                    self.capture_storage = []
+                    self._device_to_host_offset_ms = None
+                    self._last_device_time_us = None
+                    self.malformed_lines = 0
                 self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
                 self.read_thread.start()
                 click_safe_echo(f"Connected to {port}. Collecting data...")
@@ -222,14 +259,44 @@ class BreathCapture:
                     click_safe_echo(f"Serial read error: {exc}")
                 self.running = False
 
-    def _process_line(self, line: str) -> None:
+    def _process_line(self, line: str, *, host_time_ms: float | None = None) -> None:
+        """Parse the timestamped firmware format and the legacy six-value format."""
+
+        values = line.split(",")
+        arrival_ms = float(host_time_ms if host_time_ms is not None else time.time() * 1000.0)
         try:
-            parts = [float(value) for value in line.split(",")]
+            if len(values) == 8:
+                sample_index = int(values[0])
+                device_time_us = int(values[1])
+                axes = [float(value) for value in values[2:]]
+                if not (0 <= sample_index <= 0xFFFFFFFF and device_time_us >= 0):
+                    raise ValueError
+                if not np.all(np.isfinite(axes)):
+                    raise ValueError
+                with self._lock:
+                    if self._device_to_host_offset_ms is None or (
+                        self._last_device_time_us is not None and device_time_us <= self._last_device_time_us
+                    ):
+                        self._device_to_host_offset_ms = arrival_ms - device_time_us / 1000.0
+                    aligned_time_ms = self._device_to_host_offset_ms + device_time_us / 1000.0
+                    self._last_device_time_us = device_time_us
+                    self.data_storage.append([aligned_time_ms, *axes])
+                    self.capture_storage.append(
+                        [aligned_time_ms, arrival_ms, float(device_time_us), float(sample_index), *axes]
+                    )
+                return
+            if len(values) == 6:
+                axes = [float(value) for value in values]
+                if not np.all(np.isfinite(axes)):
+                    raise ValueError
+                with self._lock:
+                    self.data_storage.append([arrival_ms, *axes])
+                    self.capture_storage.append([arrival_ms, arrival_ms, float("nan"), float("nan"), *axes])
+                return
         except ValueError:
-            return
-        if len(parts) == 6:
-            with self._lock:
-                self.data_storage.append([time.time() * 1000.0] + parts)
+            pass
+        with self._lock:
+            self.malformed_lines += 1
 
     def stop(self) -> None:
         self.running = False
@@ -240,13 +307,13 @@ class BreathCapture:
             serial_port.close()
 
     def save(self) -> Path:
-        rows = self.snapshot_data_storage()
+        rows = self.snapshot_capture_storage()
         if len(rows) < 10:
             raise ValueError("Not enough samples to save; at least 10 are required.")
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
         path = self.output_dir / f"respiratory_6axis_raw_{datetime.now():%Y-%m-%d_%H-%M-%S}.csv"
-        pd.DataFrame(rows, columns=IMU_COLUMNS).to_csv(path, index=False)
+        pd.DataFrame(rows, columns=LSM6DS3_CAPTURE_COLUMNS).to_csv(path, index=False)
         return path
 
     def data_count(self) -> int:
@@ -256,6 +323,91 @@ class BreathCapture:
     def snapshot_data_storage(self) -> list[list[float]]:
         with self._lock:
             return [list(row) for row in self.data_storage]
+
+    def snapshot_data_since(self, start_index: int) -> list[list[float]]:
+        with self._lock:
+            return [list(row) for row in self.data_storage[start_index:]]
+
+    def snapshot_capture_storage(self) -> list[list[float]]:
+        with self._lock:
+            return [list(row) for row in self.capture_storage]
+
+    def snapshot_capture_since(self, start_index: int) -> list[list[float]]:
+        with self._lock:
+            return [list(row) for row in self.capture_storage[start_index:]]
+
+    def diagnostics(self, start_index: int = 0) -> dict[str, float | int | str | None]:
+        diagnostics = summarize_lsm6ds3_capture_rows(self.snapshot_capture_since(start_index))
+        diagnostics["malformed_lines"] = int(self.malformed_lines)
+        return diagnostics
+
+
+def summarize_lsm6ds3_capture_rows(rows: list[list[float]]) -> dict[str, float | int | str | None]:
+    """Summarize timing and exact UART losses from firmware sample counters."""
+
+    if not rows:
+        return {
+            "rows": 0,
+            "format": "empty",
+            "new_format_rows": 0,
+            "legacy_rows": 0,
+            "device_sample_rate_hz": None,
+            "host_arrival_sample_rate_hz": None,
+            "missing_samples": 0,
+            "missing_percent": 0.0,
+            "duplicate_samples": 0,
+            "counter_resets": 0,
+            "device_time_regressions": 0,
+        }
+
+    df = pd.DataFrame(rows, columns=LSM6DS3_CAPTURE_COLUMNS)
+    sample_index = pd.to_numeric(df["SampleIndex"], errors="coerce").to_numpy(dtype=float)
+    device_time_us = pd.to_numeric(df["DeviceTime_us"], errors="coerce").to_numpy(dtype=float)
+    host_time_ms = pd.to_numeric(df["HostTime_ms"], errors="coerce").to_numpy(dtype=float)
+    new_mask = np.isfinite(sample_index) & np.isfinite(device_time_us)
+    new_indices = sample_index[new_mask].astype(np.uint64)
+    new_device_time = device_time_us[new_mask]
+
+    missing_samples = 0
+    duplicate_samples = 0
+    counter_resets = 0
+    for previous, current in zip(new_indices[:-1], new_indices[1:]):
+        delta = (int(current) - int(previous)) & 0xFFFFFFFF
+        if delta == 0:
+            duplicate_samples += 1
+        elif delta < 0x80000000:
+            missing_samples += max(0, delta - 1)
+        else:
+            counter_resets += 1
+
+    device_dt = np.diff(new_device_time)
+    device_time_regressions = int(np.sum(device_dt <= 0))
+    valid_device_dt = device_dt[np.isfinite(device_dt) & (device_dt > 0)]
+    host_dt = np.diff(host_time_ms)
+    valid_host_dt = host_dt[np.isfinite(host_dt) & (host_dt > 0)]
+    new_rows = int(np.sum(new_mask))
+    legacy_rows = int(len(df) - new_rows)
+    expected_rows = new_rows + missing_samples
+
+    if new_rows and not legacy_rows:
+        stream_format = "timestamped"
+    elif legacy_rows and not new_rows:
+        stream_format = "legacy"
+    else:
+        stream_format = "mixed"
+    return {
+        "rows": int(len(df)),
+        "format": stream_format,
+        "new_format_rows": new_rows,
+        "legacy_rows": legacy_rows,
+        "device_sample_rate_hz": float(1_000_000.0 / np.median(valid_device_dt)) if len(valid_device_dt) else None,
+        "host_arrival_sample_rate_hz": float(1000.0 / np.median(valid_host_dt)) if len(valid_host_dt) else None,
+        "missing_samples": int(missing_samples),
+        "missing_percent": float(100.0 * missing_samples / expected_rows) if expected_rows else 0.0,
+        "duplicate_samples": int(duplicate_samples),
+        "counter_resets": int(counter_resets),
+        "device_time_regressions": device_time_regressions,
+    }
 
 
 def click_safe_echo(message: str) -> None:

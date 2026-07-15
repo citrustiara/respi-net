@@ -136,9 +136,9 @@ przyjąć z góry, że zakłóceń nie ma: szósta harmoniczna HB100 wypada przy
 63,15 GHz, czyli wewnątrz pasma A121, a zakłócenie może też wejść przez wspólne
 zasilanie USB lub przewody.
 
-Ustawić oba radary tak jak w pomiarze docelowym: obok siebie, z osiami
-równoległymi i środkami apertur oddalonymi o około 5–10 cm. Wykonać jeden
-krótki zapis każdego warunku:
+Ustawić oba radary tak jak w wykonanym pomiarze docelowym: obok siebie,
+z~jednakowym nachyleniem, środkami apertur oddalonymi o 15 cm i~taką samą
+odległością obu radarów od tułowia. Wykonać jeden krótki zapis każdego warunku:
 
 | Warunek | A121 | HB100 | Scena |
 |---|---|---|---|
@@ -169,10 +169,11 @@ Jeżeli celem jest przed spotkaniem pokazać przede wszystkim, **co da się
 wycisnąć z HB100**, nie trzeba od razu wykonywać pełnej serii do 4 m. Najkrótszy
 zestaw, który zachowuje sens metodyczny, wygląda następująco:
 
-1. Zamocować HB100 i A121 obok siebie, z odległością środków apertur nie większą
-   niż około 5–10 cm, na wysokości mostka i z osiami możliwie równoległymi.
-   A121 pozostawić z płaską pokrywą: w tym badaniu jest równoległym torem
-   porównawczym, a nie przedmiotem kolejnego testu soczewek.
+1. Zamocować HB100 i A121 obok siebie, z odległością środków apertur 15 cm,
+   na wysokości mostka i z jednakowym nachyleniem. Dalmierzem ustawić tę samą
+   odległość obu radarów od tułowia. A121 pozostawić z płaską pokrywą: jej
+   szerokie pole widzenia jest bardziej porównywalne z HB100 niż pole soczewek
+   skupiających, a sama osłona nie jest tu przedmiotem badania.
 2. W pustej, nieruchomej scenie wykonać po 30 s: A121 przy wyłączonym HB100,
    oba radary włączone oraz HB100 przy wyłączonym A121. Jest to tylko szybki
    test przesiewowy zakłóceń. Gdy pojawi się nowa linia widmowa, wzrost tła

@@ -29,7 +29,7 @@ from .a121_vitals import (
     bandpass_filter,
     clean_signal,
 )
-from .imu import IMU_COLUMNS, BreathCapture
+from .imu import IMU_COLUMNS, LSM6DS3_CAPTURE_COLUMNS, BreathCapture
 from .iphone_imu import IPhoneIMUBluetoothCapture
 from .paths import (
     DATA_DIR,
@@ -1191,7 +1191,16 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.csv_path is not None:
             self.csv_file = self.csv_path.open("w", newline="", encoding="utf-8")
             self.csv_writer = csv.writer(self.csv_file)
-            self.csv_writer.writerow(RADAR_COLUMNS if sensor == "radar" else A121_CAPTURE_COLUMNS if sensor == "a121" else IMU_COLUMNS)
+            columns = (
+                RADAR_COLUMNS
+                if sensor == "radar"
+                else A121_CAPTURE_COLUMNS
+                if sensor == "a121"
+                else LSM6DS3_CAPTURE_COLUMNS
+                if sensor == "imu"
+                else IMU_COLUMNS
+            )
+            self.csv_writer.writerow(columns)
         self.session_id = self.store.create_session(sensor, self.csv_path) if "SQLite" in storage else None
         self.persisted_index = 0
         self.last_persist_monotonic = 0.0
@@ -1271,21 +1280,26 @@ class MainWindow(QtWidgets.QMainWindow):
     def _persist_new_samples(self) -> None:
         if self.capture is None:
             return
-        rows = (
-            self.capture.snapshot_data_since(self.persisted_index)
-            if isinstance(self.capture, (A121Capture, IPhoneIMUBluetoothCapture))
-            else self.capture.data_storage[self.persisted_index :]
-        )
-        if not rows:
+        if isinstance(self.capture, BreathCapture):
+            store_rows = self.capture.snapshot_data_since(self.persisted_index)
+            csv_rows = self.capture.snapshot_capture_since(self.persisted_index)
+        elif isinstance(self.capture, (A121Capture, IPhoneIMUBluetoothCapture)):
+            store_rows = self.capture.snapshot_data_since(self.persisted_index)
+            csv_rows = store_rows
+        else:
+            store_rows = self.capture.data_storage[self.persisted_index :]
+            csv_rows = store_rows
+        if not store_rows:
             return
-        rows_copy = [list(row) for row in rows]
+        store_rows_copy = [list(row) for row in store_rows]
+        csv_rows_copy = [list(row) for row in csv_rows]
         if self.csv_writer is not None:
-            self.csv_writer.writerows(rows_copy)
+            self.csv_writer.writerows(csv_rows_copy)
             if self.csv_file is not None:
                 self.csv_file.flush()
         if self.session_id is not None:
-            self.store.append_samples(self.active_sensor, self.session_id, rows_copy)
-        self.persisted_index += len(rows_copy)
+            self.store.append_samples(self.active_sensor, self.session_id, store_rows_copy)
+        self.persisted_index += len(store_rows_copy)
 
     def _tick(self) -> None:
         if self.capture is None:

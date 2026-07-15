@@ -18,8 +18,8 @@ bez niego polskie znaki diakrytyczne znikają z PDF-a przy XeTeX-u.
 
 - Część I — przegląd literatury (SOTA): celowo pusty szkielet z zaznaczonymi miejscami.
 - Część II — zbudowany system: HB100 + front-end analogowy, A121, tor IMU,
-  **algorytmy estymacji oddechu i tętna**, eksperyment soczewki/folia
-  (korzysta z tych algorytmów, więc idzie po nich), sieci neuronowe (do zrobienia).
+  **algorytmy estymacji oddechu i tętna**, kontrolowane porównanie HB100--A121,
+  a następnie eksperyment soczewki/folia; sieci neuronowe pozostają do zrobienia.
 - Część III — część eksperymentalna: sen, algorytm klasyfikacji faz snu,
   porównanie z Garmin Fenix 7.
 
@@ -29,6 +29,11 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
 ## Skąd pochodzą liczby
 
 - Eksperyment soczewki/folia: `data/raw/a121/guided/analysis_metrics.csv` (36 nagrań).
+- Porównanie HB100 z A121: `tools/analyze_hb100_a121_comparison.py` odczytuje
+  najnowszą kompletną sesję `data/raw/hb100_a121/guided/hb100_a121_range_*`,
+  zapisuje w niej lokalne pliki `analysis_hb100_a121_metrics.csv` i
+  `analysis_hb100_a121_summary.json` oraz odtwarza trzy rysunki
+  `docs/thesis/figures/hb100_a121_*.png`. Surowe pliki pozostają poza Gitem.
 - Retest A121 przy 2 m (folia × geometria): skrypt
   `tools/analyze_a121_foil_2m.py` odczytuje najnowszą sesję
   `data/raw/a121/guided/guided_foil2m_*`, zapisuje lokalnie

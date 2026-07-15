@@ -62,11 +62,18 @@ data/raw/a121/
 
 ### IMU
 
-Use this for the ESP32/LSM6DS3 comparison path. The ESP32 streams 6-axis rows and the app adds host timestamps:
+Use this for the ESP32/LSM6DS3 comparison path. The current firmware streams a
+sample counter and its own microsecond clock before the six axes; the desktop
+CSV preserves both of them as well as the host arrival time:
 
 ```text
-Time_ms,ax,ay,az,gx,gy,gz
+Time_ms,HostTime_ms,DeviceTime_us,SampleIndex,ax,ay,az,gx,gy,gz
 ```
+
+`Time_ms` is the device clock aligned to the host epoch at first reception.
+For legacy six-axis firmware rows, the same reader remains compatible, but the
+counter and device-clock columns are empty and exact UART-loss detection is not
+available.
 
 Default output folder:
 
@@ -294,7 +301,13 @@ Scan for and capture iPhone IMU data over BLE:
 ```powershell
 uv run respi iphone-imu-devices
 uv run respi capture-iphone-imu --seconds 60
+uv run python tools/imu_lsm6ds3_iphone_guided_experiment.py --lsm-port /dev/cu.usbserial-XXXX
 ```
+
+`imu_lsm6ds3_iphone_guided_experiment.py` is a separate guided protocol for
+the four supine LSM6DS3--iPhone trials. It stores both sensor files, shared
+cue timestamps, loss diagnostics and a manifest; Esc deletes the active
+trial, while a completed one can be discarded and repeated before acceptance.
 
 Generate an offline HB100 radar plot:
 

@@ -72,6 +72,12 @@
     \parbox{0.97\linewidth}{\small\itshape Miejsce zarezerwowane: #1}}%
   \par\vspace{0.6em}}
 
+% Numery rysunków dwucyfrowych (np. 12.10) potrzebują szerszej kolumny
+% w~spisie rysunków, aby podpis nie stykał się z~numerem.
+\makeatletter
+\renewcommand*\l@figure{\@dottedtocline{1}{1.5em}{3.0em}}
+\makeatother
+
 \title{Sieci neuronowe do analizy rytmu oddechowego}
 \author{Maciej Łukasiewicz}
 \date{Gdańsk 2026}
@@ -100,7 +106,7 @@
     \vfill
     {\large Gdańsk 2026\par}
     \vspace{0.5cm}
-    {\footnotesize\color{red!75!black} Wersja robocza --- szkic pracy.\par}
+    {\footnotesize\todo{Zastąpić stronę tytułową wzorem z~MojaPG.}\par}
 \end{titlepage}
 
 % =====================================================================
@@ -117,6 +123,10 @@ radar impulsowo-koherentny Acconeer A121 (\SI{60}{GHz}) pracujący na surowych
 danych Sparse~IQ. Opracowano algorytmy estymacji częstości oddechu i tętna
 oparte na analizie fazy sygnału odbitego, aplikację desktopową do akwizycji
 i podglądu na żywo oraz zestaw narzędzi do analizy offline. Przeprowadzono
+równoczesne porównanie obu radarów: HB100 wykrywał obecność sterowanego
+oddechu i~jego zatrzymanie do \SI{100}{cm}, lecz jego jednokanałowy przebieg
+nie zachowywał stabilnie kierunku wdech--wydech; A121 umożliwiał taką analizę
+na podstawie fazy I/Q. Przeprowadzono również
 kontrolowany eksperyment porównujący trzy soczewki dielektryczne
 (hiperboliczną, FZP i płaską pokrywę) oraz wpływ folii aluminiowej naklejonej
 na klatkę piersiową (36 nagrań). W części eksperymentalnej system zastosowano
@@ -127,6 +137,14 @@ do całonocnego monitoringu snu, porównując wyniki z zegarkiem Garmin~Fenix~7.
 \paragraph{Słowa kluczowe:} radar dopplerowski, radar impulsowo-koherentny,
 rytm oddechowy, parametry witalne, HB100, Acconeer A121, analiza snu, sieci
 neuronowe.
+
+\clearpage
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+\todo{Dodać streszczenie w~języku angielskim.}
+
+\clearpage
 
 % =====================================================================
 \tableofcontents
@@ -189,8 +207,9 @@ Praca dzieli się na trzy części:
   uwzględnieniem architektur radarowych.
   \item \textbf{Część~\ref{part:system}} --- opis zbudowanego systemu: tor
   radaru HB100 z autorskim front-endem analogowym, integracja radaru
-  Acconeer~A121, algorytmy estymacji oddechu i tętna, oprogramowanie oraz
-  eksperyment porównujący soczewki i wzmacnianie odbicia folią aluminiową.
+  Acconeer~A121, osobne tory inercyjne, algorytmy estymacji oddechu i tętna
+  oraz oprogramowanie. Po opisie metod przedstawiono kontrolowane porównanie
+  HB100 z~A121, a~następnie eksperyment soczewek i~folii aluminiowej.
   \item \textbf{Część~\ref{part:eksperymenty}} --- zastosowanie systemu:
   całonocne pomiary snu, porównanie z zegarkiem Garmin~Fenix~7 oraz algorytmy
   klasyfikacji faz snu.
@@ -618,7 +637,7 @@ potwierdzenia pomiarem charakterystyki gotowego prototypu.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.95\textwidth]{hb100_frontend_schemat.png}
-    \caption{Schemat zaprojektowanego analogowego front-endu radaru HB100:
+    \caption[Schemat analogowego front-endu HB100]{Schemat zaprojektowanego analogowego front-endu radaru HB100:
     dwa stopnie wzmacniające MCP6002 (do $\approx 121\times$),
     częstotliwościowo zależne wzmocnienie, wirtualna masa \SI{1.65}{V}
     i separowane zasilanie analogowe
@@ -678,31 +697,29 @@ przeprogramowaniu odebrano 3003 surowe ramki ASCII, co odpowiada
 \SI{250.0}{Hz}; nie zastosowano korekcji transportu, nie odrzucono żadnego
 wiersza i~nie stwierdzono nasycenia przetwornika ADC.
 
-\section{Wstępne wyniki pomiarowe}
-Wstępne pomiary potwierdziły możliwość detekcji oddechu z odległości około
-\SI{50}{cm} od klatki piersiowej. Zaobserwowano również, że wstrzymanie
-oddechu odsłania w~sygnale oscylacje odpowiadające pracy serca.
+Podczas pomiarów tor HB100 i~ESP32 były zasilane z~portu USB laptopa
+pracującego na akumulatorze; zasilacz laptopa pozostawał odłączony od sieci.
+Usuwało to bezpośrednią drogę przewodzenia przydźwięku z~zasilania
+\SI{230}{V}/\SI{50}{Hz} przez ładowarkę i~przewód USB. Nie oznacza jednak
+całkowitego wyeliminowania składowej \SI{50}{Hz}: może ona nadal sprzęgać się
+elektromagnetycznie z~instalacji pomieszczenia, a~w~torze mogą występować także
+zakłócenia cyfrowe i~szum przetwornicy laptopa. Warunek zasilania bateryjnego
+ogranicza więc jedno istotne źródło zakłóceń, lecz nie zastępuje pomiaru widma
+tła.
 
-Do domknięcia oceny toru potrzebne są: wykresy czasowe i~widma Welcha dla
-powtarzalnej serii, odsetek nagrań z~pikiem przy częstości narzuconej
-metronomem oraz przypadki niepowodzenia (ruch tła, punkt zerowy, druga
-harmoniczna). Jednoczesne nagranie HB100 i~A121 może służyć porównaniu dwóch
-metod obserwujących ten sam oddech, ale A121 nie jest przez to wzorcem prawdy.
-Kontrolę negatywną stanowią odcinki bez ruchu badanego i~ze wstrzymanym
-oddechem.
 
 \section{Ograniczenia toru HB100 i wnioski}
 HB100 sumuje echa ze wszystkich obiektów w~wiązce, nie rozdziela ich po
 odległości i~nie udostępnia kanału kwadraturowego. Wynik zależy więc od
 statycznej fazy celu, ruchu tła i~wielodrogowości. Te ograniczenia wyjaśniają,
 dlaczego nawet duże wzmocnienie analogowe nie gwarantuje powtarzalnego pomiaru
-mikroruchu. Wprowadzenie A121 nie było wyłącznie wymianą czujnika na czulszy,
-lecz zmianą klasy pomiaru: możliwy stał się wybór bramki odległościowej i~praca
-na pełnym sygnale I/Q. HB100 pozostaje samodzielną niskokosztową metodą oraz
+mikroruchu. HB100 pozostaje jednak samodzielną niskokosztową metodą oraz
 demonstracją kompletnego łańcucha inżynierskiego --- od mikrofalowego modułu
-i~analogowego kondycjonowania po cyfrową estymację rytmu oddechowego. Jego
-praktycznym wynikiem powinno być wskazanie granic użyteczności, a~nie próba
-uznania go za referencję dla A121.
+i~analogowego kondycjonowania po cyfrową analizę. Na poziomie konstrukcyjnym
+nie można jeszcze przesądzić, które informacje oddechowe pozostają użyteczne:
+osobno trzeba ocenić wykrycie ruchu, jego okresowość oraz kierunek fazy cyklu.
+Taką ocenę przedstawiono dopiero po opisie A121 i~algorytmów, w~rozdziale
+\ref{chap:hb100-a121-pomiar}.
 
 % ---------------------------------------------------------------------
 \chapter{Radar impulsowo-koherentny Acconeer A121}
@@ -818,16 +835,24 @@ więc osi czasu, o~ile zachowane są czasy próbek. Numer sekwencyjny umożliwia
 wykrywanie zagubionych powiadomień po dodaniu kontroli jego ciągłości po
 stronie odbiornika.
 
-\section{Ograniczenie synchronizacji i kryteria oceny}
-W~obecnej wersji firmware LSM6DS3 wysyła jedynie sześć wartości pomiarowych,
-bez znacznika czasu ani licznika próbki. Aplikacja desktopowa nadaje im czas
-dopiero podczas przetwarzania kolejnych wierszy UART. Buforowanie transmisji
-może wtedy utworzyć wiele próbek o~niemal identycznym czasie i~zafałszować
-oszacowanie częstotliwości próbkowania. Przed ilościową oceną LSM6DS3 należy
-dodać czas z~\texttt{esp\_timer} lub monotonny licznik próbek do firmware
-i~obsłużyć go po stronie komputera. iPhone ma już czas per próbka, lecz nadal
-trzeba sprawdzić histogram $\Delta t$, luki numerów sekwencyjnych i~rzeczywistą
-liczbę próbek na sekundę.
+\todo{Dodać zrzut ekranu aplikacji iOS: wybór częstości próbkowania i~stan
+transmisji BLE.}
+
+\section{Synchronizacja i kryteria oceny}
+Aktualna wersja firmware LSM6DS3 wysyła dla każdej próbki licznik oraz czas
+\texttt{esp\_timer} w~mikrosekundach przed sześcioma wartościami ruchu. Plik
+CSV zachowuje zarówno ten czas urządzenia, jak i~czas nadejścia na hoście;
+umożliwia to wyznaczenie rzeczywistej częstotliwości oraz dokładne policzenie
+luk i~duplikatów na podstawie licznika. iPhone przekazuje własne czasy próbek,
+a~nagłówek paczki BLE zawiera numer sekwencyjny. Po stronie odbiornika
+rejestrowane są niepoprawne, brakujące i~zduplikowane paczki oraz resety
+numeracji.
+
+Do równoczesnych pomiarów obu IMU przygotowano osobny skrypt z~wspólną osią
+czasu komend, plikami CSV obu urządzeń, plikiem komend i~manifestem. Przerwana
+albo odrzucona próba usuwa wyłącznie pliki bieżącego nagrania. Przed analizą
+ilościową nadal należy sprawdzić histogram $\Delta t$, liczbę utraconych próbek
+i~rzeczywistą liczbę próbek na sekundę dla każdego urządzenia.
 
 Podstawowy eksperyment obejmuje dla obu urządzeń wyłącznie leżenie na plecach,
 oddech swobodny, oddech narzucony metronomem oraz krótki odcinek wstrzymania
@@ -1330,10 +1355,315 @@ parametrów życiowych (wartości domyślne).}
 \end{table}
 
 \section{Oprogramowanie}
-\miejsce{Aplikacja desktopowa (PyQt + pyqtgraph): podgląd na żywo z~czterech
-torów, nagrywanie do CSV i~SQLite, przeglądanie historii. Interfejs CLI
-(\texttt{respi}) do akwizycji wsadowej i~generowania wykresów. Struktura
-pakietu \texttt{respi\_net}. Zrzuty ekranu aplikacji do dodania.}
+Wspólna aplikacja desktopowa, zbudowana z~użyciem PyQt i~pyqtgraph, zapewnia
+podgląd na żywo czterech torów, nagrywanie do CSV i~SQLite oraz przeglądanie
+historii. Interfejs CLI \texttt{respi} służy do akwizycji wsadowej i~generowania
+wykresów; kod podzielono na moduły pakietu \texttt{respi\_net}.
+
+\todo{Rozwinąć opis aplikacji desktopowej: wybór czujnika, ustawienia A121,
+obsługa nagrywania oraz sposób zapisu danych.}
+
+\todo{Dodać zrzuty ekranu aplikacji desktopowej: widok A121 na żywo i~widok
+historii nagrań.}
+
+\subsection{Programowy przewodnik oddechu}
+\label{sec:programowy-przewodnik-oddechu}
+
+Do powtarzalnych prób fazowych przygotowano funkcję programowego przewodnika
+oddechu. Interfejs wyświetla dużą komendę
+\emph{wdech}, \emph{wydech}, \emph{wstrzymaj oddech} albo \emph{oddychaj
+swobodnie}; zmianę sygnalizuje także dźwiękiem. Harmonogram nie jest zaszyty
+w~pliku czujnika. Dla każdej komendy zapisywany jest rodzaj, czas początku
+i~końca względem startu nagrania oraz odpowiadający czas hosta. Pozwala to
+nakładać fazy na równoczesne strumienie różnych urządzeń bez wnioskowania
+o~nich z~samego kształtu sygnału.
+
+W~próbach 90-sekundowych stosowano \SI{10}{s} oddechu swobodnego, 7~cykli
+wdech \SI{2}{s}--wydech \SI{3}{s}, \SI{15}{s} wstrzymania po wydechu oraz
+6~kolejnych cykli \SI{2}{s}/\SI{3}{s}. Odpowiada to dokładnie
+12~oddechom/min w~częściach sterowanych. Operator może w~dowolnym momencie
+przerwać próbę; bieżące pliki są wtedy usuwane zamiast trafiać do zbioru jako
+niepełne nagranie.
+
+\todo{Dodać opis implementacji skryptu programowego przewodnika: obsługę obu
+radarów, plik komend, manifest oraz odrzucanie niepełnej próby.}
+
+\todo{Dodać zrzut ekranu programowego przewodnika oddechu podczas nagrania.}
+
+Komenda programu jest zamiarem, a~nie bezpośrednim pomiarem fizjologicznym.
+Reakcja człowieka i~akwizycja wnoszą opóźnienie, dlatego w~analizach fazowych
+znaczniki przesuwa się na podstawie sygnału koherentnego A121. Pierwszy
+eksperyment soczewek na dystansach \SI{50}{cm} i~\SI{100}{cm} nie korzystał
+z~tego rytmu: przewodnik sterował kolejnością stanowiska, lecz badany oddychał
+swobodnie. Pełny harmonogram zastosowano w~retestach wymagających porównania
+wdechu, wydechu i~wstrzymania.
+
+\chapter{Eksperymentalne porównanie radarów HB100 i A121}
+\label{chap:hb100-a121-pomiar}
+
+Rozdział zestawia oba zbudowane tory dopiero po przedstawieniu ich
+architektur oraz algorytmów rekonstrukcji sygnału. Celem nie jest
+potraktowanie A121 jako wzorca fizjologicznego, lecz sprawdzenie, jak
+architektura jednokanałowego radaru CW i~dostęp do zespolonych danych I/Q
+wpływają na trzy odrębne zadania: wykrycie aktywności oddechowej,
+oszacowanie jej okresowości oraz rozróżnienie wdechu i~wydechu.
+
+We wszystkich krótkich badaniach radarowych wykonywanych na jawie w~tej pracy
+(porównanie HB100--A121 oraz eksperymenty soczewek) badany był bez koszulki,
+z~odsłoniętym torsem. Między anteną a~klatką nie było więc warstwy odzieży;
+zapisano tym samym warunek referencyjny bez dodatkowego tłumienia i~zmiany
+odbicia przez materiał. Warunek ten nie dotyczy całonocnych pomiarów przez
+kołdrę opisanych dalej.
+
+\section{Stanowisko i protokół}
+
+Oba radary rejestrowały ten sam oddech równocześnie. Środki apertur HB100
+i~A121 znajdowały się obok siebie na wysokości mostka, w~odległości
+\SI{15}{cm} mierzonej poprzecznie między ich środkami. Osie ustawiono z~tym
+samym nachyleniem względem tułowia. Dla każdego dystansu położenie stanowiska
+korygowano tak, aby odległość od obu radarów do tułowia była taka sama
+i~wynosiła nominalnie \SI{30}{cm}, \SI{60}{cm}, \SI{100}{cm} albo ---
+w~pojedynczym reteście granicznym --- \SI{150}{cm}.
+
+Odległość i~zgodność ustawienia kątowego kontrolowano tym samym dalmierzem
+laserowym MILESEEY~D2 w~wariancie \SI{40}{m}, który wykorzystano również
+w~eksperymencie soczewek. Odczyt laserowy służył do ustawienia dystansu,
+a~poziomnice pęcherzykowe urządzenia i~położenie plamki na klatce --- do
+powtarzalnego ustawienia kierunku osi. Nie był to laboratoryjny pomiar
+trójwymiarowego kąta powierzchni klatki, lecz kontrola, że oba radary
+obserwują tułów z~porównywalnej geometrii \cite{mileseey_d2}.
+
+A121 wyposażono celowo w~płaską pokrywę. Nie skupia ona wiązki i~zapewnia
+najszersze pole widzenia spośród używanych wariantów, dzięki czemu jego
+pokrycie kątowe jest bardziej porównywalne z~szeroką wiązką HB100 niż
+w~przypadku soczewki hiperbolicznej albo FZP. Pola widzenia nadal nie są
+identyczne, a~rozstaw \SI{15}{cm} oznacza obserwację częściowo różnych
+fragmentów tułowia. Porównanie dotyczy więc odpowiedzi dwóch kompletnych
+torów na ten sam akt oddechowy, a~nie kalibracji punkt-do-punktu.
+
+Elementy stanowiska i~sposób ich niezależnego zamocowania przedstawiono na
+rys.~\ref{fig:hb100-a121-stanowisko}. Dokładny rozstaw, dystans do tułowia
+i~nachylenie ustawiano dopiero przed każdą próbą zgodnie z~opisaną procedurą.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.84\textwidth]{stanowisko_hb100_a121_porownanie.png}
+    \caption[Stanowisko porównania radarów HB100 i A121]{Elementy stanowiska
+    równoczesnego porównania radarów: po lewej moduł HB100 z~analogowym
+    front-endem na płytce stykowej, a~po prawej A121 z~płaską pokrywą,
+    zamocowany na głowicy statywu Manfrotto. Przed pomiarem położenie obu
+    czujników korygowano do geometrii opisanej w~tekście (fotografia własna).}
+    \label{fig:hb100-a121-stanowisko}
+\end{figure}
+
+Wykonano po dwa nagrania na każdym z~trzech dystansów. Każde trwało
+\SI{90}{s}. A121 pracował z~profilem~3, HWAAS~32, ośmioma przemiatanami
+na ramkę i~częstością \SI{20}{Hz}; zakres bramek obejmował nominalną
+pozycję klatki z~marginesem około \SI{50}{cm}. HB100 rejestrowano
+z~częstością \SI{250}{Hz} przez tor opisany w~sekcji~\ref{sec:frontend}.
+
+Sekwencję oddechową prowadził programowy przewodnik opisany w~sekcji
+\ref{sec:breathing-coach}. Po \SI{10}{s} oddechu swobodnego następowało
+7~cykli: wdech \SI{2}{s} i~wydech \SI{3}{s}, następnie \SI{15}{s}
+wstrzymania po wydechu oraz 6~kolejnych cykli \SI{2}{s}/\SI{3}{s}. Zadana
+częstość wynosiła \SI{0.20}{Hz}, czyli 12~oddechów/min. Każdy plik czujnika
+otrzymał czas hosta, a~osobny plik zawierał początek i~koniec każdej komendy.
+A121 nie jest w~tym porównaniu wzorcem fizjologicznym; pełni rolę drugiego,
+koherentnego toru obserwującego ten sam ruch.
+
+Po serii podstawowej wykonano pojedynczy retest na \SI{150}{cm}, zachowując
+ten sam protokół, rozstaw radarów i~płaską pokrywę A121. Jego celem było
+sprawdzenie praktycznej granicy informacji uzyskiwanej z~jednokanałowego
+HB100, a~nie wyznaczenie pełnej krzywej zasięgu: nie ma drugiego powtórzenia
+ani randomizacji. Płaską pokrywę pozostawiono celowo dla porównywalnego pola
+widzenia z~HB100. Na takim dystansie nie daje ona zysku skupiającego soczewki
+hiperbolicznej ani FZP, dlatego wynik A121 nie jest demonstracją maksymalnego
+zasięgu tego czujnika z~optyką skupiającą.
+
+Wszystkie sześć par było kompletne. W~każdym nagraniu HB100 zapisano od
+22502 do 22510 próbek, a~A121 1801 ramek. Nie odrzucono ani jednej ramki A121,
+nie wystąpiły też niepoprawne wiersze transmisji HB100. Rzeczywiste medianowe
+częstości wyniosły odpowiednio \SI{250.0}{Hz} i~\SI{20.0}{Hz}.
+
+\section{Kontrola wzajemnych zakłóceń}
+
+Przed pomiarem badanego wykonano trzy \SI{30}{s} kontrole pustej, nieruchomej
+sceny: A121 przy wyłączonym HB100, oba radary równocześnie oraz HB100 przy
+zatrzymanym A121. Dla A121 porównano medianę po bramkach z~wyraźnym echem:
+znormalizowany RMS zmian zespolonego IQ wyniósł 0,16449 dla A121 pracującego
+samodzielnie i~0,16430 przy włączonym HB100 (zmiana $-0{,}12\%$). RMS fazy
+w~paśmie \SIrange{0.10}{0.60}{Hz} wyniósł odpowiednio 0,04062 i~0,03975~rad
+(zmiana $-2{,}16\%$). Oba zapisy miały po 601 ramek i~nie zawierały strat.
+
+Dla HB100 RMS napięcia po usunięciu trendu wyniósł \SI{5.615}{mV} przy pracy
+samodzielnej i~\SI{4.780}{mV} podczas równoczesnej pracy A121, czyli nie
+wzrósł, lecz zmalał o~\SI{1.40}{dB}. W~tej krótkiej kontroli nie stwierdzono
+zatem mierzalnego wzajemnego zakłócania torów. Jest to wynik dla jednego
+ustawienia i~pustej sceny, a~nie dowód odporności w~każdej geometrii.
+
+\section{Rekonstrukcja i synchronizacja sygnałów}
+
+Dla A121 wybrano stały zestaw trzech bramek, który najczęściej wskazywała
+referencyjna maszyna stanów Acconeer. Takie użycie bramki modalnej zapobiega
+skokowi fazy, gdy algorytm w~trakcie nagrania ponownie wybiera cel. Fazę IQ
+rozpleciono, usunięto trend liniowy, uśredniono z~wagami proporcjonalnymi do
+medianowej amplitudy bramek i~przeliczono na przemieszczenie. Składową
+oddechową A121 ograniczono filtrem zerofazowym do
+\SIrange{0.10}{0.50}{Hz}.
+
+Napięcie HB100 wyrównano do siatki \SI{100}{Hz} i~zastosowano filtr
+zerofazowy \SIrange{0.10}{0.70}{Hz}. Szersza górna granica celowo zachowuje
+drugą i~trzecią harmoniczną zadanego rytmu. Opóźnienia komend nie dopasowywano
+osobno do HB100. Dla każdego nagrania wyznaczono je wyłącznie z~korelacji
+sygnału A121 z~trójkątnym wzorcem \SI{2}{s}/\SI{3}{s}; otrzymano
+\SIrange{0.250}{0.550}{s}, z~medianą \SI{0.325}{s}. Obejmuje to reakcję
+badanego i~opóźnienia akwizycji. O~tę wartość przesunięto tła komend na
+rysunkach~\ref{fig:hb100-a121-surowe} i~\ref{fig:hb100-a121-oddech}.
+
+Ponieważ znak fazy A121 i~napięcia HB100 jest umowny, dla każdego toru wybrano
+jedną polaryzację maksymalizującą zgodność z~pierwszym blokiem sterowanym.
+Nie zmieniano jej już w~drugim bloku. Jest to celowo łagodny test HB100:
+pozwala na jednorazową kalibrację znaku, lecz sprawdza, czy mapowanie pozostaje
+stabilne po wstrzymaniu oddechu.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{hb100_a121_surowe.png}
+    \caption[Surowe przebiegi A121 i HB100]{Równoczesne przebiegi przed
+    cyfrową filtracją oddechową. Dla A121 pokazano rozplecioną i~pozbawioną
+    trendu fazę IQ, a~dla HB100 napięcie ADC na wyjściu analogowego front-endu.
+    Ze względu na różne jednostki oba sygnały znormalizowano osobno zakresem
+    5.--95. percentyla; porównywać można czas i~kształt, lecz nie wysokość
+    krzywych. Niebieskie tło oznacza wdech, pomarańczowe wydech, a~szare
+    wstrzymanie po korekcie opóźnienia $\delta$.}
+    \label{fig:hb100-a121-surowe}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{hb100_a121_oddech.png}
+    \caption[Składowe oddechowe A121 i HB100]{Składowe oddechowe obu radarów
+    na tle skorygowanych komend. Linia kropkowana jest zadanym trójkątnym
+    cyklem, niebieska --- przemieszczeniem z~A121, a~pomarańczowa --- napięciem
+    HB100. Polaryzację obu torów ustalono tylko na pierwszym bloku i~zachowano
+    w~drugim. $r_{\mathrm{HB},2}$ nad panelem jest korelacją HB100 z~komendami
+    w~drugim bloku; ujemna wartość oznacza odwrócenie relacji po jednorazowej
+    kalibracji. W~każdej próbie oba sygnały wyraźnie zanikają podczas
+    wstrzymania, lecz HB100 często wykonuje dwa lub trzy oscylacje na jeden
+    cykl klatki piersiowej.}
+    \label{fig:hb100-a121-oddech}
+\end{figure}
+
+\section{Wyniki i interpretacja}
+
+Tabela~\ref{tab:hb100-a121-wyniki} rozdziela wykrycie ruchu od zachowania fazy
+cyklu. $r_{A,2}$ i~$r_{H,2}$ są korelacjami z~zadanym przebiegiem w~drugim
+bloku. $Q_{A,2}$ i~$Q_{H,2}$ oznaczają zrównoważony odsetek próbek, dla których
+znak pochodnej sygnału zgadza się z~kierunkiem wdech/wydech; pominięto po
+\SI{0.30}{s} przy każdej granicy komendy. Nie jest to wynik klasyfikatora
+uczonego, lecz opisowa miara monotoniczności i~stabilności kierunku.
+
+\begin{table}[H]
+\centering
+\caption{Porównanie faz cyklu i~zaniku sygnału w~sześciu podstawowych
+nagraniach oraz pojedynczym reteście \SI{150}{cm}. $f_{H,1}/f_{H,2}$ to dominująca częstość HB100 w~pierwszym
+i~drugim bloku; \emph{hold} jest zmianą RMS HB100 w~środkowych \SI{9}{s}
+wstrzymania względem odcinków sterowanych.}
+\label{tab:hb100-a121-wyniki}
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}rrrrrrrrr@{}}
+\toprule
+Dyst. [cm] & Powt. & $\delta$ [s] & $r_{A,2}$ & $r_{H,2}$ & $Q_{A,2}$ [\%] & $Q_{H,2}$ [\%] & $f_{H,1}/f_{H,2}$ [Hz] & Hold [dB] \\
+\midrule
+ 30 & 1 & 0,250 & 0,945 &  0,238 & 96,5 & 55,6 & 0,598 / 0,397 & $-18{,}4$ \\
+ 30 & 2 & 0,550 & 0,957 & $-0{,}098$ & 99,3 & 36,5 & 0,403 / 0,397 & $-23{,}9$ \\
+ 60 & 1 & 0,375 & 0,955 & $-0{,}543$ & 97,9 & 43,8 & 0,208 / 0,201 & $-18{,}9$ \\
+ 60 & 2 & 0,350 & 0,915 &  0,040 & 98,6 & 63,7 & 0,409 / 0,397 & $-24{,}6$ \\
+100 & 1 & 0,300 & 0,894 &  0,438 & 95,9 & 63,4 & 0,403 / 0,397 & $-24{,}3$ \\
+100 & 2 & 0,300 & 0,932 &  0,185 & 97,9 & 62,9 & 0,598 / 0,403 & $-24{,}6$ \\
+150 & 1 & 0,375 & 0,910 & $-0{,}299$ & 96,7 & 36,6 & 0,366 / 0,378 & $-15{,}7$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{hb100_a121_metryki.png}
+    \caption[Metryki porównania HB100 i A121]{Metryki sześciu prób podstawowych
+    oraz pojedynczego retestu \SI{150}{cm}. Dwa górne
+    panele dotyczą drugiego bloku po kalibracji polaryzacji na pierwszym.
+    Lewy dolny panel pokazuje poziom składowej \SI{0.20}{Hz} względem
+    silniejszej z~harmonicznych \SI{0.40}{Hz} i~\SI{0.60}{Hz}; wartość ujemna
+    oznacza dominację harmonicznej. Prawy dolny panel przedstawia zanik RMS
+    podczas wstrzymania; linia kropkowana wskazuje próg $-3$~dB. Przesunięcie
+    punktów wokół dystansu rozróżnia dwa powtórzenia.}
+    \label{fig:hb100-a121-metryki}
+\end{figure}
+
+\section{Wnioski i zakres zastosowania HB100}
+
+\paragraph{HB100 wykrywał aktywność oddechową.} W~sześciu próbach serii podstawowej
+RMS pasma HB100 malał podczas wstrzymania o~\SIrange{18.4}{24.6}{dB}. Na
+\SI{100}{cm} RMS w~odcinkach sterowanych wynosił \SI{132.3}{mV} i~
+\SI{179.8}{mV}, czyli odpowiednio o~\SI{27.4}{dB} i~\SI{30.1}{dB} więcej niż
+\SI{5.615}{mV} tła z~pustej sceny. Tor miał więc wyraźny zapas do wykrywania
+ruchu oddechowego na największym zbadanym dystansie. Przy \SI{30}{cm}
+odpowiednio 1,55\% i~4,33\% próbek przekraczało przyjęty próg nasycenia;
+przy \SI{60}{cm} i~\SI{100}{cm} nasycenie nie wystąpiło. Obecne wzmocnienie
+jest zatem zbyt duże do wiernej rejestracji głębokiego oddechu z~bardzo małej
+odległości.
+
+\paragraph{Retest graniczny \SI{150}{cm}.} W~pojedynczej próbie na
+\SI{150}{cm} oba tory nadal reagowały na zatrzymanie ruchu: RMS HB100 podczas
+wstrzymania był o~\SI{15.7}{dB} niższy niż w~odcinkach sterowanych. Sygnał
+HB100 nie zachował jednak rytmu ani kierunku fazy: w~dwóch blokach dominowały
+odpowiednio \SI{0.366}{Hz} i~\SI{0.378}{Hz}, korelacja z~komendami po
+jednorazowej kalibracji znaku wyniosła $-0{,}299$, a~zgodność kierunku
+wdech--wydech 36,6\%. W~tym samym nagraniu A121 z~płaską pokrywą osiągnął
+$r=0{,}910$ i~96,7\% zgodności kierunku. Wynik wskazuje więc praktyczną
+granicę użycia HB100 do rozróżniania faz w~tej geometrii, przy równoczesnym
+zachowaniu przewagi koherentnego A121. Jest to jednak tylko jeden retest;
+nie wyznacza ogólnego zasięgu żadnego z~radarów, a~zwłaszcza A121 z~soczewką
+skupiającą.
+
+\paragraph{Dominują harmoniczne, a~nie zadany rytm.} W~serii podstawowej w~10 z~12 sterowanych
+bloków najwyższy pik HB100 w~paśmie \SIrange{0.10}{0.65}{Hz} leżał przy
+około \SI{0.40}{Hz} albo \SI{0.60}{Hz}, mimo że klatka wykonywała cykle
+\SI{0.20}{Hz}. Tylko oba bloki pierwszej próby na \SI{60}{cm} miały maksimum
+blisko częstości podstawowej. Jest to zgodne z~modelem
+\eqref{eq:cw-baseband}: pojedynczy kanał obserwuje cosinus fazy, więc przy
+niekorzystnym punkcie pracy jeden cykl przemieszczenia może utworzyć dwa
+ekstrema napięcia. Efekt dodatkowo wzmacnia charakterystyka analogowa. Z~modelu
+\eqref{eq:hb100-transfer} wynika wzmocnienie $45{,}6\times$ przy
+\SI{0.20}{Hz}, $90{,}3\times$ przy \SI{0.40}{Hz} i~$105{,}7\times$ przy
+\SI{0.60}{Hz}; druga i~trzecia harmoniczna otrzymują więc odpowiednio około
+5,9 i~7,3~dB przewagi względem składowej podstawowej jeszcze przed ADC.
+Obcinanie amplitudy (ang. \emph{clipping}) w~próbach \SI{30}{cm} wytwarza
+kolejne harmoniczne.
+
+\paragraph{HB100 nie zachowywał wiarygodnie faz wdech--wydech.} Dla A121
+korelacja drugiego bloku z~komendami wynosiła 0,894--0,957, a~zgodność
+kierunku 95,9--99,3\%. Dla HB100 wartości wynosiły odpowiednio od $-0{,}543$
+do 0,438 oraz 36,5--63,7\%, czyli pozostawały blisko poziomu losowego 50\%.
+W~jednej próbie na \SI{60}{cm} relacja była umiarkowanie dodatnia w~pierwszym
+bloku, a~po wstrzymaniu stała się wyraźnie ujemna mimo niezmienionej
+polaryzacji. Jednorazowa kalibracja znaku nie wystarcza zatem do rozróżniania
+wdechu i~wydechu.
+
+Łącznie wyniki rozdzielają trzy poziomy użyteczności: wykrycie ruchu
+oddechowego, oszacowanie jego okresowości oraz rozpoznanie kierunku fazy.
+HB100 wiarygodnie realizował pierwszy z~nich. Częstość można wyznaczać tylko
+warunkowo, uwzględniając kandydatów $f$, $f/2$ i~$f/3$; kierunku wdech--wydech
+nie udało się zachować po jednorazowej kalibracji znaku.
+
+Najbardziej uzasadnionym zastosowaniem HB100 jest więc tania detekcja ruchu
+lub obecności aktywności oddechowej w~stałej scenie z~jedną osobą. Nie jest to
+jednoznaczna detekcja człowieka: brak sygnału może oznaczać nieobecność,
+wstrzymanie oddechu, minimum fazowe, zmianę pozycji albo złe skierowanie.
+HB100 nie powinien zatem samodzielnie rozstrzygać o~bezdechu ani fazie cyklu.
+Do analizy wdech--wydech i~przemieszczenia klatki właściwszy pozostaje A121,
+który udostępnia bramki odległościowe i~zespolony sygnał I/Q.
 
 % =====================================================================
 \chapter{Eksperyment: soczewki dielektryczne i wzmacnianie odbicia}
@@ -1398,7 +1728,11 @@ Zrealizowano plan pełny: 3~soczewki $\times$ 2~odległości
 $=$ 12~warunków, każdy powtórzony trzykrotnie, co dało \textbf{36~nagrań}
 po \SI{60}{s} (około 1200 ramek każde). Akwizycję prowadzono sterowaną
 procedurą (\texttt{tools/a121\_guided\_experiment.py}), która prowadzi
-operatora przez kolejne warunki.
+operatora przez kolejne warunki. W~każdym nagraniu badany oddychał swobodnie,
+bez narzuconej częstości i~bez komend oznaczających granice wdechu oraz
+wydechu. Celem tej serii było porównanie przesłon i~folii, a~nie walidacja faz
+pojedynczego cyklu; analizowano więc rytm występujący naturalnie w~danym
+nagraniu.
 
 Radar był zamocowany na fotograficznym statywie Manfrotto. Odległości
 \SI{50}{cm} i~\SI{100}{cm} ustawiano za pomocą dalmierza laserowego
@@ -1688,7 +2022,9 @@ przeplatane wewnątrz każdego bloku, ale stan folii pozostaje całkowicie
 splątany z~czasem sesji. Wyniki folii są z~tego powodu opisowe, natomiast
 porównanie kąta jest znacznie lepiej zabezpieczone przed monotonicznym dryfem.
 
-Każde nagranie zawierało ten sam protokół: \SI{10}{s} oddechu swobodnego,
+Sekwencję generował programowy przewodnik oddechu z~sekcji
+\ref{sec:programowy-przewodnik-oddechu}. Każde nagranie zawierało ten sam protokół:
+\SI{10}{s} oddechu swobodnego,
 7~cykli sterowanych (wdech \SI{2}{s}, wydech \SI{3}{s}), \SI{15}{s}
 wstrzymania oddechu po wydechu i~6~kolejnych cykli sterowanych. Zadana
 częstość wynosiła więc dokładnie \SI{0.20}{Hz}, czyli
@@ -2703,6 +3039,15 @@ Najważniejsze ustalenia inżynierskie uzyskane dotychczas:
   wzmacniacza i~filtru ($\approx121\times$) po estymację parametrów witalnych
   --- oraz zintegrowano radar Acconeer~A121 pracujący na surowych danych
   Sparse~IQ.
+  \item W~równoczesnych nagraniach HB100 wykrywał sterowany oddech i~jego
+  zatrzymanie do \SI{100}{cm}; podczas wstrzymania RMS malał o~
+  \SIrange{18.4}{24.6}{dB}. Jednokanałowy sygnał był jednak zdominowany przez
+  harmoniczne w~10 z~12 bloków i~nie zachowywał stabilnie kierunku
+  wdech--wydech. A121 osiągał w~tym samym teście 95,9--99,3\% opisowej
+  zgodności kierunku, dlatego to jego faza I/Q jest właściwym wejściem do
+  analizy faz cyklu. Pojedynczy retest \SI{150}{cm} podtrzymał ten wniosek:
+  HB100 wykazał zanik przy wstrzymaniu, lecz nie kierunek fazy, podczas gdy
+  A121 z~płaską pokrywą zachował 96,7\% zgodności kierunku.
   \item Na dystansie \SIrange{0.5}{1.0}{m} system nie jest ograniczony
   amplitudą sygnału: SNR oddechowy wynosi 44--47~dB niezależnie od soczewki
   i~obecności folii aluminiowej. Zysk anteny przekłada się na stabilność
