@@ -37,7 +37,7 @@ Radar connections:
 
 ![Rendered HB100 calibrated schematic](hardware/hb100_calibrated_schematic.svg)
 
-The current radar frontend uses two symmetrical non-inverting MCP6002 stages. Each stage has `Rf = 100 kΩ`, `Rg = 10 kΩ`, and a `22 nF` (`"223"`) capacitor across the feedback loop, giving about `11×` per stage (`~121×` total). The AC-coupled inputs are restored to the `1.65 V` virtual ground through `1 MΩ` bias resistors, and the output is protected by `1 kΩ` before ESP32 GPIO 33.
+The current radar frontend uses two symmetrical non-inverting MCP6002 stages. Each stage has `Rf = 100 kΩ`, `Rg = 10 kΩ`, and a `22 nF` (`"223"`) capacitor across the feedback loop, giving about `11×` per stage (`~121×`, `41.7 dB` total) only in the mid-band. The `1 µF + 1 MΩ` input/inter-stage coupling and `100 µF + 10 kΩ` gain legs each have a nominal `0.159 Hz` high-pass corner; `100 kΩ + 22 nF` gives a `72.3 Hz` upper gain corner per stage. The ideal two-stage transfer is approximately `-3 dB` over `0.36–47.3 Hz` relative to its maximum, and its gain at `0.20 Hz` is about `45.6×` rather than `121×`. The AC-coupled inputs are restored to the `1.65 V` virtual ground through `1 MΩ` bias resistors, and the output is protected by `1 kΩ` before ESP32 GPIO 33.
 
 Optional IMU connections:
 - 3V3 -> 3V
@@ -118,6 +118,22 @@ uv run respi record-a121-sleep --port COM3 --label sleep-night-1  # Ctrl+C when 
 uv run respi capture-radar --port COM6
 uv run respi live-radar --port COM6  # compatibility alias for the unified app
 ```
+
+Run the short guided HB100 range protocol (optional simultaneous A121
+comparison, two 90 s repeats at 30/60/100 cm, then farther in 50 cm steps):
+
+```powershell
+uv run python tools/hb100_a121_guided_experiment.py
+uv run python tools/hb100_a121_guided_experiment.py --probe-hb100  # connection/ADC check only
+uv run python tools/hb100_a121_guided_experiment.py --hb100-only   # A121 not connected
+```
+
+The guided runner records host timestamps and breathing-cue sidecars, supports
+Esc-to-discard, reports the 0.20 Hz peak/SNR and breath-hold attenuation, and
+uses strict 230400-baud ASCII at a stable 250 Hz with the current ESP32
+firmware. The audited serial compatibility repair remains only as a fallback
+for the older 921600-baud image and is recorded in the session manifest if it
+is ever used.
 
 IMU comparison commands are still available when needed:
 

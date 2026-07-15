@@ -22,7 +22,9 @@ The project dependencies include:
 
 ### HB100 radar via ESP32 ADC
 
-Use this for the existing analog HB100 radar pipeline. The ESP32 streams CSV-like serial rows:
+Use this for the existing analog HB100 radar pipeline. The current ESP32
+firmware streams strict ASCII at 230400 baud and a stable 250 Hz in CSV-like
+serial rows:
 
 ```text
 Timestamp_ms,RawADC,Voltage_mV
@@ -372,7 +374,8 @@ For live A121 respiration, target acquisition/reacquisition follows Acconeer's b
 
 - Check the correct COM port.
 - Check firmware matches selected app sensor.
-- Confirm baud rate, default `921600`.
+- Confirm the sensor-specific baud rate: HB100 defaults to `230400`, while the
+  ESP32 IMU remains at `921600`.
 - Use `uv run respi ports` to verify the port is visible.
 
 ### Empty or noisy plots

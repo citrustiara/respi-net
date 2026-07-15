@@ -45,7 +45,7 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
 - Algorytm snu: `src/respi_net/a121_sleep.py` (reguły faz, ocena 0–100) oraz
   `tools/analyze_a121_sleep_vitals_gated.py` (okna 60 s / krok 30 s, bramkowanie).
 - Rozdzielone wykresy faz, tętna i oddechu dla głównego porównania pełnych nocy
-  8.06 (plano-convex), 9.06 (FZP), 13.06 (płaska pokrywa) oraz dla trzech
+  1 (plano-convex), 2 (FZP), 3 (płaska pokrywa) oraz dla trzech
   pełnych nocy z płaską pokrywą nad łóżkiem odtwarza
   `tools/plot_a121_sleep_thesis.py` z plików `*_gated_sleep_vitals.csv` w
   lokalnym archiwum. Skrypt celowo nie łączy długich luk odrzuconych estymat.

@@ -18,6 +18,7 @@ from .serial_utils import list_serial_ports, ordered_ports
 
 RADAR_COLUMNS = ["Timestamp_ms", "RawADC", "Voltage_mV"]
 DOPPLER_HZ_PER_MPS = 70.16
+DEFAULT_RADAR_BAUD = 230_400
 
 
 @dataclass(frozen=True)
@@ -99,7 +100,7 @@ def analyze_radar_csv(
 
 
 class RadarCapture:
-    def __init__(self, baud: int = 921600, output_dir: str | Path = RAW_RADAR_DIR):
+    def __init__(self, baud: int = DEFAULT_RADAR_BAUD, output_dir: str | Path = RAW_RADAR_DIR):
         self.baud = baud
         self.output_dir = Path(output_dir)
         self.serial_port: serial.Serial | None = None

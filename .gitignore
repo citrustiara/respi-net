@@ -2,6 +2,7 @@
 build/
 sdkconfig.old
 sdkconfig.defaults
+!firmware/esp32_radar_adc/sdkconfig.defaults
 managed_components/
 dependencies.lock
 
@@ -26,6 +27,7 @@ data/**/*.csv
 outputs/**/*.csv
 # Local guided sessions include large recordings and small manifest files.
 data/raw/a121/guided/guided_*/
+data/raw/hb100_a121/guided/
 kicad_error.txt
 *~
 *.bak

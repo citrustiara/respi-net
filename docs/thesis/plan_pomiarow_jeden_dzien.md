@@ -178,7 +178,7 @@ zestaw, który zachowuje sens metodyczny, wygląda następująco:
    test przesiewowy zakłóceń. Gdy pojawi się nowa linia widmowa, wzrost tła
    ponad 3 dB albo utrata ramek, podejrzaną parę powtórzyć z osobnymi portami
    USB/zasilaniem; przy braku różnicy przejść od razu do pomiarów wspólnych.
-3. Wykonać wspólne nagrania przy 30 cm (jedno nagranie kontrolne), 60 cm (dwa
+3. Wykonać wspólne nagrania przy 30 cm (dwa powtórzenia), 60 cm (dwa
    powtórzenia) i 100 cm (dwa powtórzenia). Nie zmieniać wzmocnienia toru HB100
    między dystansami i zapisać, czy ADC nie ulega nasyceniu.
 4. Jeżeli 100 cm spełnia kryterium użyteczności, wykonać jedno nagranie przy
@@ -192,8 +192,9 @@ zestaw, który zachowuje sens metodyczny, wygląda następująco:
 
 Każde nagranie powinno trwać 90 s i powtarzać już użyty protokół A121:
 10 s oddechu swobodnego, 7 cykli po 5 s (wdech 2 s, wydech 3 s), 15 s
-wstrzymania po wydechu oraz 6 kolejnych cykli. Na początku wspólnego zapisu
-wykonać trzy krótkie ruchy tułowia do późniejszego wyrównania osi czasu.
+wstrzymania po wydechu oraz 6 kolejnych cykli. Nie wykonywać na początku
+dodatkowych ruchów synchronizacyjnych: prowadzony skrypt zapisuje dla obu
+torów wspólny czas hosta, a pierwsze 10 s służy ustabilizowaniu pozycji.
 Warunek zalicza się dla HB100, gdy pik przy 0,20 ± 0,02 Hz jest obecny w obu
 częściach oddychania, ma co najmniej 6 dB nad tłem i wyraźnie zanika podczas
 wstrzymania. A121 służy do sprawdzenia, czy w tym samym czasie rzeczywiście
@@ -204,6 +205,26 @@ dystansu. Daje najlepszy przypadek, dwa powtórzenia przy odległościach
 praktycznych oraz przedział granicy zasięgu. Dodatkowe dystanse i pełne
 odwrócenie kolejności mają sens dopiero wtedy, gdy ta seria działa i ma zostać
 użyta do mocniejszego wniosku ilościowego.
+
+Prowadzony zapis całej procedury uruchamia osobny program:
+
+```bash
+uv run python tools/hb100_a121_guided_experiment.py
+```
+
+Program zapisuje HB100 i~A121 do osobnych plików CSV, dodaje wspólny czas hosta
+i~plik z~fazami oddechu, prowadzi wszystkie trzy próby pustej sceny oraz dwie
+próby przy 30, 60 i~100 cm. Klawisz `Esc` przerywa i~usuwa bieżący zapis. Po
+100 cm można z~interfejsu dodać 150 cm i~kolejne dystanse co 50 cm; pierwsza
+oznaczona porażka jest automatycznie powtarzana po zmianie pozycji o~1–2 cm.
+Gdy podłączony jest tylko tor HB100, jego transmisję można najpierw sprawdzić
+bez tworzenia właściwej sesji. Aktualny firmware używa 230400 baud i~stabilnej
+częstości 250 Hz; skrypt sprawdza tę szybkość transmisji jako pierwszą, a tryb
+zgodności pozostawia wyłącznie dla starszego obrazu 921600 baud:
+
+```bash
+uv run python tools/hb100_a121_guided_experiment.py --probe-hb100
+```
 
 ### Wariant rozszerzony z pełną krzywą dystansu
 

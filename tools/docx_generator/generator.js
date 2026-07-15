@@ -307,7 +307,7 @@ add(
     sp(),
 
     record("FNGL_002", "Akwizycja danych z radaru doplerowego HB100 przez ESP32 ADC", [
-        { label: "Opis:", value: "System musi umożliwiać wysoko-prędkościowy odczyt sygnału IF z radaru HB100 przez 12-bitowy ADC ESP32 (baud 921 600), zapis do pliku CSV i wizualizację na żywo." },
+        { label: "Opis:", value: "System musi umożliwiać stabilny odczyt sygnału IF z radaru HB100 przez 12-bitowy ADC ESP32 (250 Hz, baud 230 400), zapis do pliku CSV i wizualizację na żywo." },
         { label: "Cel biznesowy:", value: "BSGL_001 Nieinwazyjny monitoring parametrów witalnych" },
         { label: "Źródło:", value: "STKH_003 Badacz / Autor systemu" },
         { label: "Priorytet:", value: "krytyczny" },
@@ -385,8 +385,8 @@ add(
     record("XSYS_002", "ESP32 – firmware ADC radaru (HB100)", [
         { label: "Opis:", value: "Drugi tryb pracy ESP32 (esp32_radar_adc): pobieranie próbek z 12-bitowego ADC GPIO34, budowanie ramek z timestampem i napięciem mV, transmisja z bardzo dużą prędkością." },
         { label: "Potrzeby:", value: "1. Odbiór ramek CSV: timestamp_ms, raw_adc, voltage_mV." },
-        { label: "Zadania:", value: "1. Przesyłanie danych z próbkowaniem ≥500 Hz (baud 921 600)." },
-        { label: "Interfejs:", value: "UART (USB CDC), baud 921 600, format CSV, newline-delimited" },
+        { label: "Zadania:", value: "1. Przesyłanie danych z próbkowaniem 250 Hz (baud 230 400)." },
+        { label: "Interfejs:", value: "UART (USB CDC), baud 230 400, format CSV, newline-delimited" },
         { label: "Źródło:", value: "STKH_003 Badacz / Autor systemu" },
         { label: "Priorytet:", value: "krytyczny" },
     ]),
@@ -425,7 +425,7 @@ add(
     sp(),
 
     record("SSYS_002", "Podsystem akwizycji danych radaru", [
-        { label: "Opis:", value: "Realizuje wysoko-prędkościowy odczyt sygnału doplerowego z HB100 przez 12-bit ADC ESP32 (baud 921 600) i transmisję ramek CSV do PC." },
+        { label: "Opis:", value: "Realizuje stabilny odczyt sygnału doplerowego z HB100 przez 12-bit ADC ESP32 (250 Hz, baud 230 400) i transmisję ramek CSV do PC." },
         { label: "Lokalizacja:", value: "HCMP_001 ESP32 LilyGO T-Display" },
         { label: "Komponenty:", value: "SCMP_002 Firmware ESP-IDF ADC radaru, HCMP_003 Moduł HB100 z wzmacniaczem" },
         { label: "Powiązania:", value: "SSYS_001 Podsystem akwizycji IMU" },
@@ -504,7 +504,7 @@ add(
     sp(),
 
     record("SCMP_002", "Firmware ESP-IDF – moduł ADC radaru (esp32_radar_adc)", [
-        { label: "Opis:", value: "Firmware C/C++ (ESP-IDF) próbkujący ADC GPIO34 z maksymalną prędkością, pakujący ramki CSV (timestamp_ms, raw_adc, voltage_mV) i emitujący je przez UART 921 600 baud." },
+        { label: "Opis:", value: "Firmware C/C++ (ESP-IDF) próbkujący ADC GPIO33 z częstością 250 Hz i uśrednianiem 64 konwersji, pakujący ramki CSV (timestamp_ms, raw_adc, voltage_mV) i emitujący je przez UART 230 400 baud." },
         { label: "Lokalizacja:", value: "HCMP_001 ESP32 LilyGO T-Display" },
         { label: "Powiązania:", value: "SCMP_004 radar_viewer.py" },
         { label: "Źródło:", value: "STKH_003 Badacz / Autor systemu" },
@@ -522,7 +522,7 @@ add(
     sp(),
 
     record("SCMP_004", "radar_viewer.py – akwizycja i DSP radaru", [
-        { label: "Opis:", value: "Skrypt Python: podłączenie do ESP32 (921 600 baud), buforowanie próbek napięcia, live FFT (okno Hanninga), wizualizacja w czasie rzeczywistym (matplotlib), zapis CSV po sesji." },
+        { label: "Opis:", value: "Skrypt Python: podłączenie do ESP32 (230 400 baud), buforowanie próbek napięcia, live FFT (okno Hanninga), wizualizacja w czasie rzeczywistym (matplotlib), zapis CSV po sesji." },
         { label: "Lokalizacja:", value: "HCMP_004 Komputer PC badacza" },
         { label: "Powiązania:", value: "SCMP_002 Firmware ADC, SCMP_005 Skrypt ML" },
         { label: "Źródło:", value: "STKH_003 Badacz / Autor systemu" },
@@ -568,7 +568,7 @@ add(
     sp(),
 
     record("FNRQ_003", "Odbiór i dekodowanie ramek danych radaru", [
-        { label: "Opis:", value: "System musi odbierać linie CSV z UART 921 600 baud (format: timestamp_ms, raw_adc, voltage_mV), walidować i buforować je. Błędne linie są pomijane." },
+        { label: "Opis:", value: "System musi odbierać linie CSV z UART 230 400 baud (format: timestamp_ms, raw_adc, voltage_mV), walidować i buforować je. Błędne linie są pomijane." },
         { label: "Dotyczy:", value: "USER_001 Badacz / Operator systemu pomiarowego" },
         { label: "Wsparcie dla:", value: "FNGL_002 Akwizycja radaru" },
         { label: "Powiązania:", value: "FNRQ_005 DSP radaru, DTRQ_002 Surowe dane radaru" },

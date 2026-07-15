@@ -38,7 +38,7 @@ from .paths import (
     RAW_RADAR_DIR,
     resolve_recordings_db_path,
 )
-from .radar import DOPPLER_HZ_PER_MPS, RADAR_COLUMNS, RadarCapture
+from .radar import DEFAULT_RADAR_BAUD, DOPPLER_HZ_PER_MPS, RADAR_COLUMNS, RadarCapture
 from .serial_utils import list_serial_ports
 
 DB_PATH = resolve_recordings_db_path()
@@ -478,7 +478,12 @@ class A121SignalTestWindow(QtWidgets.QWidget):
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, default_sensor: str = "radar", default_port: str | None = None, default_baud: int = 921600) -> None:
+    def __init__(
+        self,
+        default_sensor: str = "radar",
+        default_port: str | None = None,
+        default_baud: int | None = None,
+    ) -> None:
         super().__init__()
         pg.setConfigOptions(antialias=False, background="#111827", foreground="#e5e7eb")
         self.setWindowTitle("RespiNet Sensor Studio")
@@ -500,9 +505,11 @@ class MainWindow(QtWidgets.QMainWindow):
             QTabBar::tab:selected { background: #1e293b; color: #ffffff; }
             """
         )
-        self.default_sensor = default_sensor.lower()
+        self.default_sensor = default_sensor.lower().replace("-", "_")
         self.default_port = default_port
-        self.default_baud = default_baud
+        self.baud_follows_sensor = default_baud is None
+        automatic_baud = DEFAULT_RADAR_BAUD if self.default_sensor == "radar" else 921_600
+        self.default_baud = int(default_baud) if default_baud is not None else automatic_baud
 
         self.store = RecordingStore()
         self.capture: RadarCapture | A121Capture | BreathCapture | IPhoneIMUBluetoothCapture | None = None
@@ -827,6 +834,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.active_sensor = "imu"
         else:
             self.active_sensor = "radar"
+        if hasattr(self, "baud_spin") and self.baud_follows_sensor:
+            automatic_baud = DEFAULT_RADAR_BAUD if self.active_sensor == "radar" else 921_600
+            self.baud_spin.setValue(automatic_baud)
         if hasattr(self, "port_combo"):
             self._refresh_ports()
         self._configure_live_plots()
@@ -1896,7 +1906,11 @@ class MainWindow(QtWidgets.QMainWindow):
         event.accept()
 
 
-def launch_app(default_sensor: str = "radar", default_port: str | None = None, default_baud: int = 921600) -> int:
+def launch_app(
+    default_sensor: str = "radar",
+    default_port: str | None = None,
+    default_baud: int | None = None,
+) -> int:
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
     app.setApplicationName("RespiNet Sensor Studio")
     window = MainWindow(default_sensor=default_sensor, default_port=default_port, default_baud=default_baud)

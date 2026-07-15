@@ -60,8 +60,11 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Starting Radar ADC Sampling (64x Oversampling) on GPIO 33...");
 
-    // Data transmission rate: 500 Hz (2ms period)
-    const int transmission_period_ms = 2;
+    // Stable data transmission rate: 250 Hz (4 ms period).
+    // The 64 ADC conversions plus CSV formatting can exceed 2 ms; a 4 ms
+    // period guarantees an idle interval and prevents the task watchdog from
+    // firing while retaining ample bandwidth for respiration and heartbeat.
+    const int transmission_period_ms = 4;
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     while (1) {

@@ -1,0 +1,10 @@
+# Stable USB/UART settings for the HB100 acquisition board.
+# Keep these defaults alongside the generated sdkconfig so a clean ESP-IDF
+# configuration does not silently restore the former 921600-baud console.
+CONFIG_ESP_CONSOLE_UART_CUSTOM=y
+CONFIG_ESP_CONSOLE_UART_CUSTOM_NUM_0=y
+CONFIG_ESP_CONSOLE_UART_NUM=0
+CONFIG_ESP_CONSOLE_UART_TX_GPIO=1
+CONFIG_ESP_CONSOLE_UART_RX_GPIO=3
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=230400
+CONFIG_ESPTOOLPY_MONITOR_BAUD=230400

@@ -16,7 +16,7 @@ import click
 from .imu import BreathCapture, analyze_imu_csv
 from .iphone_imu import IPhoneIMUBluetoothCapture, discover_iphone_imu_devices, probe_iphone_imu_device
 from .paths import DATA_DIR, IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR, SLEEP_PLOTS_DIR
-from .radar import RadarCapture, analyze_radar_csv
+from .radar import DEFAULT_RADAR_BAUD, RadarCapture, analyze_radar_csv
 from .serial_utils import list_serial_ports
 
 
@@ -44,8 +44,13 @@ def ports() -> None:
     show_default=True,
 )
 @click.option("-p", "--port", help="Preferred serial port, for example COM6.")
-@click.option("-b", "--baud", default=921600, show_default=True)
-def app(sensor: str, port: str | None, baud: int) -> None:
+@click.option(
+    "-b",
+    "--baud",
+    type=click.IntRange(9600, 2_000_000),
+    help="Serial rate override; defaults to 230400 for HB100 and 921600 for the ESP32 IMU.",
+)
+def app(sensor: str, port: str | None, baud: int | None) -> None:
     """Open the unified radar/IMU desktop app."""
     from .app import launch_app
 
@@ -1073,7 +1078,7 @@ cli.add_command(record_a121_test, "capture-a121")
 
 @cli.command("capture-radar")
 @click.option("-p", "--port", help="Preferred serial port, for example COM6.")
-@click.option("-b", "--baud", default=921600, show_default=True)
+@click.option("-b", "--baud", default=DEFAULT_RADAR_BAUD, show_default=True)
 @click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=RAW_RADAR_DIR, show_default=True)
 @click.option("--plot/--no-plot", default=True, show_default=True)
 def capture_radar(port: str | None, baud: int, output_dir: Path, plot: bool) -> None:
@@ -1101,7 +1106,7 @@ def capture_radar(port: str | None, baud: int, output_dir: Path, plot: bool) -> 
 
 @cli.command("live-radar")
 @click.option("-p", "--port", default="COM6", show_default=True, help="Preferred serial port.")
-@click.option("-b", "--baud", default=921600, show_default=True)
+@click.option("-b", "--baud", default=DEFAULT_RADAR_BAUD, show_default=True)
 @click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=RAW_RADAR_DIR, show_default=True)
 def live_radar(port: str, baud: int, output_dir: Path) -> None:
     """Deprecated alias for the unified desktop app in Radar mode."""
