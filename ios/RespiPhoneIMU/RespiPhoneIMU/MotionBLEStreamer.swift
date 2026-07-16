@@ -195,10 +195,17 @@ final class MotionBLEStreamer: NSObject, ObservableObject {
             return false
         }
 
-        let count = min(maxSamplesPerNotification(), pendingSamples.count)
-        if !force && pendingSamples.count < count {
+        let maximumCount = maxSamplesPerNotification()
+        // Do not turn every 100 Hz motion callback into a BLE notification.
+        // The previous condition compared `pendingSamples.count` with
+        // `min(maximumCount, pendingSamples.count)`, so it could never defer
+        // a send and every packet contained one sample.  Batching up to the
+        // central's negotiated payload size greatly reduces notification
+        // pressure while preserving each sample's own timestamp.
+        if !force && pendingSamples.count < maximumCount {
             return false
         }
+        let count = min(maximumCount, pendingSamples.count)
         let batch = Array(pendingSamples.prefix(count))
         let data = encodeBatch(batch)
         let sent = peripheralManager.updateValue(data, for: dataCharacteristic, onSubscribedCentrals: nil)

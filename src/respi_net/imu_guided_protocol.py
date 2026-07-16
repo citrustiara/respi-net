@@ -143,5 +143,69 @@ def sample_timing_summary(rows: list[list[float]]) -> dict[str, float | int | No
     }
 
 
+def stream_coverage_summary(
+    rows: list[list[float]],
+    *,
+    window_start_ms: float,
+    expected_duration_s: float,
+    expected_sample_rate_hz: float,
+) -> dict[str, float | int | None]:
+    """Describe whether an IMU stream actually covers a capture window.
+
+    A short, contiguous burst can have a perfectly regular local ``dt`` while
+    still missing nearly the whole trial.  Unlike :func:`sample_timing_summary`,
+    this helper compares the rows with the wall-clock recording interval and
+    exposes the largest time hole.  It is intentionally independent of BLE so
+    it can also guard other timestamped sources without a sample counter.
+    """
+
+    expected_duration_s = max(0.0, float(expected_duration_s))
+    expected_rate_hz = max(0.0, float(expected_sample_rate_hz))
+    expected_rows = int(round(expected_duration_s * expected_rate_hz))
+    if not rows:
+        return {
+            "rows": 0,
+            "expected_rows": expected_rows,
+            "sample_coverage_percent": 0.0,
+            "time_coverage_s": 0.0,
+            "time_coverage_percent": 0.0,
+            "first_sample_offset_s": None,
+            "last_sample_offset_s": None,
+            "largest_gap_s": None,
+        }
+
+    values = np.asarray(rows, dtype=float)
+    timestamps_ms = values[:, 0]
+    finite = timestamps_ms[np.isfinite(timestamps_ms)]
+    if not len(finite):
+        return {
+            "rows": len(rows),
+            "expected_rows": expected_rows,
+            "sample_coverage_percent": 0.0,
+            "time_coverage_s": 0.0,
+            "time_coverage_percent": 0.0,
+            "first_sample_offset_s": None,
+            "last_sample_offset_s": None,
+            "largest_gap_s": None,
+        }
+
+    finite.sort()
+    gaps_s = np.diff(finite) / 1000.0
+    positive_gaps_s = gaps_s[np.isfinite(gaps_s) & (gaps_s > 0)]
+    first_offset_s = float((finite[0] - window_start_ms) / 1000.0)
+    last_offset_s = float((finite[-1] - window_start_ms) / 1000.0)
+    time_coverage_s = max(0.0, float((finite[-1] - finite[0]) / 1000.0))
+    return {
+        "rows": len(rows),
+        "expected_rows": expected_rows,
+        "sample_coverage_percent": float(100.0 * len(rows) / expected_rows) if expected_rows else 100.0,
+        "time_coverage_s": time_coverage_s,
+        "time_coverage_percent": float(100.0 * time_coverage_s / expected_duration_s) if expected_duration_s else 100.0,
+        "first_sample_offset_s": first_offset_s,
+        "last_sample_offset_s": last_offset_s,
+        "largest_gap_s": float(np.max(positive_gaps_s)) if len(positive_gaps_s) else 0.0,
+    }
+
+
 def counter_delta(after: dict[str, int], before: dict[str, int]) -> dict[str, int]:
     return {key: max(0, int(after.get(key, 0)) - int(before.get(key, 0))) for key in after}

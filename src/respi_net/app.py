@@ -29,7 +29,7 @@ from .a121_vitals import (
     bandpass_filter,
     clean_signal,
 )
-from .imu import IMU_COLUMNS, LSM6DS3_CAPTURE_COLUMNS, BreathCapture
+from .imu import DEFAULT_IMU_BAUD, IMU_COLUMNS, LSM6DS3_CAPTURE_COLUMNS, BreathCapture
 from .iphone_imu import IPhoneIMUBluetoothCapture
 from .paths import (
     DATA_DIR,
@@ -508,7 +508,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.default_sensor = default_sensor.lower().replace("-", "_")
         self.default_port = default_port
         self.baud_follows_sensor = default_baud is None
-        automatic_baud = DEFAULT_RADAR_BAUD if self.default_sensor == "radar" else 921_600
+        automatic_baud = DEFAULT_RADAR_BAUD if self.default_sensor == "radar" else DEFAULT_IMU_BAUD
         self.default_baud = int(default_baud) if default_baud is not None else automatic_baud
 
         self.store = RecordingStore()
@@ -835,7 +835,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.active_sensor = "radar"
         if hasattr(self, "baud_spin") and self.baud_follows_sensor:
-            automatic_baud = DEFAULT_RADAR_BAUD if self.active_sensor == "radar" else 921_600
+            automatic_baud = DEFAULT_RADAR_BAUD if self.active_sensor == "radar" else DEFAULT_IMU_BAUD
             self.baud_spin.setValue(automatic_baud)
         if hasattr(self, "port_combo"):
             self._refresh_ports()

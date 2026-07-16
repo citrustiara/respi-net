@@ -388,7 +388,7 @@ For live A121 respiration, target acquisition/reacquisition follows Acconeer's b
 - Check the correct COM port.
 - Check firmware matches selected app sensor.
 - Confirm the sensor-specific baud rate: HB100 defaults to `230400`, while the
-  ESP32 IMU remains at `921600`.
+  ESP32 IMU uses `115200`.
 - Use `uv run respi ports` to verify the port is visible.
 
 ### Empty or noisy plots

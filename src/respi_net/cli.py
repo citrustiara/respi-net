@@ -13,7 +13,7 @@ import time
 
 import click
 
-from .imu import BreathCapture, analyze_imu_csv
+from .imu import DEFAULT_IMU_BAUD, BreathCapture, analyze_imu_csv
 from .iphone_imu import IPhoneIMUBluetoothCapture, discover_iphone_imu_devices, probe_iphone_imu_device
 from .paths import DATA_DIR, IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR, SLEEP_PLOTS_DIR
 from .radar import DEFAULT_RADAR_BAUD, RadarCapture, analyze_radar_csv
@@ -48,7 +48,7 @@ def ports() -> None:
     "-b",
     "--baud",
     type=click.IntRange(9600, 2_000_000),
-    help="Serial rate override; defaults to 230400 for HB100 and 921600 for the ESP32 IMU.",
+    help="Serial rate override; defaults to 230400 for HB100 and 115200 for the ESP32 IMU.",
 )
 def app(sensor: str, port: str | None, baud: int | None) -> None:
     """Open the unified radar/IMU desktop app."""
@@ -116,7 +116,7 @@ def batch_radar(input_dir: Path, output_dir: Path) -> None:
 
 @cli.command("capture-imu")
 @click.option("-p", "--port", help="Preferred serial port, for example COM6.")
-@click.option("-b", "--baud", default=921600, show_default=True)
+@click.option("-b", "--baud", default=DEFAULT_IMU_BAUD, show_default=True)
 @click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=RAW_IMU_DIR, show_default=True)
 @click.option("--plot/--no-plot", default=True, show_default=True)
 def capture_imu(port: str | None, baud: int, output_dir: Path, plot: bool) -> None:

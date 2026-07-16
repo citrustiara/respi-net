@@ -3,12 +3,14 @@ import struct
 import numpy as np
 import pytest
 
-from respi_net.imu import BreathCapture, summarize_lsm6ds3_capture_rows
+from respi_net.imu import DEFAULT_IMU_BAUD, BreathCapture, summarize_lsm6ds3_capture_rows
 from respi_net.iphone_imu import IPhoneIMUBluetoothCapture
 
 
 def test_lsm6ds3_timestamped_uart_preserves_device_clock_and_counts_gaps() -> None:
     capture = BreathCapture()
+
+    assert capture.baud == DEFAULT_IMU_BAUD == 115_200
 
     capture._process_line("10,1000000,0.1000,0.2000,1.0000,1.000,2.000,3.000", host_time_ms=5000.0)
     capture._process_line("12,1020000,0.1100,0.2100,1.0100,1.100,2.100,3.100", host_time_ms=5021.0)
@@ -30,6 +32,18 @@ def test_lsm6ds3_legacy_uart_is_kept_but_marked_as_legacy() -> None:
     assert row[0:2] == [5000.0, 5000.0]
     assert np.isnan(row[2]) and np.isnan(row[3])
     assert capture.diagnostics()["format"] == "legacy"
+
+
+def test_lsm6ds3_ignores_boot_preamble_but_counts_errors_after_sync() -> None:
+    capture = BreathCapture()
+
+    capture._process_line("\x12\trbjr\x9abr")
+    assert capture.diagnostics()["malformed_lines"] == 0
+
+    capture._process_line("10,1000000,0.1000,0.2000,1.0000,1.000,2.000,3.000", host_time_ms=5000.0)
+    capture._process_line("not,a,valid,imu,line", host_time_ms=5010.0)
+
+    assert capture.diagnostics()["malformed_lines"] == 1
 
 
 def test_lsm6ds3_counter_wrap_is_not_reported_as_a_loss() -> None:

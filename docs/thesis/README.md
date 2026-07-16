@@ -40,6 +40,12 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
   `analysis_2m_metrics.csv` i `analysis_2m_summary.json` oraz odtwarza cztery
   rysunki `docs/thesis/figures/foil2m_*.png`. Surowe CSV i katalog sesji są
   celowo ignorowane przez Git.
+- Osobny test LSM6DS3 na klatce piersiowej: `tools/analyze_imu_lsm6ds3_iphone_session.py`
+  analizuje wskazaną sesję z `data/raw/imu/lsm6ds3_iphone_guided/`, zapisuje
+  tabelę metryk obok danych oraz odtwarza rysunek
+  `docs/thesis/figures/imu_lsm6ds3_klatka_piersiowa.png`. Analiza zawsze
+  raportuje pokrycie czasowe iPhone'a przed porównaniem torów; niepełne
+  transmisje BLE nie są traktowane jako wynik fizjologiczny.
 - Aktualne, uporządkowane wyniki nocne i porównanie z Garminem znajdują się
   w `praca_inzynierska.tex`; `docs/reports/a121_sleep_lens_report.tex` jest
   historycznym raportem pierwszej serii. Dane pośrednie obejmują pliki

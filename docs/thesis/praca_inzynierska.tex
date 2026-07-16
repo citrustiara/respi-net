@@ -65,12 +65,9 @@
 
 % Znacznik miejsc do uzupełnienia (usunąć w wersji finalnej).
 \newcommand{\todo}[1]{\textcolor{red!75!black}{\textbf{[TODO: #1]}}}
-% Rezerwa miejsca na treść, która dopiero powstanie.
-\newcommand{\miejsce}[1]{%
-  \par\vspace{0.4em}%
-  \noindent\fcolorbox{gray!40}{gray!5}{%
-    \parbox{0.97\linewidth}{\small\itshape Miejsce zarezerwowane: #1}}%
-  \par\vspace{0.6em}}
+% Starsza nazwa zachowana dla istniejących odwołań; wszystkie rezerwy są
+% celowo widoczne w PDF jako czerwone TODO.
+\newcommand{\miejsce}[1]{\todo{#1}}
 
 % Numery rysunków dwucyfrowych (np. 12.10) potrzebują szerszej kolumny
 % w~spisie rysunków, aby podpis nie stykał się z~numerem.
@@ -796,11 +793,15 @@ inne postawy wymaga osobnych danych.
 LSM6DS3 zawiera trójosiowy akcelerometr i~trójosiowy żyroskop. Wykorzystany
 firmware ESP-IDF komunikuje się z~czujnikiem po I2C z~częstotliwością
 \SI{400}{kHz}. Rejestry \texttt{CTRL1\_XL} oraz \texttt{CTRL2\_G} otrzymują
-wartość \texttt{0x70}, co ustawia częstotliwość ODR obu sensorów na
-\SI{1.66}{kHz}, zakres akcelerometru $\pm2g$ i~żyroskopu
-$\pm\SI{250}{\degree\per\second}$ \cite{lsm6ds3}. Po zgłoszeniu gotowości obu
-części odczytywane są trzy osie przyspieszenia w~$g$ oraz trzy osie prędkości
-kątowej w~stopniach na sekundę i~wysyłane tekstowo przez UART.
+wartość \texttt{0x40}, co ustawia nominalną częstotliwość ODR obu sensorów na
+\SI{104}{Hz}, zakres akcelerometru $\pm2g$ i~żyroskopu
+$\pm\SI{250}{\degree\per\second}$ \cite{lsm6ds3}. Częstotliwość dobrano do
+pasma oddechowego zamiast stosować niepotrzebne \SI{1.66}{kHz}. Po zgłoszeniu
+gotowości obu części odczytywane są jednym odczytem I2C trzy osie
+przyspieszenia w~$g$ oraz trzy osie prędkości kątowej w~stopniach na sekundę.
+Każdy wiersz UART zawiera dodatkowo licznik próbki i~czas
+\texttt{esp\_timer} w~mikrosekundach; pętla firmware utrzymuje rzeczywistą
+częstotliwość około \SI{100}{Hz}.
 
 \begin{figure}[H]
     \centering
@@ -811,6 +812,8 @@ kątowej w~stopniach na sekundę i~wysyłane tekstowo przez UART.
     \label{fig:lsm6ds3-stanowisko}
 \end{figure}
 
+\subsection{Przetwarzanie sygnału IMU}
+
 Analiza offline filtruje trzy osie w~paśmie oddechowym
 \SIrange{0.10}{0.60}{Hz}, a~następnie wyznacza pierwszą składową główną PCA.
 Osobna ścieżka łączy żyroskop z~kierunkiem grawitacji filtrem komplementarnym
@@ -820,6 +823,13 @@ ale nie gwarantuje niezmienności względem postawy, miejsca położenia czujnik
 ani przesunięcia podczas pomiaru. W~serii podstawowej nie testuje się tej
 niezmienności: urządzenia pozostają w~stałej orientacji na klatce osoby
 leżącej na plecach.
+
+Nie jest to drugi, niezależny algorytm rekonstrukcji fizycznego
+przemieszczenia porównywalny z~torem fazowym A121. PCA jest tu celowym,
+prostym połączeniem trzech osi akcelerometru w~jeden przebieg diagnostyczny;
+znak jego składowej jest umowny. Dalsza ocena ogranicza się więc do
+wykrywalności rytmu, zaniku ruchu podczas wstrzymania oraz zgodności z~rytmem
+zadającym, a~nie do bezwzględnego przypisania fazy wdech--wydech.
 
 \section{Aplikacja iOS i transmisja BLE}
 Aplikacja \emph{RespiPhoneIMU} korzysta z~\texttt{CMDeviceMotion}. Użytkownik
@@ -866,21 +876,96 @@ numeracji.
 Do równoczesnych pomiarów obu IMU przygotowano osobny skrypt z~wspólną osią
 czasu komend, plikami CSV obu urządzeń, plikiem komend i~manifestem. Przerwana
 albo odrzucona próba usuwa wyłącznie pliki bieżącego nagrania. Przed analizą
-ilościową nadal należy sprawdzić histogram $\Delta t$, liczbę utraconych próbek
-i~rzeczywistą liczbę próbek na sekundę dla każdego urządzenia.
+ilościową skrypt sprawdza rzeczywistą liczbę próbek na sekundę, liczbę
+utraconych próbek oraz pokrycie całego okna czasowego. Jest to potrzebne,
+ponieważ krótka, lokalnie regularna paczka BLE może mieć poprawne $\Delta t$,
+a~mimo to nie obejmować prawie całej próby. Zapis iPhone jest akceptowany
+tylko wtedy, gdy pokrywa co najmniej 95\% oczekiwanych próbek i~czasu próby,
+a~najdłuższa luka nie przekracza \SI{0.25}{s}.
 
 Podstawowy eksperyment obejmuje dla obu urządzeń wyłącznie leżenie na plecach,
 oddech swobodny, oddech narzucony metronomem oraz krótki odcinek wstrzymania
-oddechu. Każdy wariant należy powtórzyć dwukrotnie. Porównywane powinny być:
+oddechu. Każdy wariant jest powtarzany dwukrotnie. Po uzyskaniu kompletnego
+zapisu obu torów porównane będą:
 dominująca częstotliwość, SNR widmowy,
 prominencja piku, stabilność wyniku w~kolejnych oknach oraz udział wariancji
 wyjaśniony przez PCA. Wniosek ma dotyczyć użyteczności każdego toru, nie jego
 zgodności z~rzekomym wzorcem radarowym.
 
-\todo{Po potwierdzeniu użyteczności w~leżeniu wykonać osobny eksperyment
+\todo{Po potwierdzeniu użyteczności w~leżeniu wykonać eksperyment
 w~pozycji siedzącej. Następnie, jeśli zakres pracy na to pozwoli, sprawdzić
 leżenie na boku, różne miejsca i~orientacje telefonu oraz odporność PCA na
 zmianę postawy.}
+
+\section{Test LSM6DS3 na klatce piersiowej}
+\label{sec:imu-lsm6ds3-test}
+
+Wykonano cztery próby w~pozycji na plecach. Moduł LSM6DS3 zamocowano na
+wysokości sutków, na górnej części klatki piersiowej; podczas całej serii jego
+położenie i~orientacja pozostawały stałe. Dwie próby trwały \SI{60}{s}:
+\SI{10}{s} uspokojenia pozycji, \SI{35}{s} oddechu swobodnego i~\SI{15}{s}
+wstrzymania po wydechu. Dwie kolejne trwały \SI{90}{s}: po \SI{10}{s}
+oddechu swobodnego badany wykonał 7~cykli wdech \SI{2}{s} / wydech
+\SI{3}{s}, \SI{15}{s} wstrzymania, a~następnie 6~dalszych cykli o~tym samym
+rytmie. W~częściach sterowanych zadana częstość wynosiła zatem
+12~oddechów/min.
+
+W~każdej próbie odebrano ciągły, znacznikowany strumień LSM6DS3 z~zerową
+liczbą luk licznika, duplikatów, resetów i~niepoprawnych wierszy UART.
+Tabela~\ref{tab:imu-lsm-wyniki} przedstawia częstotliwość dominującą z~PCA
+przyspieszeń. W~dwóch próbach sterowanych wynik wyniósł 11,99~oddechów/min,
+czyli praktycznie dokładnie wartość zadaną. W~próbach oddechu swobodnego
+uzyskano 12,11 i~11,72~oddechów/min. Kolumna $R_{\mathrm{hold}}$ porównuje
+RMS ostatnich \SI{10}{s} wstrzymania z~RMS odpowiedniej części oddechowej;
+odrzuca więc ruch przejściowy bezpośrednio po komendzie wstrzymania.
+
+\begin{table}[H]
+\centering
+\caption{Wyniki testu LSM6DS3 na klatce piersiowej.}
+\label{tab:imu-lsm-wyniki}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Próba & $N$ & $f_s$ [Hz] & Luki & $f_R$ [oddech/min] & $R_{\mathrm{hold}}$ \\
+\midrule
+Swobodny + wstrzymanie, 1 & 6082 & 100 & 0 & 12,11 & 0,307 \\
+Swobodny + wstrzymanie, 2 & 6080 & 100 & 0 & 11,72 & 0,066 \\
+Sterowany 12/min + wstrzymanie, 1 & 9118 & 100 & 0 & 11,99 & 0,145 \\
+Sterowany 12/min + wstrzymanie, 2 & 9118 & 100 & 0 & 11,99 & 0,190 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Na rysunku~\ref{fig:imu-lsm-klatka} widoczny jest czytelny przebieg
+oddechowy w~każdej serii oraz wyraźne obniżenie amplitudy w~ostatniej części
+wstrzymania. W~próbie swobodnej 1~pierwsze sekundy po komendzie zawierają
+ruch przejściowy, dlatego nie są mylone z~ustalonym bezruchem. Dla dwóch prób
+sterowanych bezwzględna korelacja pochodnej przebiegu PCA z~naprzemiennymi
+komendami wdech--wydech wyniosła odpowiednio 0,847 i~0,851 po dopasowaniu
+czasowym. Potwierdza to użyteczność sygnału do badania rytmu w~tej jednej,
+ustalonej geometrii, lecz nie jest jeszcze niezależną walidacją kierunku fazy
+ani pomiarem tętna.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{imu_lsm6ds3_klatka_piersiowa.png}
+    \caption[LSM6DS3: cztery próby na klatce piersiowej]{Znormalizowana
+    pierwsza składowa główna trzech osi przyspieszenia LSM6DS3 po filtracji
+    pasmowej \SIrange{0.07}{0.60}{Hz}. Zacienienie oznacza harmonogram
+    komend; znak PCA jest umowny. Dwa dolne przebiegi odtwarzają rytm
+    12~oddechów/min, a~we wszystkich czterech próbach końcowa część fazy
+    wstrzymania ma wyraźnie mniejszą amplitudę.}
+    \label{fig:imu-lsm-klatka}
+\end{figure}
+
+\section{Porównanie LSM6DS3 i~iPhone}
+\label{sec:imu-iphone-porownanie}
+
+\todo{Wykonać porównanie LSM6DS3 i~iPhone wyłącznie w~dwóch 90-sekundowych
+próbach programu prowadzącego: \SI{10}{s} oddechu swobodnego, 7~cykli wdech
+\SI{2}{s}/wydech \SI{3}{s}, \SI{15}{s} wstrzymania oraz 6~dalszych cykli.
+Telefon ma pracować z~\SI{100}{Hz}, odblokowany i~z~aplikacją na pierwszym
+planie. Po pozytywnej kontroli transmisji BLE porównać pokrycie czasowe, luki,
+$f_R$, SNR, stabilność okien i~przebieg PCA obu urządzeń.}
 
 % ---------------------------------------------------------------------
 \chapter{Algorytmy estymacji oddechu i tętna}
@@ -1635,7 +1720,7 @@ dopiero po opisie estymatora rytmu (rys.~\ref{fig:hb100-a121-etapy}), aby
 odczyt przebiegów odnosił się już do ich znaczenia fizycznego i~ograniczeń
 jednokanałowego HB100.
 
-\section{Estymacja rytmu z jednokanałowego HB100}
+\section{Pomocniczy estymator rytmu z jednokanałowego HB100}
 \label{sec:hb100-rytm}
 
 Bezpośrednie porównanie dwóch przebiegów wymaga rozdzielenia ich znaczenia

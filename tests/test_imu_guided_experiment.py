@@ -9,6 +9,7 @@ from respi_net.imu_guided_protocol import (
     delete_trial_outputs,
     output_paths,
     sample_timing_summary,
+    stream_coverage_summary,
 )
 
 
@@ -51,3 +52,19 @@ def test_ble_counter_delta_is_relative_to_measurement_start() -> None:
     )
 
     assert delta == {"received_batches": 7, "missing_batches": 1, "invalid_batches": 0}
+
+
+def test_stream_coverage_detects_a_short_regular_burst_outside_trial() -> None:
+    rows = [[120_000.0 + 10.0 * index, 0, 0, 1, 0, 0, 0] for index in range(100)]
+
+    summary = stream_coverage_summary(
+        rows,
+        window_start_ms=60_000.0,
+        expected_duration_s=60.0,
+        expected_sample_rate_hz=100.0,
+    )
+
+    assert summary["sample_coverage_percent"] == pytest.approx(100 / 6000 * 100)
+    assert summary["time_coverage_s"] == pytest.approx(0.99)
+    assert summary["first_sample_offset_s"] == pytest.approx(60.0)
+    assert summary["largest_gap_s"] == pytest.approx(0.01)

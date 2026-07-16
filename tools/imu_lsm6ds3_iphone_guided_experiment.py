@@ -28,6 +28,7 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 import sys
 import threading
 import time
@@ -56,6 +57,7 @@ from PySide6.QtWidgets import (
 )
 
 from respi_net.imu import (
+    DEFAULT_IMU_BAUD,
     IMU_COLUMNS,
     LSM6DS3_CAPTURE_COLUMNS,
     BreathCapture,
@@ -70,11 +72,22 @@ from respi_net.imu_guided_protocol import (
     delete_trial_outputs,
     output_paths,
     sample_timing_summary,
+    stream_coverage_summary,
 )
 from respi_net.iphone_imu import IPhoneIMUBluetoothCapture
 
 
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "raw" / "imu" / "lsm6ds3_iphone_guided"
+IPHONE_EXPECTED_SAMPLE_RATE_HZ = 100.0
+IPHONE_MIN_COVERAGE_PERCENT = 95.0
+IPHONE_MAX_GAP_S = 0.25
+
+
+def _safe_name(value: str) -> str:
+    """Return a filesystem-safe session-directory name."""
+
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip())
+    return cleaned.strip("._") or "imu_session"
 
 
 def _lsm_port_candidates(preferred: str | None) -> list[str]:
@@ -114,6 +127,8 @@ class MeasurementWorker(QObject):
         lsm_baud: int,
         iphone_device: str | None,
         iphone_scan_timeout_s: float,
+        iphone_autostart: bool,
+        iphone_expected_sample_rate_hz: float,
         prep_seconds: int,
     ) -> None:
         super().__init__()
@@ -123,6 +138,8 @@ class MeasurementWorker(QObject):
         self.lsm_baud = lsm_baud
         self.iphone_device = iphone_device
         self.iphone_scan_timeout_s = iphone_scan_timeout_s
+        self.iphone_autostart = iphone_autostart
+        self.iphone_expected_sample_rate_hz = iphone_expected_sample_rate_hz
         self.prep_seconds = prep_seconds
         self.paths = output_paths(session_dir, trial)
         self.abort_event = threading.Event()
@@ -181,11 +198,38 @@ class MeasurementWorker(QObject):
             output_dir=self.session_dir,
             device=self.iphone_device,
             scan_timeout_s=self.iphone_scan_timeout_s,
+            autostart=self.iphone_autostart,
         )
         if not self.iphone.connect(self.iphone_device):
             raise RuntimeError("Nie połączono z aplikacją RespiPhoneIMU przez BLE.")
         if not self._wait_for_rows(self.iphone, 12, 3.0):
             raise RuntimeError("iPhone połączył się, ale nie wysłał poprawnych próbek IMU.")
+
+    @staticmethod
+    def _iphone_quality_error(coverage: dict[str, float | int | None], *, duration_s: float) -> str | None:
+        """Return a quality-gate error when a short burst masquerades as a trial."""
+
+        sample_coverage = float(coverage.get("sample_coverage_percent") or 0.0)
+        time_coverage = float(coverage.get("time_coverage_percent") or 0.0)
+        largest_gap_s = float(coverage.get("largest_gap_s") or 0.0)
+        first_offset_s = coverage.get("first_sample_offset_s")
+        last_offset_s = coverage.get("last_sample_offset_s")
+        if sample_coverage < IPHONE_MIN_COVERAGE_PERCENT or time_coverage < IPHONE_MIN_COVERAGE_PERCENT:
+            return (
+                f"iPhone pokrył tylko {sample_coverage:.1f}% próbek i {time_coverage:.1f}% czasu "
+                f"próby {duration_s:.0f} s (wymagane co najmniej {IPHONE_MIN_COVERAGE_PERCENT:.0f}%)."
+            )
+        if largest_gap_s > IPHONE_MAX_GAP_S:
+            return f"iPhone ma lukę czasową {largest_gap_s:.3f} s (dopuszczalne {IPHONE_MAX_GAP_S:.2f} s)."
+        if first_offset_s is None or last_offset_s is None:
+            return "iPhone nie dostarczył poprawnej osi czasu próbek."
+        edge_tolerance_s = max(0.5, 0.02 * duration_s)
+        if float(first_offset_s) > edge_tolerance_s or float(last_offset_s) < duration_s - edge_tolerance_s:
+            return (
+                "strumień iPhone nie obejmuje początku albo końca nagrania "
+                f"(pierwsza próbka {float(first_offset_s):.2f} s, ostatnia {float(last_offset_s):.2f} s)."
+            )
+        return None
 
     def _abort(self) -> None:
         self.status_changed.emit("Przerwano próbę; pliki bieżącego zapisu są usuwane…")
@@ -207,6 +251,9 @@ class MeasurementWorker(QObject):
                 self._abort()
                 return
             self.status_changed.emit("Oba tory działają. Ustabilizuj ułożenie telefon + LSM6DS3.")
+            assert self.iphone is not None
+            iphone_preflight_start = self.iphone.data_count()
+            preflight_start_wall_ms = time.time() * 1000.0
             for remaining in range(self.prep_seconds, 0, -1):
                 if self.abort_event.wait(1.0):
                     self._abort()
@@ -214,7 +261,22 @@ class MeasurementWorker(QObject):
                 self.prep_changed.emit(remaining - 1)
 
             assert self.lsm is not None and self.iphone is not None
+            if self.prep_seconds >= 3:
+                preflight_rows = self.iphone.snapshot_data_since(iphone_preflight_start)
+                preflight_coverage = stream_coverage_summary(
+                    preflight_rows,
+                    window_start_ms=preflight_start_wall_ms,
+                    expected_duration_s=float(self.prep_seconds),
+                    expected_sample_rate_hz=self.iphone_expected_sample_rate_hz,
+                )
+                preflight_error = self._iphone_quality_error(preflight_coverage, duration_s=float(self.prep_seconds))
+                if preflight_error is not None:
+                    raise RuntimeError(
+                        "Nieudana kontrola transmisji iPhone przed próbą: " + preflight_error + " "
+                        "Pozostaw aplikację na pierwszym planie, odblokowany ekran i tryb 100 Hz; uruchom próbę ponownie."
+                    )
             lsm_start = self.lsm.data_count()
+            lsm_malformed_before = self.lsm.malformed_lines
             iphone_start = self.iphone.data_count()
             iphone_counters_before = self.iphone.counter_snapshot()
             start_wall_ms = time.time() * 1000.0
@@ -246,6 +308,19 @@ class MeasurementWorker(QObject):
             if len(lsm_rows) < 10 or len(iphone_rows) < 10:
                 raise RuntimeError(f"Za mało próbek: LSM6DS3={len(lsm_rows)}, iPhone={len(iphone_rows)}.")
 
+            iphone_coverage = stream_coverage_summary(
+                iphone_rows,
+                window_start_ms=start_wall_ms,
+                expected_duration_s=self.trial.duration_s,
+                expected_sample_rate_hz=self.iphone_expected_sample_rate_hz,
+            )
+            iphone_error = self._iphone_quality_error(iphone_coverage, duration_s=self.trial.duration_s)
+            if iphone_error is not None:
+                raise RuntimeError(
+                    "Nie zaakceptowano niepełnego zapisu iPhone: " + iphone_error + " "
+                    "Bieżące pliki zostaną usunięte."
+                )
+
             pd.DataFrame(lsm_rows, columns=LSM6DS3_CAPTURE_COLUMNS).to_csv(self.paths["lsm6ds3"], index=False)
             pd.DataFrame(iphone_rows, columns=IMU_COLUMNS).to_csv(self.paths["iphone"], index=False)
             cue_rows = [
@@ -259,8 +334,9 @@ class MeasurementWorker(QObject):
             pd.DataFrame(cue_rows).to_csv(self.paths["cues"], index=False)
 
             lsm_summary = summarize_lsm6ds3_capture_rows(lsm_rows)
-            lsm_summary["malformed_lines"] = int(self.lsm.malformed_lines)
+            lsm_summary["malformed_lines"] = int(self.lsm.malformed_lines - lsm_malformed_before)
             iphone_summary = sample_timing_summary(iphone_rows)
+            iphone_summary["window_coverage"] = iphone_coverage
             iphone_summary["ble_batches"] = counter_delta(iphone_counters_after, iphone_counters_before)
             summary = {
                 "trial": self.trial.as_dict(),
@@ -287,6 +363,7 @@ def format_summary(summary: dict[str, Any]) -> str:
     lsm = summary.get("lsm6ds3", {})
     iphone = summary.get("iphone", {})
     batches = iphone.get("ble_batches", {}) if isinstance(iphone, dict) else {}
+    coverage = iphone.get("window_coverage", {}) if isinstance(iphone, dict) else {}
     return "\n".join(
         [
             f"LSM6DS3: {lsm.get('rows', 0)} próbek, fs urządzenia {lsm.get('device_sample_rate_hz') or 0:.1f} Hz, "
@@ -294,6 +371,9 @@ def format_summary(summary: dict[str, Any]) -> str:
             f"iPhone: {iphone.get('rows', 0)} próbek, fs {iphone.get('sample_rate_hz') or 0:.1f} Hz, "
             f"szacowane luki czasowe {iphone.get('estimated_missing_samples', 0)} "
             f"({iphone.get('estimated_missing_percent', 0):.3f}%).",
+            f"Pokrycie okna iPhone: {coverage.get('sample_coverage_percent', 0):.1f}% próbek, "
+            f"{coverage.get('time_coverage_percent', 0):.1f}% czasu, największa luka "
+            f"{coverage.get('largest_gap_s', 0) or 0:.3f} s.",
             f"BLE: brakujące pakiety={batches.get('missing_batches', 0)}, niepoprawne={batches.get('invalid_batches', 0)}, "
             f"duplikaty={batches.get('duplicate_batches', 0)}, resety sekwencji={batches.get('sequence_resets', 0)}.",
             *[f"{name}: {path}" for name, path in summary.get("files", {}).items()],
@@ -311,6 +391,8 @@ class GuidedImuWindow(QWidget):
         lsm_baud: int,
         iphone_device: str | None,
         iphone_scan_timeout_s: float,
+        iphone_autostart: bool,
+        iphone_expected_sample_rate_hz: float,
         prep_seconds: int,
         start_trial: int,
     ) -> None:
@@ -321,6 +403,8 @@ class GuidedImuWindow(QWidget):
         self.lsm_baud = lsm_baud
         self.iphone_device = iphone_device
         self.iphone_scan_timeout_s = iphone_scan_timeout_s
+        self.iphone_autostart = iphone_autostart
+        self.iphone_expected_sample_rate_hz = iphone_expected_sample_rate_hz
         self.prep_seconds = prep_seconds
         self.current_index = start_trial - 1
         self.active_worker: MeasurementWorker | None = None
@@ -452,7 +536,9 @@ class GuidedImuWindow(QWidget):
         self.instructions.setText(
             "Pozycja: leżenie na plecach. Telefon i LSM6DS3 umieść obok siebie na górnej części klatki "
             "piersiowej, w tej samej orientacji; nie zmieniaj położenia w trakcie próby.\n\n"
-            f"Czas rejestracji: {trial.duration_s:.0f} s. Oba tory otrzymają te same komendy zapisane potem w pliku cues.csv."
+            f"Czas rejestracji: {trial.duration_s:.0f} s. Oba tory otrzymają te same komendy zapisane potem w pliku cues.csv. "
+            f"Dla iPhone'a ustaw {self.iphone_expected_sample_rate_hz:.0f} Hz, pozostaw aplikację na pierwszym planie i nie blokuj ekranu; "
+            "niepełny strumień jest automatycznie odrzucany."
         )
         first = trial.cues[0]
         self._show_cue(first.title, first.detail, "", first.kind)
@@ -473,6 +559,8 @@ class GuidedImuWindow(QWidget):
             lsm_baud=self.lsm_baud,
             iphone_device=self.iphone_device,
             iphone_scan_timeout_s=self.iphone_scan_timeout_s,
+            iphone_autostart=self.iphone_autostart,
+            iphone_expected_sample_rate_hz=self.iphone_expected_sample_rate_hz,
             prep_seconds=self.prep_seconds,
         )
         thread = QThread(self)
@@ -587,9 +675,26 @@ class GuidedImuWindow(QWidget):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--lsm-port", help="Port szeregowy ESP32 z LSM6DS3; bez niego program próbuje wykryć go automatycznie.")
-    parser.add_argument("--lsm-baud", type=int, default=921600, help="Baudrate firmware LSM6DS3 (domyślnie 921600).")
+    parser.add_argument(
+        "--lsm-baud",
+        type=int,
+        default=DEFAULT_IMU_BAUD,
+        help=f"Baudrate firmware LSM6DS3 (domyślnie {DEFAULT_IMU_BAUD}).",
+    )
     parser.add_argument("--iphone-device", help="Opcjonalna nazwa/adres BLE iPhone'a; domyślnie RespiPhoneIMU.")
     parser.add_argument("--iphone-scan-timeout", type=float, default=10.0, help="Czas skanowania BLE [s].")
+    parser.add_argument(
+        "--iphone-no-autostart",
+        action="store_true",
+        help="Nie wysyłaj START/STOP po BLE; użyj, gdy startem strumienia steruje aplikacja iPhone (ręcznie lub przez Auto-start).",
+    )
+    parser.add_argument(
+        "--iphone-expected-sample-rate-hz",
+        type=float,
+        choices=(25.0, 50.0, 100.0),
+        default=IPHONE_EXPECTED_SAMPLE_RATE_HZ,
+        help="Częstotliwość wybrana w aplikacji iPhone; używana wyłącznie do kontroli kompletności zapisu.",
+    )
     parser.add_argument("--prep-seconds", type=int, default=5, help="Czas ustabilizowania po połączeniu czujników [s].")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="Katalog sesji IMU.")
     parser.add_argument("--session-name", help="Nazwa katalogu sesji; domyślnie czas uruchomienia.")
@@ -609,6 +714,8 @@ def main() -> int:
         lsm_baud=args.lsm_baud,
         iphone_device=args.iphone_device,
         iphone_scan_timeout_s=args.iphone_scan_timeout,
+        iphone_autostart=not args.iphone_no_autostart,
+        iphone_expected_sample_rate_hz=args.iphone_expected_sample_rate_hz,
         prep_seconds=max(0, args.prep_seconds),
         start_trial=args.start_trial,
     )

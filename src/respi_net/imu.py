@@ -17,6 +17,7 @@ from .paths import IMU_PLOTS_DIR, RAW_IMU_DIR
 from .serial_utils import list_serial_ports, ordered_ports
 
 IMU_COLUMNS = ["Time_ms", "ax", "ay", "az", "gx", "gy", "gz"]
+DEFAULT_IMU_BAUD = 115_200
 LSM6DS3_CAPTURE_COLUMNS = [
     "Time_ms",
     "HostTime_ms",
@@ -199,7 +200,7 @@ def analyze_imu_csv(
 
 
 class BreathCapture:
-    def __init__(self, baud: int = 921600, output_dir: str | Path = RAW_IMU_DIR):
+    def __init__(self, baud: int = DEFAULT_IMU_BAUD, output_dir: str | Path = RAW_IMU_DIR):
         self.baud = baud
         self.output_dir = Path(output_dir)
         self.serial_port: serial.Serial | None = None
@@ -210,6 +211,7 @@ class BreathCapture:
         self._lock = threading.Lock()
         self._device_to_host_offset_ms: float | None = None
         self._last_device_time_us: int | None = None
+        self._stream_synced = False
         self.malformed_lines = 0
 
     def connect(self, port_name: str | None = None, *, exact_port: bool = False) -> bool:
@@ -234,6 +236,7 @@ class BreathCapture:
                     self.capture_storage = []
                     self._device_to_host_offset_ms = None
                     self._last_device_time_us = None
+                    self._stream_synced = False
                     self.malformed_lines = 0
                 self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
                 self.read_thread.start()
@@ -280,6 +283,7 @@ class BreathCapture:
                         self._device_to_host_offset_ms = arrival_ms - device_time_us / 1000.0
                     aligned_time_ms = self._device_to_host_offset_ms + device_time_us / 1000.0
                     self._last_device_time_us = device_time_us
+                    self._stream_synced = True
                     self.data_storage.append([aligned_time_ms, *axes])
                     self.capture_storage.append(
                         [aligned_time_ms, arrival_ms, float(device_time_us), float(sample_index), *axes]
@@ -290,13 +294,20 @@ class BreathCapture:
                 if not np.all(np.isfinite(axes)):
                     raise ValueError
                 with self._lock:
+                    self._stream_synced = True
                     self.data_storage.append([arrival_ms, *axes])
                     self.capture_storage.append([arrival_ms, arrival_ms, float("nan"), float("nan"), *axes])
                 return
         except ValueError:
             pass
         with self._lock:
-            self.malformed_lines += 1
+            # Opening the USB-UART port can reset ESP32.  The bootloader may
+            # emit a short line at its own baud rate before the application
+            # switches to the configured console rate.  Do not report those
+            # preamble bytes as an IMU transport error; after the first valid
+            # record every malformed line remains visible in diagnostics.
+            if self._stream_synced:
+                self.malformed_lines += 1
 
     def stop(self) -> None:
         self.running = False
