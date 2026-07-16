@@ -126,10 +126,13 @@ i podglądu na żywo oraz zestaw narzędzi do analizy offline. Przeprowadzono
 równoczesne porównanie obu radarów: HB100 wykrywał obecność sterowanego
 oddechu i~jego zatrzymanie w~powtarzanej serii do \SI{100}{cm} oraz
 w~pojedynczym reteście \SI{150}{cm}. Dla pełnych, pogłębionych oddechów
-estymator konsensusu harmonicznych HB100 odtworzył zadany rytm
-\SI{0.20}{Hz} w~zakresie \SIrange{0.190}{0.204}{Hz}, lecz jednokanałowy
-przebieg nie zachowywał stabilnie kierunku wdech--wydech; A121 umożliwiał taką
-analizę na podstawie fazy I/Q. Przeprowadzono również
+estymator konsensusu harmonicznych HB100 w~12 blokach powtarzanej serii
+\SIrange{30}{100}{cm} odtworzył zadany rytm \SI{0.20}{Hz} w~zakresie
+\SIrange{0.198}{0.204}{Hz}. W~pojedynczym reteście \SI{150}{cm} uzyskano
+\SI{0.190}{Hz} i~\SI{0.202}{Hz}, lecz z~małym marginesem jakości, dlatego
+wynik traktowano jedynie jako wskazanie rytmu. Jednokanałowy przebieg nie
+zachowywał stabilnie kierunku wdech--wydech; A121 umożliwiał taką analizę na
+podstawie fazy I/Q. Przeprowadzono również
 kontrolowany eksperyment porównujący trzy soczewki dielektryczne
 (hiperboliczną, FZP i płaską pokrywę) oraz wpływ folii aluminiowej naklejonej
 na klatkę piersiową (36 nagrań). W części eksperymentalnej system zastosowano
@@ -1660,9 +1663,14 @@ stabilne po wstrzymaniu oddechu.
 
 Bezpośrednie porównanie dwóch przebiegów wymaga rozdzielenia ich znaczenia
 fizycznego. Dla A121 fazę zespolonego IQ można rozpleść i~przeliczyć na
-przemieszczenie klatki. Jednokanałowe napięcie IF HB100 nie jest natomiast
-ani przemieszczeniem, ani prędkością. Dla modelu~\eqref{eq:cw-baseband}
-różniczkowanie daje
+przemieszczenie klatki. W~torze HB100 mieszacz udostępnia pojedyncze,
+rzeczywiste napięcie IF. Dla ruchu o~stałej prędkości radialnej jego
+częstotliwość Dopplera jest proporcjonalna do prędkości
+(równanie~\eqref{eq:hb100-doppler}), lecz podczas oddechu chwilowa wartość
+napięcia IF jest nieliniową funkcją całkowitej fazy echa
+(równanie~\eqref{eq:cw-baseband}). Jej skala zależy więc od fazy statycznej
+i~nie może być bezpośrednio przeliczona na milimetry tak jak faza A121.
+Dla modelu~\eqref{eq:cw-baseband} różniczkowanie daje
 \begin{equation}
   \frac{\mathrm{d}b(t)}{\mathrm{d}t}
   =-A\sin\!\left(\frac{4\pi}{\lambda}[d_0+x(t)]+\varphi_0\right)
@@ -1670,9 +1678,10 @@ różniczkowanie daje
   \label{eq:hb100-pochodna-if}
 \end{equation}
 Nieznany czynnik sinusoidalny zależy od fazy statycznej, zmienia znak i~zanika
-w~punktach zerowych. Dlatego pochodna napięcia IF nie jest estymatą prędkości,
-a~całkowanie napięcia ani jego pochodnej nie odtwarza przemieszczenia. Dopiero
-para kanałów I/Q pozwoliłaby odzyskać ciągłą fazę i~jej znak.
+w~punktach zerowych. W~rezultacie pochodna napięcia IF nie daje stabilnej
+estymaty prędkości, a~całkowanie napięcia ani jego pochodnej nie odtwarza
+przemieszczenia. Dopiero para kanałów I/Q pozwoliłaby odzyskać ciągłą fazę
+i~jej znak.
 
 Zamiast tego opracowano estymator \emph{konsensusu harmonicznych}, którego
 wynikiem jest wyłącznie częstość powtarzalnej modulacji. Dla co najmniej
@@ -1711,8 +1720,9 @@ przemieszczenia ani do samodzielnego rozpoznawania bezdechu.
     funkcję~\eqref{eq:hb100-harmonic-consensus}: mimo najsilniejszych pików
     napięcia przy około \SI{0.37}{Hz}, estymator wskazał \SI{0.190}{Hz}
     (11,4~oddechów/min) oraz \SI{0.202}{Hz} (12,1~oddechów/min) wobec
-    zadanego rytmu \SI{0.20}{Hz}. Nie nadaje to sygnałowi HB100 kierunku
-    wdech--wydech.}
+    zadanego rytmu \SI{0.20}{Hz}. Marże jakości 2,9 i~2,1 są jednak blisko
+    progu akceptacji 2,0; pojedynczy retest stanowi więc jedynie graniczne
+    wskazanie rytmu, a~nie podstawę do estymacji fazy wdech--wydech.}
     \label{fig:hb100-a121-150cm}
 \end{figure}
 
@@ -1758,7 +1768,8 @@ HB100 można odzyskać rytm kontrolowanego ruchu mimo dominacji harmonicznych.
 \centering
 \caption{Sprawdzenie estymatora konsensusu harmonicznych HB100 w~14
 sterowanych blokach po \SIrange{29.8}{35.0}{s}. Rytm zadany wynosił
-\SI{0.20}{Hz}; oddechy były pełne i~pogłębione.}
+\SI{0.20}{Hz}; oddechy były pełne i~pogłębione. Powtarzaną serię
+\SIrange{30}{100}{cm} rozdzielono od pojedynczego retestu \SI{150}{cm}.}
 \label{tab:hb100-harmonic-rhythm}
 \small
 \begin{tabular}{@{}p{8.3cm}r@{}}
@@ -1766,21 +1777,41 @@ sterowanych blokach po \SIrange{29.8}{35.0}{s}. Rytm zadany wynosił
 Metryka & Wynik \\
 \midrule
 Najsilniejszy pojedynczy pik widma HB100 & \SIrange{0.201}{0.598}{Hz} \\
-Estymata konsensusu harmonicznych $\hat f$ & \SIrange{0.190}{0.204}{Hz} \\
-Mediana $|\hat f-\SI{0.20}{Hz}|$ & \SI{0.001}{Hz} (0,06~oddechu/min) \\
-Okna spełniające wszystkie warunki jakości & 14 / 14 \\
-Retest \SI{150}{cm}: blok 1 / blok 2 & \SI{0.190}{Hz} / \SI{0.202}{Hz} \\
+Seria \SIrange{30}{100}{cm}: $\hat f$ & \SIrange{0.198}{0.204}{Hz} \\
+Seria \SIrange{30}{100}{cm}: okna spełniające warunki jakości & 12 / 12 \\
+Seria \SIrange{30}{100}{cm}: $S_{\max}/\operatorname{med}S$ & $5{,}7$--$21{,}5$ \\
+Retest \SI{150}{cm}: $\hat f$, blok 1 / blok 2 & \SI{0.190}{Hz} / \SI{0.202}{Hz} \\
+Retest \SI{150}{cm}: $S_{\max}/\operatorname{med}S$ & 2,9 / 2,1 (próg 2,0) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-W~13 z~14 bloków odchylenie nie przekroczyło \SI{0.004}{Hz}; największe,
-\SI{0.010}{Hz}, wystąpiło w~pierwszym bloku pojedynczego retestu
-\SI{150}{cm}. Wynik pokazuje użyteczność sumowania harmonicznych dla
-powtarzalnego, silnego ruchu, ale nie jest niezależną walidacją kliniczną:
-ten sam, jeden badany wykonywał narzucone oddechy 12~oddechów/min. W~szczególności
-nie dowodzi poprawnej estymacji płytszego oddechu naturalnego, zmiennego rytmu
-ani oddechu przez kołdrę.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{hb100_a121_rytm_dystanse.png}
+    \caption[Estymacja rytmu HB100 dla 30--150 cm]{Estymacja rytmu HB100 we
+    wszystkich 14 blokach. Krzyżyki oznaczają najsilniejszy pojedynczy pik
+    widma, a~zielone punkty --- wynik konsensusu harmonicznych; każdy pomiar
+    zawiera dwa bloki. W~powtarzanej serii \SIrange{30}{100}{cm} wszystkie
+    12 estymat mieszczą się w~zakresie 11,9--12,2~oddechów/min wobec zadanych
+    12~oddechów/min. Dwa punkty przy \SI{150}{cm} należą do pojedynczego
+    retestu i~leżą blisko progu jakości $S_{\max}/\operatorname{med}S=2{,}0$;
+    nie stanowią potwierdzenia użytecznej estymacji faz oddechu.}
+    \label{fig:hb100-a121-rytm-dystanse}
+\end{figure}
+
+W~powtarzanej serii \SIrange{30}{100}{cm} wszystkie 12 bloków spełniło
+warunki jakości, a~estymaty \SIrange{0.198}{0.204}{Hz} pozostały blisko
+zadanego rytmu. Pokazuje to użyteczność sumowania harmonicznych dla
+powtarzalnego, silnego ruchu na krótkim dystansie. W~pojedynczym reteście
+\SI{150}{cm} wynik \SI{0.190}{Hz} w~pierwszym bloku i~\SI{0.202}{Hz}
+w~drugim znalazł się wprawdzie blisko wartości zadanej, lecz marże 2,9 i~2,1
+były wielokrotnie mniejsze niż 5,7--21,5 w~serii krótkodystansowej. Rytm na
+\SI{150}{cm} można więc uznać co najwyżej za graniczne wskazanie, a~nie za
+powtarzalną właściwość algorytmu. Cały eksperyment dotyczy jednego badanego,
+który wykonywał narzucone, pełne oddechy 12~oddechów/min; nie dowodzi
+poprawnej estymacji płytszego oddechu naturalnego, zmiennego rytmu ani oddechu
+przez kołdrę.
 
 \begin{figure}[H]
     \centering
@@ -1817,12 +1848,14 @@ odpowiednio \SI{0.366}{Hz} i~\SI{0.378}{Hz}, korelacja z~komendami po
 jednorazowej kalibracji znaku wyniosła $-0{,}299$, a~zgodność kierunku
 wdech--wydech 36,6\%. Jednocześnie konsensus harmoniczny wskazał
 \SI{0.190}{Hz} i~\SI{0.202}{Hz}, czyli rytm bliski zadanym \SI{0.20}{Hz}
-(rys.~\ref{fig:hb100-a121-150cm}). W~tym samym nagraniu A121 z~płaską
-pokrywą osiągnął $r=0{,}910$ i~96,7\% zgodności kierunku. Wynik wskazuje więc
-praktyczną granicę użycia HB100 do rozróżniania faz w~tej geometrii, przy
-jednoczesnej możliwości warunkowego oszacowania samej częstości. Jest to jednak
-tylko jeden retest; nie wyznacza ogólnego zasięgu żadnego z~radarów,
-a~zwłaszcza A121 z~soczewką skupiającą.
+(rys.~\ref{fig:hb100-a121-150cm}). Marże jakości 2,9 i~2,1 były jednak
+zaledwie na poziomie progu akceptacji 2,0 i~wyraźnie słabsze niż w~powtarzanej
+serii \SIrange{30}{100}{cm}. Na \SI{150}{cm} można więc mówić co najwyżej
+o~granicznym wskazaniu rytmu, a~nie o~powtarzalnej estymacji częstości.
+Estymacja faz wdech--wydech nie jest w~tej geometrii użyteczna. W~tym samym
+nagraniu A121 z~płaską pokrywą osiągnął $r=0{,}910$ i~96,7\% zgodności
+kierunku. Jest to jednak tylko jeden retest; nie wyznacza ogólnego zasięgu
+żadnego z~radarów, a~zwłaszcza A121 z~soczewką skupiającą.
 
 \paragraph{Dominują harmoniczne, a~nie zadany rytm.} W~serii podstawowej w~10 z~12 sterowanych
 bloków najwyższy pik HB100 w~paśmie \SIrange{0.10}{0.65}{Hz} leżał przy
@@ -1853,9 +1886,12 @@ wdechu i~wydechu.
 Łącznie wyniki rozdzielają trzy poziomy użyteczności: wykrycie ruchu
 oddechowego, oszacowanie jego okresowości oraz rozpoznanie kierunku fazy.
 HB100 wiarygodnie realizował pierwszy z~nich. Dla długich bloków pełnego,
-sterowanego oddechu estymator konsensusu harmonicznych pozwolił także
-warunkowo wyznaczyć częstość, łącząc kandydatów $f$, $2f$ i~$3f$. Kierunku
-wdech--wydech nie udało się jednak zachować po jednorazowej kalibracji znaku.
+sterowanego oddechu na \SIrange{30}{100}{cm} estymator konsensusu
+harmonicznych pozwolił warunkowo wyznaczyć rytm, łącząc kandydatów $f$, $2f$
+i~$3f$. Jest to najwyższy poziom interpretacji, jaki dane uzasadniają dla
+HB100: pomocniczy wskaźnik rytmu po przejściu rygorystycznej kontroli jakości.
+Przy \SI{150}{cm} nawet ta interpretacja pozostaje graniczna, a~kierunku
+wdech--wydech nie udało się zachować po jednorazowej kalibracji znaku.
 
 Najbardziej uzasadnionym zastosowaniem HB100 jest więc tania detekcja ruchu
 lub obecności aktywności oddechowej w~stałej scenie z~jedną osobą. Nie jest to
@@ -1865,7 +1901,10 @@ HB100 nie powinien zatem samodzielnie rozstrzygać o~bezdechu ani fazie cyklu.
 Do analizy wdech--wydech i~przemieszczenia klatki właściwszy pozostaje A121,
 który udostępnia bramki odległościowe i~zespolony sygnał I/Q. Estymator HB100
 może służyć jedynie jako ostrożny wskaźnik rytmu w~stabilnym, wystarczająco
-silnym fragmencie ruchu, z~jawnym odrzuceniem wyniku niejednoznacznego.
+silnym fragmencie ruchu na krótkim dystansie, z~jawnym odrzuceniem wyniku
+niejednoznacznego. Nie jest porównywalny z~A121 jako źródło informacji
+o~fazie oddechu, ponieważ A121 zachował zgodność kierunku bliską 96--99\%
+w~powtarzanej serii.
 
 % =====================================================================
 \chapter{Eksperyment: soczewki dielektryczne i wzmacnianie odbicia}
@@ -3246,13 +3285,17 @@ Najważniejsze ustalenia inżynierskie uzyskane dotychczas:
   \SIrange{18.4}{24.6}{dB}. Jednokanałowy sygnał był jednak zdominowany przez
   harmoniczne w~10 z~12 bloków i~nie zachowywał stabilnie kierunku
   wdech--wydech. Opracowany estymator konsensusu harmonicznych odzyskał
-  w~14 blokach rytm \SIrange{0.190}{0.204}{Hz} przy zadanych
-  \SI{0.20}{Hz}, ale nie odtwarza przemieszczenia ani faz cyklu. A121 osiągał
-  w~tym samym teście 95,9--99,3\% opisowej zgodności kierunku, dlatego to jego
-  faza I/Q jest właściwym wejściem do analizy faz cyklu. Pojedynczy retest
-  \SI{150}{cm} podtrzymał ten wniosek: HB100 wykazał zanik przy wstrzymaniu
-  i~rytm po złożeniu harmonicznych, lecz nie kierunek fazy, podczas gdy A121
-  z~płaską pokrywą zachował 96,7\% zgodności kierunku.
+  w~12 blokach powtarzanej serii \SIrange{30}{100}{cm} rytm
+  \SIrange{0.198}{0.204}{Hz} przy zadanych \SI{0.20}{Hz}. Jest to jednak
+  jedynie warunkowa estymacja rytmu dla dużych, pełnych oddechów po kontroli
+  jakości, a~nie rekonstrukcja przemieszczenia ani faz cyklu. W~pojedynczym
+  reteście \SI{150}{cm} wartości \SI{0.190}{Hz} i~\SI{0.202}{Hz} miały
+  marżę jakości zaledwie 2,9 i~2,1 przy progu 2,0, dlatego są tylko
+  granicznym wskazaniem rytmu; estymacja faz wdech--wydech nie była tam
+  użyteczna. A121 osiągał w~powtarzanej serii 95,9--99,3\% opisowej zgodności
+  kierunku, a~w~reteście \SI{150}{cm} 96,7\%, dlatego jego faza I/Q pozostaje
+  właściwym wejściem do analizy faz cyklu. HB100 może pełnić co najwyżej rolę
+  pomocniczego wskaźnika rytmu, wyraźnie słabszego informacyjnie od A121.
   \item Na dystansie \SIrange{0.5}{1.0}{m} system nie jest ograniczony
   amplitudą sygnału: SNR oddechowy wynosi 44--47~dB niezależnie od soczewki
   i~obecności folii aluminiowej. Zysk anteny przekłada się na stabilność

@@ -833,7 +833,7 @@ def plot_150cm_retest(results: list[ComparisonResult], output_path: Path) -> Non
     )
     hb100_axis.set_ylabel("Napięcie [mV]")
     hb100_axis.set_xlabel("Czas od początku zapisu [s]")
-    hb100_axis.set_title("HB100: rzeczywisty, jednokanałowy sygnał IF (nie jest przemieszczeniem)")
+    hb100_axis.set_title("HB100: rzeczywisty, jednokanałowy sygnał IF o skali zależnej od fazy")
     hb100_axis.legend(loc="upper right", frameon=False)
     _style_axis(hb100_axis)
 
@@ -879,9 +879,119 @@ def plot_150cm_retest(results: list[ComparisonResult], output_path: Path) -> Non
         _style_axis(axis)
 
     figure.suptitle(
-        "Retest 150 cm: A121 mierzy przemieszczenie, HB100 pozwala estymować tylko rytm harmoniczny",
+        "Retest 150 cm: przemieszczenie z A121 i graniczna estymacja rytmu z HB100",
         y=0.995,
     )
+    figure.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(figure)
+
+
+def plot_harmonic_rhythm_by_distance(metrics: pd.DataFrame, output_path: Path) -> None:
+    """Show why repeated short-range cadence estimates differ from the 150 cm retest."""
+
+    figure, axes = plt.subplots(2, 1, figsize=(13.2, 8.3), sharex=True, constrained_layout=True)
+    counts = metrics.groupby("distance_cm")["run"].count().to_dict()
+    repeat_offsets = {1: -1.55, 2: 1.55}
+    block_offsets = {1: -0.43, 2: 0.43}
+    raw_label_added = False
+    rhythm_label_added = False
+    quality_label_added = False
+
+    for row in metrics.itertuples(index=False):
+        distance = float(row.distance_cm)
+        repeat_offset = (
+            repeat_offsets.get(int(row.repeat), 0.0)
+            if counts[int(row.distance_cm)] > 1
+            else 0.0
+        )
+        for block in (1, 2):
+            x = distance + repeat_offset + block_offsets[block]
+            raw_frequency_hz = float(
+                getattr(row, f"hb100_dominant_frequency_hz_block{block}")
+            )
+            rhythm_frequency_hz = float(
+                getattr(row, f"hb100_harmonic_rhythm_frequency_hz_block{block}")
+            )
+            quality = float(
+                getattr(row, f"hb100_harmonic_rhythm_score_vs_median_block{block}")
+            )
+            axes[0].scatter(
+                x,
+                raw_frequency_hz * 60.0,
+                color=HB100_COLOUR,
+                marker="x",
+                s=62,
+                linewidth=1.65,
+                label="najsilniejszy pojedynczy pik widma" if not raw_label_added else None,
+                zorder=3,
+            )
+            axes[0].scatter(
+                x,
+                rhythm_frequency_hz * 60.0,
+                color="#009E73",
+                marker="o",
+                s=49,
+                edgecolor="white",
+                linewidth=0.75,
+                label="estymata konsensusu harmonicznych" if not rhythm_label_added else None,
+                zorder=4,
+            )
+            axes[1].scatter(
+                x,
+                quality,
+                color="#009E73",
+                marker="o",
+                s=49,
+                edgecolor="white",
+                linewidth=0.75,
+                label="Smax / mediana S" if not quality_label_added else None,
+                zorder=4,
+            )
+            raw_label_added = True
+            rhythm_label_added = True
+            quality_label_added = True
+
+    for axis in axes:
+        axis.axvspan(142.5, 157.5, color="#CC3311", alpha=0.07, zorder=0)
+        axis.set_xlim(22.0, 158.0)
+        axis.set_xticks((30, 60, 100, 150), ("30", "60", "100", "150"))
+        _style_axis(axis)
+
+    axes[0].axhline(
+        PACED_RESPIRATION_HZ * 60.0,
+        color=TEMPLATE_COLOUR,
+        linestyle=":",
+        linewidth=1.15,
+        label="rytm zadany: 12 oddechów/min",
+    )
+    axes[0].set_ylim(5.3, 38.0)
+    axes[0].set_ylabel("Częstość [oddechy/min]")
+    axes[0].set_title("Rytm HB100: konsensus odzyskuje podstawę mimo dominacji harmonicznych")
+    axes[0].legend(loc="upper left", frameon=False, ncol=3, fontsize=9.2)
+
+    axes[1].axhline(
+        HB100_RHYTHM_MIN_SCORE_VS_MEDIAN,
+        color=TEMPLATE_COLOUR,
+        linestyle=":",
+        linewidth=1.15,
+        label="minimalna marża jakości: 2,0",
+    )
+    axes[1].annotate(
+        "150 cm: pojedynczy retest\nblisko progu jakości",
+        xy=(150.43, 2.07),
+        xytext=(125.0, 5.0),
+        ha="center",
+        va="bottom",
+        arrowprops={"arrowstyle": "->", "color": "#555555", "linewidth": 1.0},
+        fontsize=9.4,
+        color="#444444",
+    )
+    axes[1].set_ylim(0.0, 24.0)
+    axes[1].set_xlabel("Odległość [cm]")
+    axes[1].set_ylabel("Marża jakości")
+    axes[1].set_title("Powtarzane pomiary 30--100 cm mają wyraźniejszy margines decyzji")
+    axes[1].legend(loc="upper left", frameon=False)
+
     figure.savefig(output_path, dpi=220, bbox_inches="tight")
     plt.close(figure)
 
@@ -1131,6 +1241,7 @@ def main() -> int:
         plot_respiratory_overlays(results, figure_dir / "hb100_a121_oddech.png")
         plot_metrics(metrics, figure_dir / "hb100_a121_metryki.png")
         plot_150cm_retest(results, figure_dir / "hb100_a121_150cm_retest.png")
+        plot_harmonic_rhythm_by_distance(metrics, figure_dir / "hb100_a121_rytm_dystanse.png")
 
     print_summary(metrics, summary)
     print(f"\nMetrics: {metrics_path}")

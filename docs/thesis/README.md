@@ -32,7 +32,7 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
 - Porównanie HB100 z A121: `tools/analyze_hb100_a121_comparison.py` odczytuje
   najnowszą kompletną sesję `data/raw/hb100_a121/guided/hb100_a121_range_*`,
   zapisuje w niej lokalne pliki `analysis_hb100_a121_metrics.csv` i
-  `analysis_hb100_a121_summary.json` oraz odtwarza trzy rysunki
+  `analysis_hb100_a121_summary.json` oraz odtwarza cztery rysunki
   `docs/thesis/figures/hb100_a121_*.png`. Surowe pliki pozostają poza Gitem.
 - Retest A121 przy 2 m (folia × geometria): skrypt
   `tools/analyze_a121_foil_2m.py` odczytuje najnowszą sesję
