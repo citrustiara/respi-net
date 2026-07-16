@@ -1271,8 +1271,9 @@ def plot_metrics(metrics: pd.DataFrame, output_path: Path) -> None:
     )
     axes[0, 1].axhline(0.5, color="#555555", linestyle=":", linewidth=1.1)
     axes[0, 1].set_ylim(0.30, 1.03)
-    axes[0, 1].set_ylabel("Zgodność kierunku wdech/wydech")
-    axes[0, 1].set_title("Polaryzacja ustalona na bloku 1, ocena na bloku 2")
+    axes[0, 1].set_ylabel("Zgodność znaku pochodnej z komendą")
+    axes[0, 1].set_title("Kierunek cyklu: mierzony (A121) vs zakładany (HB100)")
+    axes[0, 1].legend(frameon=False, loc="center right")
 
     _distance_scatter(
         axes[1, 0],

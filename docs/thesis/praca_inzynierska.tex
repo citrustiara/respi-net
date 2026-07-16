@@ -272,10 +272,24 @@ W~odbiorniku jednokanałowym napięcie ma w~uproszczeniu postać
   b(t)=A\cos\!\left(\frac{4\pi}{\lambda}[d_0+x(t)]+\varphi_0\right).
   \label{eq:cw-baseband}
 \end{equation}
-Dla małego ruchu czułość zależy od fazy statycznej celu. W~pewnych
-odległościach pochodna funkcji cosinus zanika i~powstają punkty zerowe
-(\emph{null points}). Drugi, przesunięty o~$90^\circ$ kanał kwadraturowy Q
-uzupełnia kanał I~i~pozwala śledzić fazę niezależnie od tego położenia.
+Znak fazy jest tu nieistotny: cosinus jest funkcją parzystą, więc przeciwna
+konwencja zespolona daje ten sam przebieg po zmianie stałej $\varphi_0$.
+Pojedynczy kanał rzeczywisty z~zasady nie niesie informacji o~znaku ruchu ---
+i~właśnie stąd bierze się jego ograniczenie omawiane w~rozdziale
+\ref{chap:hb100-a121-pomiar}.
+
+Zależność~\eqref{eq:cw-baseband} nie jest liniowa względem przemieszczenia;
+w~literaturze nosi ona nazwę \emph{nieliniowego efektu demodulacji fazy
+Dopplera} \cite{boriclubecke2016}. Dla małego ruchu czułość zależy od fazy
+statycznej celu: w~pewnych odległościach pochodna funkcji cosinus zanika
+i~powstają punkty zerowe (\emph{null points}). Punkty optymalne i~zerowe
+występują naprzemiennie co $\lambda/8$, więc już taka zmiana średniej
+odległości celu przenosi układ z~maksimum czułości do minimum
+\cite{mercuri2017}. Drugi, przesunięty o~$90^\circ$ kanał kwadraturowy Q
+uzupełnia kanał I~i~pozwala śledzić fazę niezależnie od tego położenia;
+demodulacja arcus tangens z~pary I/Q jest standardowym rozwiązaniem problemu
+punktów zerowych \cite{park2007}. Korzyści z~toru kwadraturowego względem
+odbiornika jednokanałowego opisano ilościowo już w~\cite{droitcour2004}.
 Niskokosztowy HB100 udostępnia jednak tylko pojedyncze, rzeczywiste wyjście IF,
 co stanowi jego fundamentalne ograniczenie \cite{hb100_doc}.
 
@@ -542,11 +556,14 @@ przemieszczenie $x(t)$ zmienia fazę echa o~$4\pi x(t)/\lambda$, zgodnie
 z~modelem~\eqref{eq:cw-baseband}. Przy $\lambda\approx\SI{28.5}{mm}$ pełny
 obrót fazy odpowiada przesunięciu celu o~około \SI{14.2}{mm}. Ponieważ HB100
 udostępnia tylko jeden rzeczywisty kanał IF, lokalna czułość na mały ruch jest
-proporcjonalna do sinusa fazy statycznej. Zmiana średniej odległości o~około
-$\lambda/4\approx\SI{7.1}{mm}$ może zatem przenieść układ z~maksimum czułości
-do punktu zerowego. W~pobliżu takiego punktu składowa podstawowa oddechu
-słabnie, a~względnie rośnie druga harmoniczna. Nie jest to błąd filtracji,
-lecz konsekwencja jednokanałowej architektury CW.
+proporcjonalna do sinusa fazy statycznej. Punkty optymalne i~zerowe leżą
+naprzemiennie co $\lambda/8$ \cite{mercuri2017}, więc zmiana średniej
+odległości o~zaledwie $\lambda/8\approx\SI{3.6}{mm}$ może przenieść układ
+z~maksimum czułości do punktu zerowego; kolejne punkty zerowe dzieli
+$\lambda/4\approx\SI{7.1}{mm}$. W~pobliżu takiego punktu składowa podstawowa
+oddechu słabnie, a~względnie rośnie druga harmoniczna. Nie jest to błąd
+filtracji, lecz konsekwencja jednokanałowej architektury CW
+\cite{droitcour2004}.
 
 \begin{table}[H]
 \centering
@@ -741,7 +758,10 @@ przemieszczeniu celu
     \label{eq:faza}
 \end{equation}
 co daje czułość rzędu ułamków milimetra --- wystarczającą, aby zarejestrować
-zarówno oddech (kilka milimetrów), jak i~składową sercową.
+zarówno oddech (kilka milimetrów), jak i~składową sercową. Konwencję znaku
+w~równaniu~\eqref{eq:faza} omówiono w~sekcji~\ref{sec:model-sygnalu}; jest ona
+stałą właściwością toru, dzięki czemu faza A121 niesie nie tylko wielkość, lecz
+także \emph{kierunek} ruchu klatki.
 
 Sam układ A121 integruje część radiową, baseband oraz anteny w~obudowie
 o~wymiarach około $5{,}2\times5{,}5\times0{,}88$~mm. Producent podaje EIRP
@@ -1129,9 +1149,9 @@ zespoloną
   \label{eq:iq}
 \end{equation}
 gdzie amplituda $A$ opisuje siłę odbicia, a~faza $\varphi$ --- drogę optyczną
-fali. Dla celu oddalonego o~$d$ faza sygnału odbitego wynosi
-$\varphi = -4\pi d/\lambda$, skąd bezpośrednio wynika zależność wykorzystywana
-w~całym potoku:
+fali. Fala pokonuje drogę do celu i~z~powrotem, więc dla celu oddalonego
+o~$d$ moduł fazy echa wynosi $|\varphi| = 4\pi d/\lambda$, a~zależność
+wykorzystywana w~całym potoku ma postać
 \begin{equation}
   \Delta d = \frac{\lambda}{4\pi}\,\Delta\varphi .
   \label{eq:faza-przemieszczenie}
@@ -1140,6 +1160,23 @@ Dla $f_0 = \SI{60}{GHz}$ mamy $\lambda \approx \SI{5}{mm}$, a~więc
 $\SI{1}{rad}$ zmiany fazy odpowiada zaledwie \SI{0.4}{mm} przemieszczenia.
 To właśnie ta czułość --- a~nie amplituda --- jest źródłem informacji
 o~parametrach życiowych.
+
+\paragraph{Konwencja znaku.} Znak w~równaniu~\eqref{eq:faza-przemieszczenie}
+nie jest prawem fizycznym, lecz konsekwencją konwencji zespolonej przyjętej
+w~czujniku: dla zapisu $\mathrm{e}^{+\mathrm{j}\omega t}$ faza echa maleje
+z~odległością, a~dla $\mathrm{e}^{-\mathrm{j}\omega t}$ --- rośnie. Jest to
+zatem właściwość toru, stała dla danego czujnika i~danego potoku
+przetwarzania, a~nie wielkość losowa zmieniająca się między nagraniami. Dla
+A121 i~opisanego tu potoku obowiązuje konwencja $\varphi = +4\pi d/\lambda$:
+oddalenie celu zwiększa fazę, a~zbliżenie ją zmniejsza, co czyni
+równanie~\eqref{eq:faza-przemieszczenie} poprawnym w~zapisanej postaci.
+Konwencję tę ustalono empirycznie i~potwierdzono w~19~niezależnych nagraniach
+sterowanych (rozdziały~\ref{chap:hb100-a121-pomiar}
+i~\ref{chap:soczewki}): w~każdym z~nich zrekonstruowane przemieszczenie
+korelowało \emph{dodatnio} ze wzorcem oddechowym bez jakiejkolwiek korekty
+znaku. Wynika z~niej bezpośrednio kierunek fazy cyklu wykorzystywany
+w~sekcji~\ref{sec:etapy-przetwarzania-oddechu}: wdech zbliża klatkę do radaru,
+więc $d$ maleje, faza maleje, a~przebieg wyjściowy \emph{opada}.
 
 Skala zjawisk, które trzeba rozdzielić, jest jednak skrajnie nierówna:
 ruch klatki piersiowej przy spokojnym oddechu wynosi \SIrange{4}{12}{mm},
@@ -1357,8 +1394,10 @@ Na przefiltrowanym przebiegu można utworzyć prostą, odtwarzalną anotację
 wstępną bez modelu uczonego. Detektor szuka maksimów i~minimów po
 normalizacji: minimalna prominencja wynosi $0{,}30\,\sigma$, a~minimalny
 odstęp między ekstremami jest równy $0{,}45$ okresu wyznaczonego z~maksimum
-FFT. Przyjęto stałą konwencję: przejście od maksimum do minimum oznacza
-wdech, a~od minimum do następnego maksimum --- wydech. Nie wykonano ręcznych
+FFT. Kierunek faz nie jest przy tym dowolnym wyborem, lecz wynika
+z~konwencji znaku ustalonej w~sekcji~\ref{sec:model-sygnalu}: wdech zbliża
+klatkę do radaru i~zmniejsza fazę, więc przejście od maksimum do minimum
+oznacza wdech, a~od minimum do następnego maksimum --- wydech. Nie wykonano ręcznych
 poprawek znaczników (rysunek~\ref{fig:a121-oddech-fazy}). Są to zatem
 deterministyczne etykiety bazowe przydatne do kontroli danych i~wstępnej
 anotacji, lecz nie zastępują referencyjnego pomiaru fizjologicznego ani
@@ -1502,7 +1541,7 @@ logarytmu kontrastu amplitudowego, obu pewności oraz stosunku energii
 pasmowej~\eqref{eq:ber}.
 
 \paragraph{Zastrzeżenie dotyczące wskaźników pewności.} Jak wynika z~eksperymentu opisanego
-w~następnym rozdziale~(\ref{chap:soczewki}), wskaźniki te \textbf{osiągają wartość
+w~rozdziale~\ref{chap:soczewki}, wskaźniki te \textbf{osiągają wartość
 maksymalną we wszystkich 36~nagraniach} wykonanych na siedząco do \SI{1}{m}.
 Są więc użyteczne jako zabezpieczenie przed publikowaniem szumu, ale
 \emph{nie nadają się} do porównywania jakości konfiguracji sprzętowych ---
@@ -1839,11 +1878,24 @@ sygnału A121 z~trójkątnym wzorcem \SI{2}{s}/\SI{3}{s}; otrzymano
 badanego i~opóźnienia akwizycji. O~tę wartość przesunięto tła komend na
 rys.~\ref{fig:hb100-a121-etapy}.
 
-Ponieważ znak fazy A121 i~napięcia HB100 jest umowny, dla każdego toru wybrano
-jedną polaryzację maksymalizującą zgodność z~pierwszym blokiem sterowanym.
-Nie zmieniano jej już w~drugim bloku. Jest to celowo łagodny test HB100:
-pozwala na jednorazową kalibrację znaku, lecz sprawdza, czy mapowanie pozostaje
-stabilne po wstrzymaniu oddechu.
+Oba tory poddano tej samej procedurze: dla każdego wybrano jedną polaryzację
+maksymalizującą zgodność z~pierwszym blokiem sterowanym i~nie zmieniano jej już
+w~drugim bloku. Procedura ta działa jednak na obu torach zupełnie inaczej i~ta
+różnica jest sama w~sobie wynikiem.
+
+Dla A121 kalibracja okazała się operacją pustą. Znak jego fazy nie jest umowny,
+lecz wynika z~konwencji toru omówionej w~sekcji~\ref{sec:model-sygnalu}:
+we~wszystkich siedmiu nagraniach wybrana polaryzacja była dodatnia,
+a~korelacja surowego, nieskorygowanego przemieszczenia ze wzorcem wynosiła już
+$0{,}909$--$0{,}959$. Gdyby kalibrację całkowicie pominąć, wyniki A121 byłyby
+identyczne. Dla HB100 przeciwnie --- polaryzację odwrócono w~każdym z~siedmiu
+nagrań, a~korelacja przed korektą mieściła się w~zakresie
+$-0{,}514$--$-0{,}171$, czyli była słaba niezależnie od przyjętego znaku.
+
+Jest to zatem celowo łagodny test HB100, a~nie wyrównanie szans: A121 nie
+korzysta z~tej ulgi, natomiast HB100 dostaje jednorazową kalibrację znaku
+i~mimo niej sprawdzany jest tylko pod kątem tego, czy raz ustalone mapowanie
+przetrwa wstrzymanie oddechu.
 
 Zestawienie przykładowych przebiegów surowych i~po filtracji umieszczono
 dopiero po opisie estymatora rytmu (rys.~\ref{fig:hb100-a121-etapy}), aby
@@ -1888,7 +1940,27 @@ gdzie $\hat a_k(kf)$ jest amplitudą sinusoidy o~częstości $kf$, dopasowaną
 metodą najmniejszych kwadratów do wyrównanego czasowo i~pozbawionego trendu
 napięcia HB100. Energia podstawy oraz drugiej i~trzeciej harmonicznej jest
 więc składana do wspólnego kandydata zamiast wybierania najsilniejszego piku
-widma. Wynik jest publikowany tylko, gdy co najmniej dwie składowe wnoszą po
+widma.
+
+Pomysł nie jest nowy: jest to wariant \emph{sumy harmonicznej}, metody
+opracowanej pierwotnie do wyznaczania częstotliwości podstawowej mowy
+\cite{noll1970}. Schroeder wykazał, że częstość sygnału okresowego,
+\emph{którego składowa podstawowa jest niedostępna pomiarowo}, można odzyskać
+z~częstotliwości jego wyższych harmonicznych \cite{schroeder1968} --- czyli
+rozwiązał dokładnie ten problem, który w~torze HB100 tworzy nieliniowa
+demodulacja fazy. Nowy jest tu wyłącznie kontekst: przeniesienie metody
+z~analizy dźwięku na jednokanałowy radar CW oraz dobór bramek jakości do tego
+zastosowania.
+
+Amplitudę wyznacza się dopasowaniem najmniejszych kwadratów w~dowolnie wybranej
+częstotliwości, a~nie odczytem prążka FFT. Pozwala to zagęścić siatkę
+kandydatów do \SI{0.001}{Hz}, podczas gdy rozdzielczość prążkowa okna
+\SI{30}{s} wynosiłaby zaledwie około \SI{0.033}{Hz}, czyli około
+2~oddechów/min. Zabieg ten usuwa kwantyzację odczytu, lecz nie zmienia
+fizycznej zdolności rozdzielczej: dwóch tonów odległych o~mniej niż $1/T$
+nadal nie da się rozróżnić. Precyzyjna estymacja dotyczy tu pojedynczego,
+dobrze odseparowanego składnika, co jest typowym przypadkiem stosowalności
+najmniejszych kwadratów w~dziedzinie częstotliwości \cite{vanderplas2018}. Wynik jest publikowany tylko, gdy co najmniej dwie składowe wnoszą po
 minimum 5\% energii, najlepszy wynik przewyższa o~co najmniej 5\% kandydata
 oddalonego o~\SI{0.035}{Hz}, a~jego wynik jest co najmniej dwukrotnie większy
 od mediany $S(f)$. W~przeciwnym przypadku algorytm zwraca brak estymaty, a~nie
@@ -1923,39 +1995,6 @@ zrekonstruowanym przemieszczeniu najsilniejszy pik w~paśmie
 \SIrange{0.10}{0.30}{Hz}. Jest to niezależna, prosta estymata pomocnicza:
 nie koryguje ona wyniku HB100 ani nie zmienia jego kryteriów akceptacji.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{hb100_a121_150cm_retest.png}
-    \caption[Oddzielny retest HB100 i A121 na 150 cm]{Pojedynczy retest na
-    \SI{150}{cm}. Górny panel pokazuje przemieszczenie wyznaczone z~fazy IQ
-    A121, środkowy --- jednokanałowe napięcie IF HB100; zachowano osobne
-    jednostki, aby nie sugerować ich równoważności. Dolne panele pokazują
-    funkcję~\eqref{eq:hb100-harmonic-consensus}: mimo najsilniejszych pików
-    napięcia przy około \SI{0.37}{Hz}, estymator wskazał \SI{0.190}{Hz}
-    (11,4~oddechów/min) oraz \SI{0.202}{Hz} (12,1~oddechów/min) wobec
-    zadanego rytmu \SI{0.20}{Hz}. Marże jakości 2,9 i~2,1 są jednak blisko
-    progu akceptacji 2,0; pojedynczy retest stanowi więc jedynie graniczne
-    wskazanie rytmu, a~nie podstawę do estymacji fazy wdech--wydech.}
-    \label{fig:hb100-a121-150cm}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{hb100_a121_rytm_dystanse.png}
-    \caption[Profile konsensusu HB100 i rytm A121 dla 30--150 cm]{Porównanie
-    estymacji rytmu we wszystkich 14 blokach. Górny rząd przedstawia funkcję
-    konsensusu harmonicznych $S(f)$ dla HB100: jasne linie są profilami
-    pojedynczych bloków, ciemna --- ich medianą dla danego dystansu. Linia
-    kropkowana wyznacza zadane 12~oddechów/min, zielona --- medianę estymat
-    HB100, a~niebieskie trójkąty --- pik \SIrange{0.10}{0.30}{Hz} z~A121.
-    Dolny panel pokazuje wynik każdego bloku; krzyżyki to mylące najsilniejsze
-    piki HB100 przed złożeniem harmonicznych. Przy \SIrange{30}{100}{cm}
-    profile HB100 mają wyraźniejszą przewagę kandydata przy 12~oddechach/min
-    ($S_{\max}/\operatorname{med}S=5{,}7$--$21{,}5$) niż w~pojedynczym
-    reteście \SI{150}{cm} (2,1--2,9).}
-    \label{fig:hb100-a121-rytm-dystanse}
-\end{figure}
-
 \section{Wyniki i interpretacja}
 
 Tabela~\ref{tab:hb100-a121-wyniki} rozdziela wykrycie ruchu od zachowania fazy
@@ -1964,6 +2003,19 @@ bloku. $Q_{A,2}$ i~$Q_{H,2}$ oznaczają zrównoważony odsetek próbek, dla któ
 znak pochodnej sygnału zgadza się z~kierunkiem wdech/wydech; pominięto po
 \SI{0.30}{s} przy każdej granicy komendy. Nie jest to wynik klasyfikatora
 uczonego, lecz opisowa miara monotoniczności i~stabilności kierunku.
+
+Ta sama liczba znaczy jednak dla obu torów co innego i~warto to powiedzieć
+wprost. Dla A121 mierzy ona rzeczywisty kierunek ruchu klatki, bo faza IQ
+niesie znak przemieszczenia (sekcja~\ref{sec:model-sygnalu}). Dla HB100 jest
+natomiast \emph{testem naiwnego założenia}, że rzeczywiste napięcie IF
+zachowuje się jak przemieszczenie. Model~\eqref{eq:cw-baseband} przewiduje, że
+założenie to musi zawieść: zgodnie z~równaniem~\eqref{eq:hb100-pochodna-if}
+znak pochodnej napięcia jest znakiem $\mathrm{d}x/\mathrm{d}t$ przemnożonym
+przez nieznany czynnik $-\sin(\cdot)$, zależny od fazy statycznej celu.
+Wartość $Q_H$ nie jest więc miarą jakości, którą HB100 mógłby poprawić lepszym
+strojeniem toru --- jest predykcją teoretyczną poddaną sprawdzeniu na trzech
+dystansach i~dwóch powtórzeniach. Sens jej pomiaru polega na tym, że
+przewidywanie modelu zostaje zweryfikowane danymi, a~nie przyjęte na wiarę.
 
 \begin{table}[H]
 \centering
@@ -2038,11 +2090,53 @@ przez kołdrę.
 
 \begin{figure}[H]
     \centering
+    \includegraphics[width=\textwidth]{hb100_a121_rytm_dystanse.png}
+    \caption[Profile konsensusu HB100 i rytm A121 dla 30--150 cm]{Porównanie
+    estymacji rytmu we wszystkich 14 blokach. Górny rząd przedstawia funkcję
+    konsensusu harmonicznych $S(f)$ dla HB100: jasne linie są profilami
+    pojedynczych bloków, ciemna --- ich medianą dla danego dystansu. Linia
+    kropkowana wyznacza zadane 12~oddechów/min, zielona --- medianę estymat
+    HB100, a~niebieskie trójkąty --- pik \SIrange{0.10}{0.30}{Hz} z~A121.
+    Dolny panel pokazuje wynik każdego bloku; krzyżyki to mylące najsilniejsze
+    piki HB100 przed złożeniem harmonicznych. Przy \SIrange{30}{100}{cm}
+    profile HB100 mają wyraźniejszą przewagę kandydata przy 12~oddechach/min
+    ($S_{\max}/\operatorname{med}S=5{,}7$--$21{,}5$) niż w~pojedynczym
+    reteście \SI{150}{cm} (2,1--2,9).}
+    \label{fig:hb100-a121-rytm-dystanse}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{hb100_a121_150cm_retest.png}
+    \caption[Oddzielny retest HB100 i A121 na 150 cm]{Pojedynczy retest na
+    \SI{150}{cm}, wyodrębniony z~powtarzanej serii ze względu na brak
+    powtórzenia. Górny panel pokazuje przemieszczenie wyznaczone z~fazy IQ
+    A121, środkowy --- jednokanałowe napięcie IF HB100; zachowano osobne
+    jednostki, aby nie sugerować ich równoważności. Dolne panele pokazują
+    funkcję~\eqref{eq:hb100-harmonic-consensus}: mimo najsilniejszych pików
+    napięcia przy około \SI{0.37}{Hz}, estymator wskazał \SI{0.190}{Hz}
+    (11,4~oddechów/min) oraz \SI{0.202}{Hz} (12,1~oddechów/min) wobec
+    zadanego rytmu \SI{0.20}{Hz}. Marże jakości 2,9 i~2,1 są jednak blisko
+    progu akceptacji 2,0; pojedynczy retest stanowi więc jedynie graniczne
+    wskazanie rytmu, a~nie podstawę do estymacji fazy wdech--wydech.}
+    \label{fig:hb100-a121-150cm}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
     \includegraphics[width=\textwidth]{hb100_a121_metryki.png}
     \caption[Metryki porównania HB100 i A121]{Metryki sześciu prób podstawowych
     oraz pojedynczego retestu \SI{150}{cm}. Dwa górne
     panele dotyczą drugiego bloku po kalibracji polaryzacji na pierwszym.
-    Lewy dolny panel pokazuje poziom składowej \SI{0.20}{Hz} względem
+    Prawy górny panel przedstawia zgodność znaku pochodnej sygnału
+    z~komendą. Dla A121 jest to rzeczywisty kierunek ruchu klatki, ponieważ
+    faza IQ niesie znak przemieszczenia. Dla HB100 jest to test naiwnego
+    założenia, że rzeczywiste napięcie IF zachowuje się jak przemieszczenie;
+    równanie~\eqref{eq:hb100-pochodna-if} przewiduje niepowodzenie tego
+    założenia, a~panel to przewidywanie weryfikuje. Wartości HB100 nie skupiają
+    się wokół 50\%, lecz układają po obu stronach tej linii --- to sygnatura
+    znaku narzuconego przez fazę statyczną, nie szumu. Lewy dolny panel pokazuje
+    poziom składowej \SI{0.20}{Hz} względem
     silniejszej z~harmonicznych \SI{0.40}{Hz} i~\SI{0.60}{Hz}; wartość ujemna
     oznacza dominację harmonicznej. Prawy dolny panel przedstawia zanik RMS
     podczas wstrzymania; linia kropkowana wskazuje próg $-3$~dB. Przesunięcie
@@ -2068,8 +2162,8 @@ odległości.
 wstrzymania był o~\SI{15.7}{dB} niższy niż w~odcinkach sterowanych. Sygnał
 HB100 nie zachował kierunku fazy: w~dwóch blokach dominowały surowe piki
 odpowiednio \SI{0.366}{Hz} i~\SI{0.378}{Hz}, korelacja z~komendami po
-jednorazowej kalibracji znaku wyniosła $-0{,}299$, a~zgodność kierunku
-wdech--wydech 36,6\%. Jednocześnie konsensus harmoniczny wskazał
+jednorazowej kalibracji znaku wyniosła $-0{,}299$, a~zgodność znaku pochodnej
+z~komendą 36,6\%, czyli była systematycznie odwrócona. Jednocześnie konsensus harmoniczny wskazał
 \SI{0.190}{Hz} i~\SI{0.202}{Hz}, czyli rytm bliski zadanym \SI{0.20}{Hz}
 (rys.~\ref{fig:hb100-a121-150cm}). Marże jakości 2,9 i~2,1 były jednak
 zaledwie na poziomie progu akceptacji 2,0 i~wyraźnie słabsze niż w~powtarzanej
@@ -2097,14 +2191,27 @@ kolejne harmoniczne. Najsilniejszy pik widma nie jest zatem dobrym estymatorem
 częstości, ale sam układ pików pozostaje użyteczny dla
 funkcji~\eqref{eq:hb100-harmonic-consensus}.
 
-\paragraph{HB100 nie zachowywał wiarygodnie faz wdech--wydech.} Dla A121
-korelacja drugiego bloku z~komendami wynosiła 0,894--0,957, a~zgodność
-kierunku 95,9--99,3\%. Dla HB100 wartości wynosiły odpowiednio od $-0{,}543$
-do 0,438 oraz 36,5--63,7\%, czyli pozostawały blisko poziomu losowego 50\%.
-W~jednej próbie na \SI{60}{cm} relacja była umiarkowanie dodatnia w~pierwszym
-bloku, a~po wstrzymaniu stała się wyraźnie ujemna mimo niezmienionej
-polaryzacji. Jednorazowa kalibracja znaku nie wystarcza zatem do rozróżniania
-wdechu i~wydechu.
+\paragraph{Brak kierunku wdech--wydech w~HB100 potwierdza model, a~nie
+niedoskonałość wykonania.} Dla A121 korelacja drugiego bloku z~komendami
+wynosiła 0,894--0,957, a~zgodność kierunku 95,9--99,3\%. Dla HB100 wartości
+wynosiły odpowiednio od $-0{,}543$ do 0,438 oraz 36,5--63,7\%. Jest to
+dokładnie to, czego wymaga równanie~\eqref{eq:hb100-pochodna-if}: przy
+nieznanym czynniku $-\sin(\cdot)$ zależnym od fazy statycznej celu żaden dobór
+polaryzacji nie może ustalić kierunku.
+
+Rozkład tych wartości jest przy tym bardziej wymowny niż sama ich wielkość.
+Nie są to wyniki „bliskie losowym'': 36,5\% i~36,6\% oznaczają
+\emph{systematyczne odwrócenie} kierunku, a~nie brak informacji. Gdyby sygnał
+był szumem, $Q_H$ skupiłoby się wokół 50\%; tymczasem rozrzut 36--64\% układa
+się po obu stronach tej wartości, co jest sygnaturą znaku ustalanego osobno
+przez punkt pracy każdego nagrania. W~jednej próbie na \SI{60}{cm} relacja
+była umiarkowanie dodatnia w~pierwszym bloku, a~po wstrzymaniu stała się
+wyraźnie ujemna mimo niezmienionej polaryzacji --- czyli mapowanie odwróciło
+się w~obrębie jednego nagrania. Informacja o~ruchu jest zatem w~napięciu
+obecna, lecz jej znak jest przypisywany przez geometrię, a~nie przez fazę
+oddechu. Właśnie dlatego użyteczny okazał się estymator, który znaku w~ogóle
+nie używa, opierając się wyłącznie na energii harmonicznych
+(równanie~\eqref{eq:hb100-harmonic-consensus}).
 
 Łącznie wyniki rozdzielają trzy poziomy użyteczności: wykrycie ruchu
 oddechowego, oszacowanie jego okresowości oraz rozpoznanie kierunku fazy.
@@ -2122,7 +2229,14 @@ jednoznaczna detekcja człowieka: brak sygnału może oznaczać nieobecność,
 wstrzymanie oddechu, minimum fazowe, zmianę pozycji albo złe skierowanie.
 HB100 nie powinien zatem samodzielnie rozstrzygać o~bezdechu ani fazie cyklu.
 Do analizy wdech--wydech i~przemieszczenia klatki właściwszy pozostaje A121,
-który udostępnia bramki odległościowe i~zespolony sygnał I/Q. Estymator HB100
+który udostępnia bramki odległościowe i~zespolony sygnał I/Q. Wniosek ten jest
+zgodny z~literaturą: przewagę toru kwadraturowego nad odbiornikiem
+jednokanałowym w~pomiarze parametrów krążeniowo-oddechowych wykazano
+ilościowo już w~\cite{droitcour2004}, a~demodulacja arcus tangens z~pary I/Q
+pozostaje standardowym sposobem obejścia punktów zerowych \cite{park2007}.
+Przedstawiony pomiar dodaje do tego obrazu rozróżnienie trzech poziomów
+użyteczności oraz pokazuje, że rytm --- w~przeciwieństwie do kierunku fazy ---
+bywa odzyskiwalny nawet z~jednego kanału rzeczywistego. Estymator HB100
 może służyć jedynie jako ostrożny wskaźnik rytmu w~stabilnym, wystarczająco
 silnym fragmencie ruchu na krótkim dystansie, z~jawnym odrzuceniem wyniku
 niejednoznacznego. Nie jest porównywalny z~A121 jako źródło informacji
@@ -2505,8 +2619,11 @@ radialny zależnością $x=\lambda\varphi/(4\pi)$ dla częstotliwości
 rzędu \SIrange{0.10}{0.50}{Hz}.
 
 Znaczników z~aplikacji nie nałożono bezpośrednio na czas ramek. Dla odcinków
-sterowanych utworzono trójkątny wzorzec: faza maleje podczas wdechu i~rośnie
-podczas wydechu. Następnie dla każdej próby szukano przesunięcia w~kroku
+sterowanych utworzono trójkątny wzorzec zgodny z~konwencją znaku ustaloną
+w~sekcji~\ref{sec:model-sygnalu}: faza maleje podczas wdechu i~rośnie
+podczas wydechu. Wzorca tego nie dopasowywano co do znaku --- korelacja
+wyszła dodatnia we~wszystkich 12~nagraniach, co potwierdza, że konwencja jest
+stałą właściwością toru. Następnie dla każdej próby szukano przesunięcia w~kroku
 \SI{25}{ms}, które maksymalizowało korelację Pearsona między wzorcem
 i~sygnałem. Oszacowane łączne opóźnienie komenda--zarejestrowany ruch mieściło
 się w~zakresie \SIrange{0.275}{0.625}{s}, z~medianą \SI{0.375}{s}. Maksima
@@ -2704,7 +2821,7 @@ uogólnienia, potencjał zastosowania w~czasie rzeczywistym.}
 
 % =====================================================================
 % =====================================================================
-\part{Część eksperymentalna: zastosowanie systemu}
+\part{Zastosowanie systemu}
 \label{part:eksperymenty}
 % =====================================================================
 % =====================================================================
@@ -3639,6 +3756,48 @@ Agilsense / ST Electronics, \emph{HB100 Microwave Sensor Module Data Sheet},
 Microchip Technology, \emph{MCP6001/2/4 Operational Amplifier Data Sheet}.
 \url{https://ww1.microchip.com/downloads/aemDocuments/documents/MSLD/ProductDocuments/DataSheets/MCP6001-1R-1U-2-4-1-MHz-Low-Power-Op-Amp-DS20001733.pdf}
 (dostęp: 15.07.2026).
+
+\bibitem{droitcour2004}
+A.~D. Droitcour, O. Boric-Lubecke, V.~M. Lubecke, J. Lin, G.~T.~A. Kovacs,
+\emph{Range Correlation and I/Q Performance Benefits in Single-Chip Silicon
+Doppler Radars for Noncontact Cardiopulmonary Monitoring}, IEEE Transactions
+on Microwave Theory and Techniques, tom~52, s.~838--848, 2004,
+\url{https://doi.org/10.1109/TMTT.2004.823552}.
+
+\bibitem{park2007}
+B.-K. Park, O. Boric-Lubecke, V.~M. Lubecke, \emph{Arctangent Demodulation
+with DC Offset Compensation in Quadrature Doppler Radar Receiver Systems},
+IEEE Transactions on Microwave Theory and Techniques, tom~55, nr~5,
+s.~1073--1079, 2007, \url{https://doi.org/10.1109/TMTT.2007.895653}.
+
+\bibitem{mercuri2017}
+M. Mercuri, Y.-H. Liu, I. Lorato, T. Torfs, A. Bourdoux, C. Van~Hoof,
+\emph{Frequency-Tracking CW Doppler Radar Solving Small-Angle Approximation
+and Null Point Issues in Non-Contact Vital Signs Monitoring}, IEEE
+Transactions on Biomedical Circuits and Systems, tom~11, nr~3, s.~671--680,
+2017, \url{https://doi.org/10.1109/TBCAS.2016.2647560}.
+
+\bibitem{boriclubecke2016}
+O. Boric-Lubecke, V.~M. Lubecke, A.~D. Droitcour, B.-K. Park, A. Singh,
+\emph{Doppler Radar Physiological Sensing}, Wiley, 2016,
+\url{https://doi.org/10.1002/9781119078418}.
+
+\bibitem{schroeder1968}
+M.~R. Schroeder, \emph{Period Histogram and Product Spectrum: New Methods for
+Fundamental-Frequency Measurement}, The Journal of the Acoustical Society of
+America, tom~43, nr~4, s.~829--834, 1968,
+\url{https://doi.org/10.1121/1.1910902}.
+
+\bibitem{noll1970}
+A.~M. Noll, \emph{Pitch Determination of Human Speech by the Harmonic Product
+Spectrum, the Harmonic Sum Spectrum, and a Maximum Likelihood Estimate},
+Proceedings of the Symposium on Computer Processing in Communications,
+tom~XIX, Polytechnic Press, Brooklyn, NY, s.~779--797, 1970.
+
+\bibitem{vanderplas2018}
+J.~T. VanderPlas, \emph{Understanding the Lomb--Scargle Periodogram}, The
+Astrophysical Journal Supplement Series, tom~236, nr~1, s.~16, 2018,
+\url{https://doi.org/10.3847/1538-4365/aab766}.
 
 \todo{Uzupełnić pozostałą bibliografię do części klinicznej, optycznej,
 UWB i~uczenia maszynowego.}
