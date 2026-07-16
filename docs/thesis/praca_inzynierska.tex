@@ -883,14 +883,31 @@ a~mimo to nie obejmować prawie całej próby. Zapis iPhone jest akceptowany
 tylko wtedy, gdy pokrywa co najmniej 95\% oczekiwanych próbek i~czasu próby,
 a~najdłuższa luka nie przekracza \SI{0.25}{s}.
 
-Podstawowy eksperyment obejmuje dla obu urządzeń wyłącznie leżenie na plecach,
-oddech swobodny, oddech narzucony metronomem oraz krótki odcinek wstrzymania
-oddechu. Każdy wariant jest powtarzany dwukrotnie. Po uzyskaniu kompletnego
-zapisu obu torów porównane będą:
-dominująca częstotliwość, SNR widmowy,
-prominencja piku, stabilność wyniku w~kolejnych oknach oraz udział wariancji
-wyjaśniony przez PCA. Wniosek ma dotyczyć użyteczności każdego toru, nie jego
-zgodności z~rzekomym wzorcem radarowym.
+Podstawowy eksperyment obejmował dla obu urządzeń wyłącznie leżenie na plecach,
+oddech swobodny, oddech narzucony programowym przewodnikiem oraz krótki odcinek
+wstrzymania oddechu; każdy wariant powtarzano dwukrotnie. Zapisy obu torów
+oceniono trzema miarami, wyznaczonymi tą samą filtracją pasmową i~tym samym
+PCA trzech osi przyspieszenia:
+\begin{itemize}
+  \item \textbf{dominująca częstość $f_R$} --- położenie maksimum widma
+  w~paśmie oddechowym, porównywane z~rytmem zadanym przez przewodnika;
+  \item \textbf{czytelność piku $Q_{\mathrm{spec}}$} --- stosunek najwyższego
+  piku widma do mediany pozostałej części pasma oddechowego, w~dB. Celowo nie
+  nazwano jej SNR: mianownik jest tłem widmowym w~paśmie oddechu, a~nie
+  skalibrowanym szumem toru pomiarowego;
+  \item \textbf{zgodność z~komendami $|\rho_{\mathrm{cue}}|$} --- bezwzględna
+  korelacja pochodnej przebiegu PCA z~naprzemiennymi komendami wdechu
+  i~wydechu po dopasowaniu czasowym.
+\end{itemize}
+Osobno raportowany jest iloraz RMS ostatnich \SI{10}{s} wstrzymania do RMS
+odcinka oddechowego, sprawdzający, czy rejestrowany ruch faktycznie zanika po
+zatrzymaniu oddechu.
+
+Wnioski dotyczą użyteczności każdego toru z~osobna, a~nie jego zgodności
+z~rzekomym wzorcem radarowym. Miary są celowo skromne: opisują wykrywalność
+rytmu i~jego zanik, a~nie bezwzględną amplitudę, znak ani fazę PCA, których nie
+interpretuje się fizycznie. Wyniki obu serii przedstawiono w~sekcjach
+\ref{sec:imu-lsm6ds3-test} i~\ref{sec:imu-iphone-porownanie}.
 
 \todo{Po potwierdzeniu użyteczności w~leżeniu wykonać eksperyment
 w~pozycji siedzącej. Następnie, jeśli zakres pracy na to pozwoli, sprawdzić
@@ -960,12 +977,125 @@ ani pomiarem tętna.
 \section{Porównanie LSM6DS3 i~iPhone}
 \label{sec:imu-iphone-porownanie}
 
-\todo{Wykonać porównanie LSM6DS3 i~iPhone wyłącznie w~dwóch 90-sekundowych
-próbach programu prowadzącego: \SI{10}{s} oddechu swobodnego, 7~cykli wdech
-\SI{2}{s}/wydech \SI{3}{s}, \SI{15}{s} wstrzymania oraz 6~dalszych cykli.
-Telefon ma pracować z~\SI{100}{Hz}, odblokowany i~z~aplikacją na pierwszym
-planie. Po pozytywnej kontroli transmisji BLE porównać pokrycie czasowe, luki,
-$f_R$, SNR, stabilność okien i~przebieg PCA obu urządzeń.}
+Porównanie wykonano w~dwóch próbach po \SI{90}{s}, wyłącznie w~pozycji na
+plecach. Telefon i~moduł LSM6DS3 leżały obok siebie na górnej części klatki
+piersiowej, w~tej samej orientacji. Harmonogram każdej próby obejmował
+\SI{10}{s} oddechu swobodnego, 7~cykli wdech \SI{2}{s}/wydech \SI{3}{s},
+\SI{15}{s} wstrzymania po wydechu i~6~dalszych cykli o~tym samym rytmie.
+Telefon pracował z~zadaną częstotliwością \SI{100}{Hz}; zapis obejmuje
+zarówno próbki LSM6DS3 z~licznikiem urządzenia, jak i~próbki iPhone
+otrzymane przez BLE.
+
+Jakość transmisji obu torów była wystarczająca do porównania. W~dwóch
+próbach LSM6DS3 dostarczył odpowiednio 9119 i~9120 próbek przy \SI{100}{Hz},
+bez luk licznika, duplikatów, resetów ani niepoprawnych wierszy UART. iPhone
+dostarczył po 9012 próbek, czyli ponad 100\% oczekiwanej liczby i~czasu okna
+nagrania (niewielki nadmiar wynika z~próbek na jego granicach). Każdy zapis
+iPhone obejmował 751 pakietów BLE, bez utraconych, zduplikowanych ani
+niepoprawnych pakietów; największa luka pomiędzy kolejnymi próbkami wyniosła
+\SI{10}{ms}. W~odróżnieniu od wcześniejszej, niekompletnej transmisji jest to
+ciągły strumień obejmujący całe dwa okna pomiarowe.
+
+Tabela~\ref{tab:imu-iphone-wyniki} porównuje cechy wyznaczone tą samą
+filtracją pasmową i~PCA trzech osi przyspieszenia. $Q_{\mathrm{spec}}$ jest
+stosunkiem najwyższego piku widma do mediany pozostałej części pasma
+oddechowego, wyrażonym w~dB; jest zatem wskaźnikiem czytelności piku, a~nie
+kalibrowanym SNR toru pomiarowego. $|\rho_{\mathrm{cue}}|$ oznacza
+bezwzględną korelację pochodnej PCA z~naprzemiennymi komendami wdechu
+i~wydechu po dopasowaniu czasowym. Wartość bezwzględną stosuje się dlatego,
+że znak pierwszej składowej głównej zależy od orientacji czujnika.
+
+\begin{table}[H]
+\centering
+\caption{Porównanie LSM6DS3 i~iPhone w~dwóch próbach sterowanych
+\SI{12}{oddech\per\minute}. Wartości w~komórkach zapisano jako
+LSM6DS3 / iPhone.}
+\label{tab:imu-iphone-wyniki}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Próba & $f_R$ [oddech/min] & $Q_{\mathrm{spec}}$ [dB] & $|\rho_{\mathrm{cue}}|$ \\
+\midrule
+1 & 12,06 / 11,94 & 14,2 / 28,4 & 0,689 / 0,779 \\
+2 & 12,07 / 11,99 & 18,9 / 20,8 & 0,739 / 0,760 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Oba tory odtworzyły rytm bliski wartości zadanej \SI{12}{oddech\per\minute}.
+Różnica między ich estymatami wyniosła odpowiednio 0,12 i~0,08~oddechu/min,
+a~iPhone osiągnął w~tych dwóch krótkich seriach wyższy wskaźnik
+$Q_{\mathrm{spec}}$. W~końcowych \SI{10}{s} wstrzymania iloraz RMS względem
+części oddechowej wyniósł 0,335 i~0,120 dla LSM6DS3 oraz 0,200 i~0,228 dla
+iPhone, co w~obu przypadkach potwierdza wyraźne zmniejszenie ruchu.
+Rysunek~\ref{fig:imu-iphone-porownanie} pokazuje zgodność odtwarzanego rytmu
+z~harmonogramem w~obu urządzeniach. Nie porównuje się jednak bezwzględnej
+amplitudy, znaku ani fazy PCA: czujniki mają różne skale, niezależne zegary
+i~nie były walidowane względem referencyjnego toru ruchu. Wynik potwierdza
+użyteczność obu strumieni do estymacji rytmu w~tej ustalonej geometrii, lecz
+nie jest oceną dokładności oddechowej dla innych ułożeń ani pomiarem tętna.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{imu_lsm6ds3_iphone_porownanie.png}
+    \caption[Porównanie przebiegów IMU LSM6DS3 i iPhone]{Znormalizowane
+    przebiegi PCA przyspieszeń z~LSM6DS3 (niebieski) i~iPhone (pomarańczowy)
+    po tej samej filtracji pasmowej \SIrange{0.07}{0.60}{Hz}. Tło oznacza
+    kolejne komendy programu prowadzącego. Osie czasu odnoszą się do wspólnego
+    czasu hosta; znaku i~bezwzględnej amplitudy PCA nie interpretuje się
+    fizycznie.}
+    \label{fig:imu-iphone-porownanie}
+\end{figure}
+
+\subsection{Poziom resztkowego ruchu w~bezruchu}
+\label{sec:imu-spoczynek}
+
+W~tym samym ułożeniu wykonano dodatkowy, \SI{60}{s} zapis bez celowego ruchu.
+Jego celem nie była rejestracja oddechu ani tętna, lecz określenie tła
+widocznego w~danych udostępnianych przez oba tory: czujnik, firmware albo
+aplikację oraz transmisję. Oba strumienie były kompletne: LSM6DS3 dostarczył
+6079 próbek przy \SI{100}{Hz}, bez luk licznika, a~iPhone 6000 próbek w~500
+pakietach BLE, również bez strat. Maksymalny odstęp między próbkami iPhone
+wyniósł \SI{10}{ms}.
+
+Tabela~\ref{tab:imu-spoczynek} zestawia RMS wektora trzech osi po usunięciu
+trendu liniowego oraz RMS pierwszej składowej PCA po filtracji w~paśmie
+oddechowym i~w~paśmie \SIrange{0.8}{3.0}{Hz}, wykorzystywanym tu wyłącznie
+jako pasmo potencjalnej składowej sercowej. Nie jest to próba wykrywania
+tętna. W~całym zakresie LSM6DS3 miał niższy poziom resztkowy: około
+1,8-krotnie dla surowego wektora przyspieszeń, 1,6-krotnie w~paśmie oddechu
+i~1,5-krotnie w~drugim paśmie. Różnica dla żyroskopu jest niewielka.
+
+\begin{table}[H]
+\centering
+\caption{Porównanie sygnału resztkowego w~\SI{60}{s} bezruchu.}
+\label{tab:imu-spoczynek}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Tor & $\sigma_{a}$ [mg] & $\sigma_{\omega}$ [\si{\degree\per\second}] &
+$\sigma_{\mathrm{PCA},R}$ [mg] & $\sigma_{\mathrm{PCA},H}$ [mg] \\
+\midrule
+LSM6DS3 & 0,697 & 0,0728 & 0,0592 & 0,1026 \\
+iPhone & 1,246 & 0,0816 & 0,0943 & 0,1591 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Rysunek~\ref{fig:imu-spoczynek-widmo} nie pokazuje w~żadnym torze
+pojedynczego dominującego piku w~paśmie oddechowym ani w~paśmie potencjalnej
+składowej sercowej. Wynik oznacza, że w~tym pojedynczym ułożeniu LSM6DS3 daje
+niższe tło niż aplikacja iPhone, nie zaś że jest ogólnie lepszym czujnikiem
+oddechu. Na klatce piersiowej iPhone uzyskał wyższy wskaźnik czytelności piku
+w~dwóch wcześniejszych próbach, więc o~użyteczności decydują również sposób
+mocowania, dynamika ruchu oraz przetwarzanie systemowe.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{imu_lsm6ds3_iphone_static_widmo.png}
+    \caption[Widmo IMU w bezruchu]{Gęstość widmowa pierwszej składowej PCA
+    przyspieszeń podczas \SI{60}{s} bezruchu. Zaznaczono pasmo oddechowe oraz
+    pasmo \SIrange{0.8}{3.0}{Hz}; nie jest to wynik detekcji tętna.}
+    \label{fig:imu-spoczynek-widmo}
+\end{figure}
 
 % ---------------------------------------------------------------------
 \chapter{Algorytmy estymacji oddechu i tętna}
