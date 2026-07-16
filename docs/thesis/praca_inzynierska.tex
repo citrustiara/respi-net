@@ -1095,6 +1095,56 @@ oddech jest nieodróżnialny od szumu czujnika i~zamiast losowej częstotliwośc
 raportowany jest brak wyniku. Bez tego zabezpieczenia system podczas wstrzymania
 oddechu pokazywał ,,oddech'' wzięty z~szumu.
 
+\subsection{Od surowego IQ do przebiegu oddechowego}
+\label{sec:etapy-przetwarzania-oddechu}
+Sam wynik częstości nie pokazuje, które własności sygnału usuwają kolejne
+operacje potoku. Dlatego na rysunku~\ref{fig:a121-oddech-etapy} pokazano ten
+sam, stabilny \SI{15}{s} fragment rzeczywistego nagrania A121 po kolejnych
+przekształceniach. Najpierw widoczne są nieprzetworzone składowe $I$ i~$Q$.
+Moduł residuum po usunięciu echa statycznego służy wyłącznie do wyboru bramki,
+nie do wyznaczenia fazy: właśnie dlatego następne panele wracają do surowego
+sygnału zespolonego. Faza po wycentrowaniu okręgu IQ, faza różnicowa oraz
+koherentne połączenie trzech bramek prowadzą do ostatniego panelu ---
+przebiegu po filtrze \SIrange{0.10}{0.50}{Hz}. Różne skale pionowe są celowe:
+rysunek obrazuje zmianę postaci sygnału, a~nie zmianę jego bezwzględnej
+amplitudy.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{a121_oddech_etapy_przetwarzania.png}
+    \caption[Etapy rekonstrukcji sygnału oddechowego A121]{Kolejne etapy
+    rekonstrukcji sygnału oddechowego z~tego samego fragmentu Sparse IQ.
+    Panele należy czytać wierszami od lewej do prawej: surowe $I/Q$,
+    usunięcie echa statycznego dla wyboru bramki, wycentrowanie IQ, faza
+    różnicowa, koherentne łączenie bramek i~końcowa filtracja pasmowa.
+    Zastosowano zakres \SIrange{0.485}{0.515}{m}; jest to wynik przetworzenia
+    rzeczywistego nagrania, a~nie przebieg syntetyczny.}
+    \label{fig:a121-oddech-etapy}
+\end{figure}
+
+\paragraph{Deterministyczne znaczniki wdechu i~wydechu.}
+Na przefiltrowanym przebiegu można utworzyć prostą, odtwarzalną anotację
+wstępną bez modelu uczonego. Detektor szuka maksimów i~minimów po
+normalizacji: minimalna prominencja wynosi $0{,}30\,\sigma$, a~minimalny
+odstęp między ekstremami jest równy $0{,}45$ okresu wyznaczonego z~maksimum
+FFT. Przyjęto stałą konwencję: przejście od maksimum do minimum oznacza
+wdech, a~od minimum do następnego maksimum --- wydech. Nie wykonano ręcznych
+poprawek znaczników (rysunek~\ref{fig:a121-oddech-fazy}). Są to zatem
+deterministyczne etykiety bazowe przydatne do kontroli danych i~wstępnej
+anotacji, lecz nie zastępują referencyjnego pomiaru fizjologicznego ani
+weryfikacji ręcznej.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{a121_oddech_fazy_deterministyczne.png}
+    \caption[Deterministyczne znaczniki faz oddechu]{Końcowy sygnał oddechowy
+    z~nałożonymi znacznikami wyznaczonymi tylko przez ustaloną regułę
+    ekstremów. Niebieskie pola oznaczają wdech (maksimum do minimum),
+    pomarańczowe --- wydech (minimum do maksimum); trójkąty wskazują początki
+    odpowiednich faz.}
+    \label{fig:a121-oddech-fazy}
+\end{figure}
+
 \section{Estymacja tętna --- problem harmonicznych}
 \label{sec:tetno}
 Ruch klatki piersiowej przy oddychaniu nie jest sinusoidalny: wdech i~wydech
