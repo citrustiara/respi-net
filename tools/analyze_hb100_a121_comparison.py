@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Analyse the simultaneous HB100/A121 guided comparison.
 
-The analysis keeps the two questions separate:
+The analysis keeps three questions separate:
 
 * can the inexpensive HB100 path detect that paced breathing is present, and
+* can a harmonic-consensus estimator recover its cadence without assuming that
+  a real IF voltage is displacement, and
 * does its single real IF channel preserve inhale/exhale direction?
 
 Both sensors are aligned on host timestamps.  A121 Sparse IQ is reduced to a
@@ -51,6 +53,16 @@ PHASE_TO_DISPLACEMENT_MM = (
 A121_COLOUR = "#0072B2"
 HB100_COLOUR = "#D55E00"
 TEMPLATE_COLOUR = "#222222"
+PACED_RESPIRATION_HZ = 0.20
+HB100_RHYTHM_CANDIDATE_BAND_HZ = (0.10, 0.30)
+HB100_RHYTHM_HARMONICS = (1, 2, 3)
+HB100_RHYTHM_GRID_STEP_HZ = 0.001
+HB100_RHYTHM_MIN_WINDOW_S = 20.0
+HB100_RHYTHM_COMPETITOR_SEPARATION_HZ = 0.035
+HB100_RHYTHM_MIN_SCORE_VS_COMPETITOR = 1.05
+HB100_RHYTHM_MIN_SCORE_VS_MEDIAN = 2.0
+HB100_RHYTHM_COMPONENT_FRACTION = 0.05
+HB100_RHYTHM_MIN_COMPONENTS = 2
 
 
 @dataclass
@@ -69,6 +81,21 @@ class ComparisonResult:
     a121_sign: float
     hb100_sign: float
     metrics: dict[str, Any]
+
+
+@dataclass
+class HarmonicRhythmEstimate:
+    """Phase-invariant cadence candidate inferred from HB100 harmonic energy."""
+
+    frequency_hz: float
+    score_mv2: float
+    score_vs_competitor: float
+    score_vs_median: float
+    contributing_harmonics: int
+    harmonic_energy_fractions: tuple[float, float, float]
+    accepted: bool
+    candidate_frequencies_hz: np.ndarray
+    candidate_scores_mv2: np.ndarray
 
 
 def _latest_session() -> Path:
@@ -354,6 +381,81 @@ def _sinusoid_amplitude(
     return float(np.hypot(coefficients[0], coefficients[1]))
 
 
+def estimate_hb100_harmonic_rhythm(
+    time_s: np.ndarray,
+    voltage_mv: np.ndarray,
+    start_s: float,
+    end_s: float,
+) -> HarmonicRhythmEstimate:
+    """Estimate a breathing cadence without treating real IF voltage as displacement.
+
+    A one-channel CW receiver observes a cosine of propagation phase.  A deep
+    chest excursion can therefore move energy from the breathing fundamental
+    into its second or third harmonic.  This routine folds the energy at
+    ``f``, ``2 f`` and ``3 f`` back onto candidate fundamentals.  It deliberately
+    returns ``accepted=False`` for a candidate supported by only one component
+    or insufficiently separated from another cadence candidate.
+    """
+
+    mask = (
+        np.isfinite(time_s)
+        & np.isfinite(voltage_mv)
+        & (time_s >= start_s)
+        & (time_s <= end_s)
+    )
+    time = np.asarray(time_s[mask], dtype=float)
+    values = np.asarray(voltage_mv[mask], dtype=float)
+    if len(time) < 4 or float(time[-1] - time[0]) < HB100_RHYTHM_MIN_WINDOW_S:
+        raise ValueError(
+            f"HB100 rhythm estimation needs at least {HB100_RHYTHM_MIN_WINDOW_S:.0f} s of valid data."
+        )
+
+    candidates = np.arange(
+        HB100_RHYTHM_CANDIDATE_BAND_HZ[0],
+        HB100_RHYTHM_CANDIDATE_BAND_HZ[1] + 0.5 * HB100_RHYTHM_GRID_STEP_HZ,
+        HB100_RHYTHM_GRID_STEP_HZ,
+    )
+    amplitudes = np.asarray(
+        [
+            [
+                _sinusoid_amplitude(time, values, harmonic * candidate, time[0], time[-1])
+                for harmonic in HB100_RHYTHM_HARMONICS
+            ]
+            for candidate in candidates
+        ],
+        dtype=float,
+    )
+    component_energy = np.square(amplitudes)
+    scores = np.sum(component_energy, axis=1)
+    selected_index = int(np.argmax(scores))
+    frequency_hz = float(candidates[selected_index])
+    score = float(scores[selected_index])
+    selected_energy = component_energy[selected_index]
+    fractions = selected_energy / max(score, 1e-12)
+    competitor = float(
+        np.max(scores[np.abs(candidates - frequency_hz) >= HB100_RHYTHM_COMPETITOR_SEPARATION_HZ])
+    )
+    score_vs_competitor = score / max(competitor, 1e-12)
+    score_vs_median = score / max(float(np.median(scores)), 1e-12)
+    contributing_harmonics = int(np.count_nonzero(fractions >= HB100_RHYTHM_COMPONENT_FRACTION))
+    accepted = bool(
+        contributing_harmonics >= HB100_RHYTHM_MIN_COMPONENTS
+        and score_vs_competitor >= HB100_RHYTHM_MIN_SCORE_VS_COMPETITOR
+        and score_vs_median >= HB100_RHYTHM_MIN_SCORE_VS_MEDIAN
+    )
+    return HarmonicRhythmEstimate(
+        frequency_hz=frequency_hz,
+        score_mv2=score,
+        score_vs_competitor=score_vs_competitor,
+        score_vs_median=score_vs_median,
+        contributing_harmonics=contributing_harmonics,
+        harmonic_energy_fractions=tuple(float(value) for value in fractions),
+        accepted=accepted,
+        candidate_frequencies_hz=candidates,
+        candidate_scores_mv2=scores,
+    )
+
+
 def _dominant_frequency(
     time_s: np.ndarray,
     signal: np.ndarray,
@@ -412,18 +514,26 @@ def analyse_recording(measurement: dict[str, Any]) -> ComparisonResult:
     for start, end in block_limits:
         amplitudes = {
             frequency: _sinusoid_amplitude(h_time, h_raw, frequency, start, end)
-            for frequency in (0.20, 0.40, 0.60)
+            for frequency in (PACED_RESPIRATION_HZ, 2 * PACED_RESPIRATION_HZ, 3 * PACED_RESPIRATION_HZ)
         }
-        strongest_harmonic = max(amplitudes[0.40], amplitudes[0.60])
+        strongest_harmonic = max(amplitudes[2 * PACED_RESPIRATION_HZ], amplitudes[3 * PACED_RESPIRATION_HZ])
+        rhythm = estimate_hb100_harmonic_rhythm(h_time, h_raw, start, end)
         harmonic_metrics.append(
             {
-                "fundamental_amplitude_mv": amplitudes[0.20],
-                "second_harmonic_amplitude_mv": amplitudes[0.40],
-                "third_harmonic_amplitude_mv": amplitudes[0.60],
+                "fundamental_amplitude_mv": amplitudes[PACED_RESPIRATION_HZ],
+                "second_harmonic_amplitude_mv": amplitudes[2 * PACED_RESPIRATION_HZ],
+                "third_harmonic_amplitude_mv": amplitudes[3 * PACED_RESPIRATION_HZ],
                 "fundamental_vs_strongest_harmonic_db": float(
-                    20.0 * np.log10((amplitudes[0.20] + 1e-12) / (strongest_harmonic + 1e-12))
+                    20.0
+                    * np.log10((amplitudes[PACED_RESPIRATION_HZ] + 1e-12) / (strongest_harmonic + 1e-12))
                 ),
                 "dominant_frequency_hz": _dominant_frequency(h_time, h_raw, start, end),
+                "harmonic_rhythm_frequency_hz": rhythm.frequency_hz,
+                "harmonic_rhythm_bpm": rhythm.frequency_hz * 60.0,
+                "harmonic_rhythm_score_vs_competitor": rhythm.score_vs_competitor,
+                "harmonic_rhythm_score_vs_median": rhythm.score_vs_median,
+                "harmonic_rhythm_contributing_harmonics": float(rhythm.contributing_harmonics),
+                "harmonic_rhythm_accepted": float(rhythm.accepted),
             }
         )
 
@@ -678,6 +788,104 @@ def plot_respiratory_overlays(results: list[ComparisonResult], output_path: Path
     plt.close(figure)
 
 
+def plot_150cm_retest(results: list[ComparisonResult], output_path: Path) -> None:
+    """Render the one-off 150 cm retest separately from the paired core series."""
+
+    retests = [result for result in results if result.distance_cm == 150]
+    if not retests:
+        return
+    result = retests[-1]
+    block_limits = (
+        (10.0 + result.cue_delay_s, 45.0 + result.cue_delay_s, "blok 1"),
+        (60.0 + result.cue_delay_s, 89.8, "blok 2"),
+    )
+    estimates = [
+        estimate_hb100_harmonic_rhythm(result.hb_time_s, result.hb_raw_mv, start, end)
+        for start, end, _ in block_limits
+    ]
+
+    figure = plt.figure(figsize=(15.5, 11.0))
+    grid = figure.add_gridspec(3, 2, height_ratios=(1.0, 1.0, 1.08), hspace=0.40, wspace=0.23)
+    a121_axis = figure.add_subplot(grid[0, :])
+    hb100_axis = figure.add_subplot(grid[1, :], sharex=a121_axis)
+
+    _shade_cues(a121_axis, result.cues, result.cue_delay_s)
+    a121_axis.plot(
+        result.a121_time_s,
+        result.a121_sign * result.a121_resp_mm,
+        color=A121_COLOUR,
+        linewidth=1.35,
+        label="A121: przemieszczenie z fazy IQ",
+    )
+    a121_axis.set_ylabel("Przemieszczenie [mm]")
+    a121_axis.set_xlim(0.0, 90.0)
+    a121_axis.set_title("A121: składowa oddechowa przeliczona na przemieszczenie")
+    a121_axis.legend(loc="upper right", frameon=False)
+    _style_axis(a121_axis)
+
+    _shade_cues(hb100_axis, result.cues, result.cue_delay_s)
+    hb100_axis.plot(
+        result.hb_time_s,
+        result.hb_resp_mv,
+        color=HB100_COLOUR,
+        linewidth=1.0,
+        label="HB100: napięcie IF po filtracji 0,10--0,70 Hz",
+    )
+    hb100_axis.set_ylabel("Napięcie [mV]")
+    hb100_axis.set_xlabel("Czas od początku zapisu [s]")
+    hb100_axis.set_title("HB100: rzeczywisty, jednokanałowy sygnał IF (nie jest przemieszczeniem)")
+    hb100_axis.legend(loc="upper right", frameon=False)
+    _style_axis(hb100_axis)
+
+    for axis, estimate, (_, _, block_name) in zip(
+        (figure.add_subplot(grid[2, 0]), figure.add_subplot(grid[2, 1])),
+        estimates,
+        block_limits,
+        strict=True,
+    ):
+        normalised_score = estimate.candidate_scores_mv2 / max(estimate.score_mv2, 1e-12)
+        axis.plot(
+            estimate.candidate_frequencies_hz * 60.0,
+            normalised_score,
+            color=HB100_COLOUR,
+            linewidth=1.65,
+        )
+        axis.axvline(
+            PACED_RESPIRATION_HZ * 60.0,
+            color=TEMPLATE_COLOUR,
+            linestyle=":",
+            linewidth=1.15,
+            label="rytm zadany: 12 oddechów/min",
+        )
+        axis.axvline(
+            estimate.frequency_hz * 60.0,
+            color="#009E73" if estimate.accepted else "#CC3311",
+            linestyle="--",
+            linewidth=1.45,
+            label=f"estymata: {estimate.frequency_hz * 60.0:.1f} oddechów/min",
+        )
+        axis.set_xlim(
+            HB100_RHYTHM_CANDIDATE_BAND_HZ[0] * 60.0,
+            HB100_RHYTHM_CANDIDATE_BAND_HZ[1] * 60.0,
+        )
+        axis.set_ylim(0.0, 1.08)
+        axis.set_xlabel("Kandydat częstości podstawowej [oddechy/min]")
+        axis.set_ylabel("Suma energii f, 2f i 3f\n(znormalizowana)")
+        axis.set_title(
+            f"{block_name}: {estimate.contributing_harmonics} składowe, "
+            f"stosunek do konkurenta {estimate.score_vs_competitor:.2f}"
+        )
+        axis.legend(loc="upper right", frameon=False, fontsize=8.8)
+        _style_axis(axis)
+
+    figure.suptitle(
+        "Retest 150 cm: A121 mierzy przemieszczenie, HB100 pozwala estymować tylko rytm harmoniczny",
+        y=0.995,
+    )
+    figure.savefig(output_path, dpi=220, bbox_inches="tight")
+    plt.close(figure)
+
+
 def _distance_scatter(
     ax: plt.Axes,
     metrics: pd.DataFrame,
@@ -775,6 +983,16 @@ def build_summary(metrics: pd.DataFrame, interference: dict[str, Any]) -> dict[s
     )
     dominant = metrics.loc[:, dominant_columns].to_numpy(dtype=float).ravel()
     harmonic_dominant = int(np.count_nonzero(~((dominant >= 0.18) & (dominant <= 0.22))))
+    rhythm_columns = (
+        "hb100_harmonic_rhythm_frequency_hz_block1",
+        "hb100_harmonic_rhythm_frequency_hz_block2",
+    )
+    harmonic_rhythm = metrics.loc[:, rhythm_columns].to_numpy(dtype=float).ravel()
+    rhythm_accepted_columns = (
+        "hb100_harmonic_rhythm_accepted_block1",
+        "hb100_harmonic_rhythm_accepted_block2",
+    )
+    rhythm_accepted = metrics.loc[:, rhythm_accepted_columns].to_numpy(dtype=float).ravel()
     return {
         "definitions": {
             "cue_delay_s": "Aggregate command-to-recorded-motion delay estimated from A121 only.",
@@ -784,6 +1002,10 @@ def build_summary(metrics: pd.DataFrame, interference: dict[str, Any]) -> dict[s
             ),
             "fundamental_vs_strongest_harmonic_db": (
                 "20 log10 of fitted 0.20 Hz amplitude divided by the larger fitted 0.40/0.60 Hz amplitude."
+            ),
+            "harmonic_rhythm": (
+                "Cadence candidate maximizing the summed least-squares energy at f, 2f and 3f; "
+                "a one-component or weakly separated candidate is rejected."
             ),
         },
         "overall": {
@@ -801,6 +1023,12 @@ def build_summary(metrics: pd.DataFrame, interference: dict[str, Any]) -> dict[s
             "hb100_phase_accuracy_block2_max": float(metrics["hb100_phase_accuracy_block2"].max()),
             "hb100_harmonic_dominant_blocks": harmonic_dominant,
             "paced_blocks": int(len(dominant)),
+            "hb100_harmonic_rhythm_hz_min": float(harmonic_rhythm.min()),
+            "hb100_harmonic_rhythm_hz_max": float(harmonic_rhythm.max()),
+            "hb100_harmonic_rhythm_median_absolute_error_hz": float(
+                np.median(np.abs(harmonic_rhythm - PACED_RESPIRATION_HZ))
+            ),
+            "hb100_harmonic_rhythm_accepted_blocks": int(np.count_nonzero(rhythm_accepted > 0.5)),
             "hb100_hold_drop_db_min": float(metrics["hb100_hold_vs_paced_db"].min()),
             "hb100_hold_drop_db_max": float(metrics["hb100_hold_vs_paced_db"].max()),
             "hb100_saturated_recordings": int(
@@ -835,6 +1063,10 @@ def print_summary(metrics: pd.DataFrame, summary: dict[str, Any]) -> None:
         "hb100_phase_accuracy_block2",
         "hb100_dominant_frequency_hz_block1",
         "hb100_dominant_frequency_hz_block2",
+        "hb100_harmonic_rhythm_frequency_hz_block1",
+        "hb100_harmonic_rhythm_frequency_hz_block2",
+        "hb100_harmonic_rhythm_accepted_block1",
+        "hb100_harmonic_rhythm_accepted_block2",
         "hb100_hold_vs_paced_db",
         "hb100_saturation_percent",
     ]
@@ -898,6 +1130,7 @@ def main() -> int:
         plot_raw_overlays(results, figure_dir / "hb100_a121_surowe.png")
         plot_respiratory_overlays(results, figure_dir / "hb100_a121_oddech.png")
         plot_metrics(metrics, figure_dir / "hb100_a121_metryki.png")
+        plot_150cm_retest(results, figure_dir / "hb100_a121_150cm_retest.png")
 
     print_summary(metrics, summary)
     print(f"\nMetrics: {metrics_path}")
