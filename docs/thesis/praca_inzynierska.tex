@@ -835,8 +835,17 @@ więc osi czasu, o~ile zachowane są czasy próbek. Numer sekwencyjny umożliwia
 wykrywanie zagubionych powiadomień po dodaniu kontroli jego ciągłości po
 stronie odbiornika.
 
-\todo{Dodać zrzut ekranu aplikacji iOS: wybór częstości próbkowania i~stan
-transmisji BLE.}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.34\textwidth]{respi_iphone_ble_ui.png}
+    \caption[Interfejs aplikacji iOS RespiPhoneIMU]{Aplikacja
+    \emph{RespiPhoneIMU}: wybór częstotliwości \SI{25}{Hz}, \SI{50}{Hz} lub
+    \SI{100}{Hz}, sterowanie reklamowaniem usługi BLE i~liczniki transmisji.
+    Zrzut wykonano w~symulatorze iOS, który poprawnie prezentuje interfejs,
+    lecz nie obsługuje trybu peryferyjnego BLE; widoczny stan
+    \emph{unsupported} nie jest wynikiem testu telefonu fizycznego.}
+    \label{fig:iphone-ble-ui}
+\end{figure}
 
 \section{Synchronizacja i kryteria oceny}
 Aktualna wersja firmware LSM6DS3 wysyła dla każdej próbki licznik oraz czas
@@ -1413,8 +1422,32 @@ wykresów; kod podzielono na moduły pakietu \texttt{respi\_net}.
 \todo{Rozwinąć opis aplikacji desktopowej: wybór czujnika, ustawienia A121,
 obsługa nagrywania oraz sposób zapisu danych.}
 
-\todo{Dodać zrzuty ekranu aplikacji desktopowej: widok A121 na żywo i~widok
-historii nagrań.}
+Układ widoku A121 pokazano na rysunku~\ref{fig:desktop-a121-live}. Po lewej
+stronie znajdują się wybór czujnika oraz parametry akwizycji i~bramkowania,
+a~po prawej trzy wykresy aktualnego profilu odległościowego, oddechu i~tętna.
+Ten sam program udostępnia przeglądarkę nagrań: po wybraniu pliku CSV lub
+sesji SQLite odtwarza profil, przefiltrowany sygnał oddechowy i~sygnał sercowy
+wraz z~podsumowaniem analizy (rysunek~\ref{fig:desktop-historia}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{respi_a121_live_ui.png}
+    \caption[Widok A121 aplikacji desktopowej]{Widok toru A121 w~aplikacji
+    \emph{RespiNet Sensor Studio}. Interfejs grupuje ustawienia odległości,
+    HWAAS, liczbę przemiatań, częstość ramek i~wybór bramki po lewej stronie;
+    po prawej przygotowuje trzy wykresy używane podczas akwizycji na żywo.}
+    \label{fig:desktop-a121-live}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{respi_a121_history_ui.png}
+    \caption[Historia nagrań A121 w aplikacji desktopowej]{Przeglądarka
+    nagrań aplikacji desktopowej po otwarciu rzeczywistego pliku Sparse IQ
+    A121. Tabela po lewej pozwala wybrać źródło, a~wykresy po prawej pokazują
+    profil amplitudy z~bramką oraz składowe oddechową i~sercową.}
+    \label{fig:desktop-historia}
+\end{figure}
 
 \subsection{Programowy przewodnik oddechu}
 \label{sec:programowy-przewodnik-oddechu}
@@ -1438,7 +1471,15 @@ niepełne nagranie.
 \todo{Dodać opis implementacji skryptu programowego przewodnika: obsługę obu
 radarów, plik komend, manifest oraz odrzucanie niepełnej próby.}
 
-\todo{Dodać zrzut ekranu programowego przewodnika oddechu podczas nagrania.}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\textwidth]{respi_przewodnik_oddechu_ui.png}
+    \caption[Widok programowego przewodnika oddechu]{Programowy
+    przewodnik w~fazie \emph{wydechu}. Duży komunikat, pozostały czas oraz
+    pasek postępu pozwalają badanemu podążać za protokołem, natomiast wyraźny
+    przycisk przerwania zapewnia odrzucenie niepełnego nagrania.}
+    \label{fig:programowy-przewodnik-ui}
+\end{figure}
 
 Komenda programu jest zamiarem, a~nie bezpośrednim pomiarem fizjologicznym.
 Reakcja człowieka i~akwizycja wnoszą opóźnienie, dlatego w~analizach fazowych
