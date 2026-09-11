@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from scipy.signal import butter, detrend, find_peaks, sosfiltfilt, welch, lfilter
+from scipy.signal import butter, coherence, detrend, find_peaks, hilbert, sosfiltfilt, welch, lfilter
 
 from .a121 import parse_json_array
 
@@ -24,13 +24,28 @@ HEART_RATE_CONFIDENCE_MIN = 5.0
 HEART_RATE_STRONG_LOCK_CONFIDENCE = 30.0
 HEART_RATE_LOCK_MIN_WIDTH_HZ = 0.32
 HEART_RATE_LOCK_HALF_WIDTH_HZ = HEART_RATE_LOCK_MIN_WIDTH_HZ * 0.5
-# Real A121 recordings often show the clearest cardiac micro-motion on the near edge of the
-# torso return, not necessarily at the maximum-amplitude distance bin used for respiration.
-HEART_RANGE_HALF_WIDTH_M = 0.18
-HEART_RANGE_MAX_BINS = 13
-HEART_BIN_CLUSTER_TOLERANCE_HZ = 0.10
-HEART_BIN_MIN_CONFIDENCE = 4.0
-HEART_RANGE_OVERRIDE_MIN_CONFIDENCE = 12.0
+# Cardiac motion is weak and often shows best a few centimetres from the strongest breathing
+# return, for example on the near edge of the torso. The heart search therefore scans every
+# range bin within this distance of the target, also outside the breathing gate.
+HEART_SEARCH_HALF_WIDTH_M = 0.12
+# Cardiac motion shows in several neighbouring range bins, while noise peaks do not repeat from
+# one bin to the next, so each bin's spectrum is averaged with the bins this close to it.
+HEART_NEIGHBOUR_HALF_WIDTH_M = 0.02
+HEART_MIN_WINDOW_S = 10.0
+HEART_SPECTRUM_SEGMENT_S = 20.0
+HEART_COHERENCE_SEGMENT_S = 15.0
+# A heart peak must stand this many times above the median of the weighted heart-band spectrum,
+# averaged over neighbouring bins. Weaker peaks are not reported.
+HEART_PEAK_MIN_PROMINENCE = 8.0
+# A heart-band peak at least this coherent with the breathing harmonics moves in step with
+# breathing and is never used as the heart rate.
+HEART_MAX_BREATHING_COHERENCE = 0.5
+# Coherence is ignored where the breathing reference has less power than this share of its peak.
+HEART_REFERENCE_POWER_FLOOR = 1e-3
+# Breathing makes the raw IQ of the chest return change in the breathing band far above the
+# receiver noise floor. Static scenes and noise stay close to it.
+BREATHING_MOTION_SNR_MIN = 10.0
+MOTION_NOISE_BAND_MIN_HZ = 2.5
 
 
 @dataclass(frozen=True)
@@ -1091,57 +1106,6 @@ def _subtract_resp_harmonics(values: np.ndarray, fs: float, resp_hz: float, max_
         return x
 
 
-def _remove_resp_correlated_motion(values: np.ndarray, resp_signal: np.ndarray, fs: float) -> np.ndarray:
-    """Subtract motion components that are coherent with the breathing waveform.
-
-    Normal breathing creates large nonlinear chest motion; its harmonics can sit directly inside
-    the heart band.  Instead of blindly notching every respiratory harmonic, fit only components
-    that are actually correlated with the measured respiration waveform and subtract them softly.
-    This preserves a real pulse near a harmonic better than a hard sinusoid comb filter.
-    """
-    x_full = clean_signal(np.asarray(values, dtype=float))
-    r_full = clean_signal(np.asarray(resp_signal, dtype=float))
-    n = min(len(x_full), len(r_full))
-    if fs <= 0 or n < max(160, int(round(fs * 10.0))):
-        return x_full
-
-    x = x_full[-n:]
-    r = r_full[-n:]
-    r_std = float(np.std(r))
-    if not np.isfinite(r_std) or r_std <= 1e-9:
-        return x_full
-    r = (r - float(np.mean(r))) / r_std
-
-    columns: list[np.ndarray] = []
-    # Powers 2-6 model common nonlinear respiratory harmonics without explicitly deleting every
-    # sin/cos harmonic.  The subtraction is intentionally soft so a real pulse near a harmonic
-    # can survive and be recovered by the peak-spacing validator.
-    for power in (2, 3, 4, 5, 6):
-        feature = np.power(r, power)
-        feature = clean_signal(feature)
-        feature = _bandpass_matrix(feature, fs, HEART_BAND_HZ, order=2, zero_phase=True).ravel()
-        scale = float(np.std(feature))
-        if np.isfinite(scale) and scale > 1e-9:
-            columns.append(feature / scale)
-    if not columns:
-        return x_full
-
-    design = np.column_stack(columns)
-    if design.shape[0] <= design.shape[1] + 8:
-        return x_full
-    try:
-        xtx = design.T @ design
-        ridge = max(float(np.trace(xtx)) / max(xtx.shape[0], 1), 1e-9) * 0.03
-        coeff = np.linalg.solve(xtx + np.eye(xtx.shape[0]) * ridge, design.T @ x)
-        artifact = design @ coeff
-        residual = clean_signal(x - 0.70 * artifact)
-        out = x_full.copy()
-        out[-n:] = residual
-        return out
-    except Exception:
-        return x_full
-
-
 def _spectral_entropy(values: np.ndarray, fs: float, band_hz: tuple[float, float]) -> float:
     x = clean_signal(values)
     if len(x) < 16 or fs <= 0:
@@ -1487,153 +1451,180 @@ def _aligned_weighted_average(signals: np.ndarray, weights: np.ndarray, ref_col:
     return np.sum(aligned * w[None, :], axis=1)
 
 
-def _heart_range_candidate_indices(
-    distances: np.ndarray,
-    selected_idx: int,
-    amplitude_weight: np.ndarray,
-    gate_half_width_m: float,
-) -> np.ndarray:
-    m = len(distances)
-    if m == 0:
-        return np.asarray([], dtype=int)
-    selected_idx = int(np.clip(selected_idx, 0, m - 1))
-    selected_distance = float(distances[selected_idx])
-    half_width_m = max(HEART_RANGE_HALF_WIDTH_M, float(gate_half_width_m) * 3.0)
-    local = np.flatnonzero(
-        (np.abs(distances - selected_distance) <= half_width_m)
-        & (distances >= A121_MIN_TARGET_DISTANCE_M)
-    )
-    if len(local) == 0:
-        return np.asarray([selected_idx], dtype=int)
+def _breathing_motion_snr(complex_profile: np.ndarray, fs: float, bins: np.ndarray) -> float:
+    """Return how far the raw IQ of ``bins`` changes in the breathing band above receiver noise.
 
-    amp = np.asarray(amplitude_weight, dtype=float)
-    if len(amp) != m:
-        amp = np.ones(m, dtype=float)
-    local_amp = np.maximum(amp[local], 0.0)
-    local_peak = float(np.max(local_amp)) if len(local_amp) else 0.0
-    if not np.isfinite(local_peak) or local_peak <= 0.0:
-        local_peak = 1.0
-    amp_norm = local_amp / (local_peak + 1e-12)
-    proximity = 1.0 - np.clip(np.abs(distances[local] - selected_distance) / max(half_width_m, 1e-9), 0.0, 1.0)
-
-    # Keep the torso return around the selected range.  Cardiac motion often appears on the
-    # near edge of that return, so do not use only the maximum-amplitude bin.
-    keep = (amp_norm >= 0.25) | (proximity >= 0.65)
-    candidate = local[keep]
-    if len(candidate) == 0:
-        candidate = np.asarray([selected_idx], dtype=int)
-
-    if len(candidate) > HEART_RANGE_MAX_BINS:
-        cand_amp_norm = np.maximum(amp[candidate], 0.0) / (local_peak + 1e-12)
-        cand_proximity = 1.0 - np.clip(
-            np.abs(distances[candidate] - selected_distance) / max(half_width_m, 1e-9),
-            0.0,
-            1.0,
-        )
-        rank_score = 0.70 * cand_amp_norm + 0.30 * cand_proximity
-        order = np.argsort(rank_score, kind="stable")[-HEART_RANGE_MAX_BINS:]
-        candidate = candidate[np.sort(order)]
-    return np.asarray(np.sort(candidate), dtype=int)
-
-
-def _estimate_heart_from_range_bins(
-    angle_unwrapped: np.ndarray,
-    distances: np.ndarray,
-    selected_idx: int,
-    amplitude_weight: np.ndarray,
-    resp_signal: np.ndarray,
-    fs: float,
-    heart_band: tuple[float, float],
-    reject_hz: tuple[float, ...],
-    gate_half_width_m: float,
-    heart_window_s: float | None = None,
-) -> tuple[np.ndarray, np.ndarray, float, float] | None:
-    """Find heart rate from a small range-bin cluster instead of only the peak bin.
-
-    In real foil/chest recordings the strongest HR bin can sit several centimeters in front of
-    the maximum-amplitude range.  Estimate each nearby bin independently, cluster agreeing rates,
-    then recombine the best bins.  This rejects isolated false locks while recovering the real
-    pulse when breathing motion shifts the peak-distance bin.
+    For each bin, the mean power in the breathing band is divided by the median power above
+    MOTION_NOISE_BAND_MIN_HZ, where only noise is expected, and the largest ratio is returned.
+    A breathing chest moves its return far above the noise floor. A static scene or noise does
+    not. Raw IQ is used because the unwrapped phase of noise is a random walk with strong
+    low-frequency power, which looks like slow motion. The ratio does not depend on the IQ
+    amplitude scale. Returns inf when the frame rate is too low to measure the noise band.
     """
-    x = np.asarray(angle_unwrapped, dtype=float)
-    if x.ndim != 2 or x.shape[0] < 24 or fs <= 0 or len(distances) == 0:
-        return None
-    m = min(x.shape[1], len(distances))
-    if m <= 0:
-        return None
-    distances = distances[:m]
-    x = x[:, :m]
-    candidate_idx = _heart_range_candidate_indices(distances, selected_idx, amplitude_weight, gate_half_width_m)
-    candidate_idx = candidate_idx[(0 <= candidate_idx) & (candidate_idx < m)]
-    if len(candidate_idx) == 0:
-        return None
+    z = np.asarray(complex_profile, dtype=np.complex128)
+    if z.ndim != 2 or z.shape[0] < 16 or fs <= 0 or fs * 0.46 <= MOTION_NOISE_BAND_MIN_HZ:
+        return float("inf")
+    indices = np.asarray(bins, dtype=int)
+    indices = indices[(0 <= indices) & (indices < z.shape[1])]
+    if len(indices) == 0:
+        return float("inf")
+    nperseg = min(z.shape[0], max(64, int(round(fs * 10.0))))
+    freqs, psd = welch(z[:, indices], fs=fs, nperseg=nperseg, return_onesided=False, axis=0)
+    abs_freqs = np.abs(freqs)
+    breathing = (abs_freqs >= A121_RESP_BAND_HZ[0]) & (abs_freqs <= A121_RESP_BAND_HZ[1])
+    noise = (abs_freqs >= MOTION_NOISE_BAND_MIN_HZ) & (abs_freqs <= fs * 0.46)
+    if not np.any(breathing) or not np.any(noise):
+        return float("inf")
+    floor = np.maximum(np.median(psd[noise], axis=0), np.finfo(float).tiny)
+    return float(np.max(np.mean(psd[breathing], axis=0) / floor))
 
-    amp = np.asarray(amplitude_weight, dtype=float)
-    if len(amp) != m:
-        amp = np.ones(m, dtype=float)
-    local_peak = float(np.max(np.maximum(amp[candidate_idx], 0.0))) if len(candidate_idx) else 1.0
-    if not np.isfinite(local_peak) or local_peak <= 0.0:
-        local_peak = 1.0
-    selected_distance = float(distances[int(np.clip(selected_idx, 0, m - 1))])
-    half_width_m = max(HEART_RANGE_HALF_WIDTH_M, float(gate_half_width_m) * 3.0)
 
-    bin_results: list[tuple[int, float, float, float]] = []
-    for idx in candidate_idx:
-        heart_source = _remove_resp_correlated_motion(x[:, int(idx)], resp_signal, fs)
-        heart_signal = _bandpass_matrix(heart_source, fs, HEART_BAND_HZ, order=3, zero_phase=True).ravel()
-        rate_signal = _heart_rate_signal_window(heart_signal, resp_signal, fs, heart_window_s)
-        hz, confidence = estimate_band_peak_fused(rate_signal, fs, heart_band, reject_hz=reject_hz)
-        if hz <= 0.0 or confidence < HEART_BIN_MIN_CONFIDENCE:
+def _breathing_harmonic_reference(breathing: np.ndarray, resp_hz: float, fs: float) -> np.ndarray | None:
+    """Return harmonic templates that follow the measured breathing phase.
+
+    The breathing fundamental is isolated with a band-pass around ``resp_hz``. Its Hilbert phase
+    theta(t) follows every breath, so cos(k * theta) stays locked to the k-th breathing harmonic
+    even when the estimated rate is slightly off or the rate drifts. All orders from 2 up to the
+    top of the heart band are summed.
+    """
+    x = np.asarray(breathing, dtype=float)
+    if resp_hz <= 0 or fs <= 0 or len(x) < 32:
+        return None
+    high = min(HEART_BAND_HZ[1] * 1.10, fs * 0.46)
+    orders = np.arange(2, int(high / resp_hz) + 1)
+    orders = orders[orders * resp_hz >= HEART_BAND_HZ[0] * 0.80]
+    if len(orders) == 0:
+        return None
+    fundamental = _bandpass_matrix(x, fs, (0.6 * resp_hz, 1.5 * resp_hz), order=2, zero_phase=True).ravel()
+    theta = np.unwrap(np.angle(hilbert(fundamental)))
+    return np.cos(theta[:, None] * orders[None, :]).sum(axis=1)
+
+
+def _estimate_heart_from_bins(
+    phase: np.ndarray,
+    distances: np.ndarray,
+    target_idx: int,
+    fs: float,
+    band_hz: tuple[float, float],
+    resp_hz: float,
+) -> tuple[float, float, np.ndarray]:
+    """Estimate heart rate from every range bin near the target.
+
+    Returns ``(heart_hz, confidence, heart_signal)``.
+
+    Cardiac motion is weak and often shows best a few centimetres from the breathing return, so
+    each bin within HEART_SEARCH_HALF_WIDTH_M of the target is examined, also outside the gate.
+
+    Breathing harmonics are the main false peaks in the heart band. They are handled with a
+    coherence test instead of a notch, a subtraction or blanking of fixed frequencies. The
+    reference is built from the breathing phase of the target bin (see
+    _breathing_harmonic_reference), so it follows every breathing harmonic. Coherence with it is
+    high only for motion that keeps a steady phase against breathing from one segment to the next.
+    Each bin's heart-band power is multiplied by ``(1 - coherence) ** 2``, and a frequency where the
+    coherence is at least HEART_MAX_BREATHING_COHERENCE is never used as a peak. A heartbeat a few
+    bpm from a harmonic drifts in phase against it and keeps most of its power. Nothing is
+    subtracted from the signal.
+
+    Each bin's weighted spectrum is divided by its median over the heart band and averaged with
+    the bins within HEART_NEIGHBOUR_HALF_WIDTH_M. Cardiac motion shows in neighbouring bins, while
+    noise peaks do not repeat, so the average keeps a heartbeat and flattens noise. The highest
+    local maximum of that average inside ``band_hz`` is the candidate of a bin. A frequency where
+    any of the averaged bins is locked to breathing is skipped, so a harmonic cannot leak into a
+    neighbour. The most prominent candidate over all bins wins. Below HEART_PEAK_MIN_PROMINENCE no
+    rate is reported. The prominence, capped at 100, is the confidence.
+
+    heart_signal is the chosen bin's heart-band signal with the same weighting applied, so a
+    harmonic that was pushed down does not dominate the plot. Without a rate it is the weighted
+    signal of the target bin.
+
+    Limits: coherence shows that a component moves in step with breathing, not what causes it. A
+    heartbeat that sits on a harmonic looks locked to breathing and is rejected with it, so the
+    rate is 0 or comes from another bin. In synthetic tests a heartbeat in its own bins was still
+    found 1 bpm from a harmonic, but one that shares its bins with a stronger harmonic needed about
+    4 bpm of separation. Without a breathing rate there is no reference and harmonics are not
+    rejected.
+    """
+    x = np.asarray(phase, dtype=float)
+    n = x.shape[0] if x.ndim == 2 else 0
+    m = min(x.shape[1], len(distances)) if x.ndim == 2 else 0
+    empty = (0.0, 0.0, np.zeros(n, dtype=float))
+    if n < 32 or m == 0 or fs <= 0 or n / fs < HEART_MIN_WINDOW_S:
+        return empty
+    d = np.asarray(distances, dtype=float)[:m]
+    target_idx = int(np.clip(target_idx, 0, m - 1))
+    near = (np.abs(d - d[target_idx]) <= HEART_SEARCH_HALF_WIDTH_M) & (d >= A121_MIN_TARGET_DISTANCE_M)
+    bins = np.union1d(np.flatnonzero(near), [target_idx]).astype(int)
+    target_col = int(np.flatnonzero(bins == target_idx)[0])
+    filtered = _bandpass_matrix(x[:, bins], fs, HEART_BAND_HZ, order=3, zero_phase=True)
+
+    nperseg = min(n, max(64, int(round(fs * HEART_SPECTRUM_SEGMENT_S))))
+    freqs, psd = welch(filtered, fs=fs, nperseg=nperseg, detrend="linear", axis=0)
+    heart_grid = (freqs >= max(HEART_BAND_HZ[0], fs / n)) & (freqs <= min(HEART_BAND_HZ[1], fs * 0.46))
+    inner = np.flatnonzero(heart_grid & (freqs >= band_hz[0]) & (freqs <= band_hz[1]))
+    inner = inner[(inner > 0) & (inner < len(freqs) - 1)]
+    inner = inner[heart_grid[inner - 1] & heart_grid[inner + 1]]
+    if np.count_nonzero(heart_grid) < 5 or len(inner) == 0:
+        return empty
+
+    weight = np.ones_like(psd)
+    locked = np.zeros(psd.shape, dtype=bool)
+    reference = _breathing_harmonic_reference(x[:, target_idx], resp_hz, fs)
+    coherence_segment = min(int(round(fs * HEART_COHERENCE_SEGMENT_S)), n // 3)
+    if reference is not None and coherence_segment >= 16:
+        with np.errstate(divide="ignore", invalid="ignore"):
+            coh_freqs, coh = coherence(
+                filtered,
+                np.broadcast_to(reference[:, None], filtered.shape),
+                fs=fs,
+                nperseg=coherence_segment,
+                detrend="linear",
+                axis=0,
+            )
+        coh = np.clip(np.nan_to_num(coh, nan=0.0), 0.0, 1.0)
+        # Coherence only means something where the reference has power. Far from every harmonic
+        # the reference is window leakage, and a steady tone can look coherent with it by chance.
+        _, reference_power = welch(reference, fs=fs, nperseg=coherence_segment, detrend="linear")
+        coh[reference_power < HEART_REFERENCE_POWER_FLOOR * float(np.max(reference_power))] = 0.0
+        for col in range(len(bins)):
+            bin_coherence = np.interp(freqs, coh_freqs, coh[:, col])
+            weight[:, col] = (1.0 - bin_coherence) ** 2
+            locked[:, col] = bin_coherence >= HEART_MAX_BREATHING_COHERENCE
+    score = psd * weight
+
+    tiny = np.finfo(float).tiny
+    relative = score / np.maximum(np.median(score[heart_grid], axis=0), tiny)
+    averaged = np.empty_like(relative)
+    near_locked = np.zeros_like(locked)
+    for col in range(len(bins)):
+        neighbours = np.abs(d[bins] - d[bins[col]]) <= HEART_NEIGHBOUR_HALF_WIDTH_M + 1e-9
+        averaged[:, col] = relative[:, neighbours].mean(axis=1)
+        near_locked[:, col] = locked[:, neighbours].any(axis=1)
+
+    best: tuple[float, int, int] | None = None
+    for col in range(len(bins)):
+        s = averaged[:, col]
+        maxima = inner[(s[inner] >= s[inner - 1]) & (s[inner] >= s[inner + 1]) & ~near_locked[inner, col]]
+        if len(maxima) == 0:
             continue
-        amp_norm = float(np.clip(max(float(amp[int(idx)]), 0.0) / (local_peak + 1e-12), 0.0, 1.0))
-        proximity = float(
-            1.0
-            - np.clip(abs(float(distances[int(idx)]) - selected_distance) / max(half_width_m, 1e-9), 0.0, 1.0)
-        )
-        score = float(confidence * (0.55 + 0.35 * amp_norm + 0.10 * proximity))
-        bin_results.append((int(idx), float(hz), float(confidence), score))
+        peak = int(maxima[int(np.argmax(s[maxima]))])
+        if best is None or s[peak] > best[0]:
+            best = (float(s[peak]), col, peak)
 
-    if not bin_results:
-        return None
+    fft_freqs = np.fft.rfftfreq(n, d=1.0 / fs)
 
-    best_members: list[tuple[int, float, float, float]] = []
-    best_score = -1.0
-    for result in bin_results:
-        hz = result[1]
-        members = [other for other in bin_results if abs(other[1] - hz) <= HEART_BIN_CLUSTER_TOLERANCE_HZ]
-        cluster_score = float(sum(other[3] for other in members))
-        if len(members) == 1:
-            cluster_score *= 0.45
-        else:
-            cluster_score *= 1.0 + 0.08 * min(len(members) - 1, 4)
-        if cluster_score > best_score:
-            best_score = cluster_score
-            best_members = members
+    def weighted_signal(col: int) -> np.ndarray:
+        gain = np.sqrt(np.interp(fft_freqs, freqs[heart_grid], weight[heart_grid, col]))
+        return np.fft.irfft(np.fft.rfft(filtered[:, col]) * gain, n=n)
 
-    if not best_members:
-        return None
-    top_members = sorted(best_members, key=lambda item: item[3], reverse=True)[:3]
-    top_members = sorted(top_members, key=lambda item: item[0])
-    top_idx = np.asarray([item[0] for item in top_members], dtype=int)
-    weights = np.asarray([max(item[3], 1e-6) for item in top_members], dtype=float)
-    weights /= float(np.sum(weights)) + 1e-12
-    ref_col = int(np.argmax(weights))
-
-    heart_source = _aligned_weighted_average(x[:, top_idx], weights, ref_col)
-    heart_source = _remove_resp_correlated_motion(heart_source, resp_signal, fs)
-    heart_signal = _bandpass_matrix(heart_source, fs, HEART_BAND_HZ, order=3, zero_phase=True).ravel()
-    rate_signal = _heart_rate_signal_window(heart_signal, resp_signal, fs, heart_window_s)
-    heart_hz, heart_confidence = estimate_band_peak_fused(rate_signal, fs, heart_band, reject_hz=reject_hz)
-
-    member_weight_sum = float(np.sum([item[3] for item in top_members])) + 1e-12
-    clustered_hz = float(sum(item[1] * item[3] for item in top_members) / member_weight_sum)
-    clustered_confidence = float(max(item[2] for item in top_members))
-    if heart_hz <= 0.0 or abs(heart_hz - clustered_hz) > HEART_BIN_CLUSTER_TOLERANCE_HZ * 1.35:
-        heart_hz = clustered_hz
-        heart_confidence = max(heart_confidence, clustered_confidence * 0.85)
-    else:
-        heart_confidence = max(heart_confidence, clustered_confidence * 0.75)
-    return heart_source, heart_signal, float(heart_hz), float(min(heart_confidence, 100.0))
+    if best is None or best[0] < HEART_PEAK_MIN_PROMINENCE:
+        return 0.0, 0.0, weighted_signal(target_col)
+    prominence, col, peak = best
+    y0, y1, y2 = np.log(score[peak - 1 : peak + 2, col] + tiny)
+    heart_hz = float(freqs[peak])
+    denom = y0 - 2.0 * y1 + y2
+    if abs(denom) > 1e-12:
+        heart_hz += float(np.clip(0.5 * (y0 - y2) / denom, -0.5, 0.5)) * float(freqs[1] - freqs[0])
+    return heart_hz, float(min(prominence, 100.0)), weighted_signal(col)
 
 
 def _weighted_fft_peak(
@@ -1909,7 +1900,7 @@ def analyze_a121_vitals(
 
             # Use clutter removal for target/weight amplitudes. Respiration rate itself is
             # estimated below by Acconeer's BreathingProcessor; this centered differential phase
-            # path remains for target scoring, plotting, and the experimental heart candidate.
+            # path remains for target scoring, plotting, and the heart-rate search.
             static_cutoff = _valid_band_for_fs(A121_RESP_BAND_HZ, fs)
             zm_profile = complex_profile - _lowpass_static_complex(
                 complex_profile,
@@ -1968,13 +1959,8 @@ def analyze_a121_vitals(
                 candidate_idx = np.arange(start_idx, end_idx, dtype=int)
                 if len(candidate_idx) == 0:
                     candidate_idx = np.asarray([selected_idx], dtype=int)
-                amp = amplitude_weight[candidate_idx] if len(amplitude_weight) == m else np.ones(len(candidate_idx))
-                weights = np.maximum(np.asarray(amp, dtype=float), 0.0)
-                if float(np.sum(weights)) <= 0.0:
-                    weights = np.ones(len(candidate_idx), dtype=float)
-                weights /= float(np.sum(weights)) + 1e-12
             else:
-                candidate_idx, weights = _candidate_weights(
+                candidate_idx, _ = _candidate_weights(
                     distances,
                     selected_idx,
                     amplitude_weight,
@@ -1983,8 +1969,6 @@ def analyze_a121_vitals(
                     max_bins=3,
                 )
             candidate_bins = int(len(candidate_idx))
-            ref_matches = np.flatnonzero(candidate_idx == selected_idx)
-            ref_col = int(ref_matches[0]) if len(ref_matches) else int(np.argmax(weights))
 
             raw_phase = angle_unwrapped[:, selected_idx]
             raw_i = np.real(zm_profile[:, selected_idx])
@@ -2052,61 +2036,23 @@ def analyze_a121_vitals(
                 else 0.0
             )
 
-            harmonic_rejects: tuple[float, ...]
-            if resp_hz_for_harmonics > 0:
-                harmonic_rejects = tuple(
-                    resp_hz_for_harmonics * order
-                    for order in range(2, 8)
-                    if HEART_BAND_HZ[0] * 0.85 <= resp_hz_for_harmonics * order <= HEART_BAND_HZ[1] * 1.05
-                )
-            else:
-                harmonic_rejects = ()
-
-            heart_source = _aligned_weighted_average(angle_unwrapped[:, candidate_idx], weights, ref_col)
-            # Breathing can dominate the heart band through nonlinear harmonics.  Remove only the
-            # part of the heart source that is coherent with the measured respiration waveform,
-            # then let the FFT/peak-spacing validator decide which cardiac candidate to trust.
-            heart_source = _remove_resp_correlated_motion(heart_source, resp_signal, fs)
-            heart_signal = _bandpass_matrix(heart_source, fs, HEART_BAND_HZ, order=3, zero_phase=True).ravel()
-            heart_rate_signal = _heart_rate_signal_window(heart_signal, resp_signal, fs, heart_window_s)
-            heart_band = _heart_search_band(heart_prior_hz, heart_prior_std_hz)
-            heart_hz, heart_confidence = estimate_band_peak_fused(
-                heart_rate_signal,
-                fs,
-                heart_band,
-                reject_hz=harmonic_rejects,
-            )
-            range_heart = _estimate_heart_from_range_bins(
-                angle_unwrapped,
+            # Heart rate: search every range bin near the target and weight breathing harmonics
+            # down by their coherence with the breathing phase (see _estimate_heart_from_bins).
+            # Averaging only the bins around the target missed heart motion a few centimetres
+            # away, and notching, subtracting or blanking harmonics also removed real heart rates
+            # close to a harmonic. Without heart_window_s the whole analysed window is used.
+            heart_phase = angle_unwrapped
+            if heart_window_s is not None and np.isfinite(float(heart_window_s)) and heart_window_s > 0:
+                heart_phase = angle_unwrapped[-max(1, int(round(float(heart_window_s) * fs))) :]
+            heart_hz, heart_confidence, heart_signal = _estimate_heart_from_bins(
+                heart_phase,
                 distances,
                 selected_idx,
-                median_amp,
-                resp_signal,
                 fs,
-                heart_band,
-                harmonic_rejects,
-                half_width,
-                heart_window_s=heart_window_s,
+                _heart_search_band(heart_prior_hz, heart_prior_std_hz),
+                resp_hz_for_harmonics,
             )
-            if range_heart is not None:
-                range_source, range_signal, range_hz, range_confidence = range_heart
-                if range_confidence >= max(
-                    heart_confidence * 1.10,
-                    HEART_RATE_CONFIDENCE_MIN,
-                    HEART_RANGE_OVERRIDE_MIN_CONFIDENCE,
-                ):
-                    heart_source = range_source
-                    heart_signal = range_signal
-                    heart_rate_signal = _heart_rate_signal_window(heart_signal, resp_signal, fs, heart_window_s)
-                    heart_hz = range_hz
-                    heart_confidence = range_confidence
-            # NOTE: _near_resp_harmonic post-check was removed. It zeroed out valid heart
-            # rate estimates when they happened to be near a respiratory harmonic, which is
-            # extremely common. The narrowed FFT notch above provides sufficient suppression
-            # for true harmonic artifacts without blanking the real heart rate.
-            if len(heart_rate_signal) / max(fs, 1e-9) < 10.0:
-                heart_hz = 0.0
-                heart_confidence = 0.0
+            motion_snr = _breathing_motion_snr(complex_profile, fs, candidate_idx)
 
             search_mask = distances >= A121_MIN_TARGET_DISTANCE_M if len(distances) else np.asarray([], dtype=bool)
             if not np.any(search_mask):
@@ -2146,11 +2092,18 @@ def analyze_a121_vitals(
                 and heart_confidence < HEART_RATE_STRONG_LOCK_CONFIDENCE
             ):
                 heart_hz = 0.0
-                heart_confidence = 0.0
+            # A static scene can have a strong return and a random breathing estimate, but its IQ
+            # does not move. Without Acconeer's own rate, report rates only when it does.
+            if recorded_resp_hz <= 0.0 and motion_snr < BREATHING_MOTION_SNR_MIN:
+                resp_hz = 0.0
+                heart_hz = 0.0
             if not present:
                 resp_hz = 0.0
                 heart_hz = 0.0
+            # A rejected rate must not keep a confidence that looks like evidence.
+            if resp_hz == 0.0:
                 resp_confidence = 0.0
+            if heart_hz == 0.0:
                 heart_confidence = 0.0
 
             signal_quality = float(
@@ -2269,7 +2222,9 @@ def analyze_a121_vitals(
     if not present:
         resp_hz = 0.0
         heart_hz = 0.0
+    if resp_hz == 0.0:
         resp_confidence = 0.0
+    if heart_hz == 0.0:
         heart_confidence = 0.0
     signal_quality = float(np.clip(0.25 * min(resp_confidence / 5.0, 1.0) + 0.25 * min(heart_confidence / 5.0, 1.0) + (0.25 if present else 0.0), 0.0, 1.0))
 
