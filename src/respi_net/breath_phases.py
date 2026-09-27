@@ -37,13 +37,16 @@ CLASS_COLOURS = ("#3b82f6", "#f59e0b", "#22c55e", "#dc2626", "#9ca3af")
 NOISE_EXPORT_CODE = 999
 IGNORE_EXPORT_CODE = -1
 
-# What may follow what. A hold is entered only from the breath it holds and
-# left only by the opposite breath; noise can interrupt and resume anything.
+# What may follow what.  A hold is named after the breath it interrupts, so it
+# can only be entered from that breath -- exhale straight into "hold after
+# inhale" is impossible by definition.  It can be left either way: a breath
+# can be held at any lung volume, and a breath held halfway out is often
+# finished before the next inhale.  Noise can interrupt and resume anything.
 ALLOWED_TRANSITIONS: dict[int, frozenset[int]] = {
     INHALE: frozenset({EXHALE, HOLD_AFTER_INHALE, NOISE}),
-    HOLD_AFTER_INHALE: frozenset({EXHALE, NOISE}),
+    HOLD_AFTER_INHALE: frozenset({EXHALE, INHALE, NOISE}),
     EXHALE: frozenset({INHALE, HOLD_AFTER_EXHALE, NOISE}),
-    HOLD_AFTER_EXHALE: frozenset({INHALE, NOISE}),
+    HOLD_AFTER_EXHALE: frozenset({INHALE, EXHALE, NOISE}),
     NOISE: frozenset({INHALE, HOLD_AFTER_EXHALE, EXHALE, HOLD_AFTER_INHALE}),
 }
 

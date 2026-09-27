@@ -190,6 +190,7 @@ def align_cues(
     lag_s: float | None = None,
     search_before_s: float = 0.6,
     search_after_s: float = 0.9,
+    hold_end_before_s: float = 1.5,
     min_phase_s: float = 0.4,
     mask_s: float = 0.2,
     fallback_mask_s: float = 0.5,
@@ -260,17 +261,40 @@ def align_cues(
                         method, moment = "stop", float(time_s[window[k]])
                         break
             elif (before, after) in ((HOLD_AFTER_EXHALE, INHALE), (HOLD_AFTER_INHALE, EXHALE)):
+                # A breath held halfway is often finished before the next one
+                # starts: exhale, hold, a little more exhale, then inhale.  So
+                # the first sustained motion either way ends the hold, and the
+                # search starts earlier, because people leave a hold as soon
+                # as they feel the cue coming.
                 rising = after == INHALE
-                moving = (velocity[window] > threshold) if rising else (velocity[window] < -threshold)
+                window = _window(time_s, max(expected - hold_end_before_s, previous_time + min_phase_s), hi)
+                v = velocity[window]
+                towards = (v > threshold) if rising else (v < -threshold)
+                onward = (v < -threshold) if rising else (v > threshold)
                 for k in range(1, len(window)):
-                    if not moving[k - 1] and _sustained(moving, k, start_run):
-                        # Back up to where the motion began, not where it got fast.
-                        onset = k
-                        weak = (velocity[window] > 0.3 * threshold) if rising else (velocity[window] < -0.3 * threshold)
-                        while onset > 1 and weak[onset - 1]:
-                            onset -= 1
+                    new_breath = not towards[k - 1] and _sustained(towards, k, start_run)
+                    carried_on = not onward[k - 1] and _sustained(onward, k, start_run)
+                    if not (new_breath or carried_on):
+                        continue
+                    # Back up to where the motion began, not where it got fast.
+                    weak = (v > 0.3 * threshold) if rising == new_breath else (v < -0.3 * threshold)
+                    onset = k
+                    while onset > 1 and weak[onset - 1]:
+                        onset -= 1
+                    if new_breath:
                         method, moment = "start", float(time_s[window[onset]])
-                        break
+                    else:
+                        # Finishing the held breath delays the next one, so its
+                        # turn is looked for up to 2.5 s past the cue rather
+                        # than within the usual window.
+                        rest = _window(time_s, float(time_s[window[k]]), min(limit_hi, expected + 2.5))
+                        turn = int(np.argmin(signal[rest]) if rising else np.argmax(signal[rest]))
+                        if 0 < turn < len(rest) - 1:
+                            continued = EXHALE if rising else INHALE
+                            boundaries.append(Boundary(cue_s, expected, float(time_s[window[onset]]), before, continued, "start"))
+                            before = continued
+                            method, moment = "turn", float(time_s[rest[turn]])
+                    break
 
         if method == "fallback":
             moment = max(expected, previous_time + min_phase_s)

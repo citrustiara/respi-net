@@ -5,16 +5,19 @@ echo strength in dB -- and one label per sample.  Windows are cut and
 normalised only when a dataset is exported, so the same runs can feed any
 window length later.
 
-Normalisation is per window: chest and velocity are divided by the window's
-breathing scale, so deep coached breaths and sub-millimetre sleep breaths
-look alike to the network; phases are about the shape of a breath, not its
-depth.  Splits are by run or a coarser group: windows cut from one recording
-never land on both sides of a split.
+Chest and velocity are divided by the breathing scale of the *preceding*
+30 s, so deep coached breaths and sub-millimetre sleep breaths look alike to
+the network -- phases are about the shape of a breath, not its depth -- and a
+sample is scaled exactly as it would be live, from the past only.  The first
+seconds of every window are context, not training targets: a causal model
+sees a full receptive field there only in a live stream, so those samples
+are labelled IGNORE.  Splits are by run or a coarser group: windows cut from
+one recording never land on both sides of a split.
 
 Exported file (``.npz``): ``X`` float32 [N, C, W], ``y`` int8 [N, W] (0-4,
 -1 = ignore), ``split`` [N] ("train"/"val"/"test"), ``run_id`` [N],
-``start_s`` float32 [N], ``meta`` JSON (fs, window_s, stride_s, channels,
-class_names, runs).
+``start_s`` float32 [N], ``meta`` JSON (fs, window_s, stride_s, warmup_s,
+channels, class_names, runs).
 """
 
 from __future__ import annotations
@@ -94,21 +97,36 @@ def load_run(path: Path) -> LabelledRun:
         )
 
 
-def normalise_window(window: np.ndarray, *, min_scale: float = 1e-3) -> np.ndarray:
-    """Per-window scaling: chest and velocity by the breathing scale, echo about its median.
+def causal_normalise(
+    features: np.ndarray,
+    fs: float,
+    *,
+    history_s: float = 30.0,
+    step_s: float = 0.5,
+    min_scale: float = 1e-3,
+) -> np.ndarray:
+    """Scale a run the way a live system can: from the past ``history_s`` only.
 
-    The scale is the 5th-95th percentile spread of the chest trace, a robust
-    breath depth; ``min_scale`` keeps an empty window from being blown up
-    into noise.
+    Every ``step_s`` the chest median and breathing scale (5th-95th
+    percentile spread, a robust breath depth) and the echo median are taken
+    over the samples up to that moment; chest is centred and divided by the
+    scale, velocity divided by it, echo centred.  ``min_scale`` keeps a still
+    stretch from being blown up into noise.  Until ``history_s`` has passed
+    the history is simply shorter.
     """
 
-    window = np.asarray(window, dtype=float)
-    out = np.empty_like(window)
-    chest = window[0]
-    scale = max(float(np.percentile(chest, 95) - np.percentile(chest, 5)), min_scale)
-    out[0] = (chest - np.median(chest)) / scale
-    out[1] = window[1] / scale
-    out[2:] = window[2:] - np.median(window[2:], axis=-1, keepdims=True)
+    features = np.asarray(features, dtype=float)
+    out = np.empty_like(features)
+    history = max(1, int(round(history_s * fs)))
+    step = max(1, int(round(step_s * fs)))
+    for start in range(0, features.shape[1], step):
+        stop = min(features.shape[1], start + step)
+        past = features[:, max(0, start - history) : start + 1]
+        chest = past[0]
+        scale = max(float(np.percentile(chest, 95) - np.percentile(chest, 5)), min_scale)
+        out[0, start:stop] = (features[0, start:stop] - np.median(chest)) / scale
+        out[1, start:stop] = features[1, start:stop] / scale
+        out[2:, start:stop] = features[2:, start:stop] - np.median(past[2:], axis=-1, keepdims=True)
     out[~np.isfinite(out)] = 0.0
     return out.astype(np.float32)
 
@@ -116,22 +134,26 @@ def normalise_window(window: np.ndarray, *, min_scale: float = 1e-3) -> np.ndarr
 def make_windows(
     runs: Sequence[LabelledRun],
     *,
-    window_s: float = 30.0,
+    window_s: float = 60.0,
     stride_s: float = 5.0,
+    warmup_s: float = 20.0,
     min_labelled_fraction: float = 0.25,
 ) -> dict[str, np.ndarray]:
-    """Normalised windows fully inside each run, skipping mostly unlabelled ones."""
+    """Causally normalised windows inside each run; the first ``warmup_s`` of each is context only."""
 
     xs, ys, run_ids, starts = [], [], [], []
     for run in runs:
         width = int(round(window_s * run.fs))
         stride = max(1, int(round(stride_s * run.fs)))
+        warmup = min(width, int(round(warmup_s * run.fs)))
+        normalised = causal_normalise(run.features, run.fs)
         for start in range(0, len(run.labels) - width + 1, stride):
-            labels = run.labels[start : start + width]
-            if np.mean(labels != IGNORE) < min_labelled_fraction:
+            labels = run.labels[start : start + width].astype(np.int8)
+            labels[:warmup] = IGNORE
+            if np.mean(labels[warmup:] != IGNORE) < min_labelled_fraction:
                 continue
-            xs.append(normalise_window(run.features[:, start : start + width]))
-            ys.append(labels.astype(np.int8))
+            xs.append(normalised[:, start : start + width])
+            ys.append(labels)
             run_ids.append(run.run_id)
             starts.append(float(run.time_s[start]))
     if not xs:
@@ -189,8 +211,9 @@ def export_dataset(
     runs: Sequence[LabelledRun],
     path: Path,
     *,
-    window_s: float = 30.0,
+    window_s: float = 60.0,
     stride_s: float = 5.0,
+    warmup_s: float = 20.0,
     splits: Mapping[str, str] | None = None,
     min_labelled_fraction: float = 0.25,
     description: str = "",
@@ -201,7 +224,9 @@ def export_dataset(
     if len(fs_values) != 1:
         raise ValueError(f"Runs must share one sample rate, got {sorted(fs_values)}")
     splits = dict(splits or assign_splits(runs))
-    windows = make_windows(runs, window_s=window_s, stride_s=stride_s, min_labelled_fraction=min_labelled_fraction)
+    windows = make_windows(
+        runs, window_s=window_s, stride_s=stride_s, warmup_s=warmup_s, min_labelled_fraction=min_labelled_fraction
+    )
     split = np.array([splits[run_id] for run_id in windows["run_id"]])
     counts = {
         name: {
@@ -221,9 +246,10 @@ def export_dataset(
         "fs": float(next(iter(fs_values))),
         "window_s": float(window_s),
         "stride_s": float(stride_s),
+        "warmup_s": float(warmup_s),
         "channels": list(CHANNELS),
         "class_names": list(CLASS_NAMES),
-        "normalisation": "per window: chest and velocity / (p95-p5 of chest); echo_db minus median",
+        "normalisation": "causal, trailing 30 s: chest minus median and / (p95-p5 of chest); velocity / same; echo_db minus median",
         "runs": {run.run_id: {"group": run.group, "subject": run.subject, "split": splits[run.run_id], **run.meta} for run in runs},
         "splits": counts,
     }

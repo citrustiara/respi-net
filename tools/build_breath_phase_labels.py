@@ -14,7 +14,7 @@ and writes, under ``data/processed/breath_phases/``:
 * ``labels/<run>_labels.csv`` and ``<run>_boundaries.csv`` -- for inspection,
 * ``plots/<run>.png`` and ``plots/coach_labels.pdf`` -- every run, labels over the signal,
 * ``alignment.csv``, ``baseline.csv``, ``summary.json``,
-* ``dataset_coach_v1.npz`` -- 30 s windows split by run.
+* ``dataset_coach_v1.npz`` -- 60 s windows (first 20 s context only) split by run.
 
 ``--thesis-figures`` also redraws the two figures used in the thesis.
 
@@ -290,8 +290,9 @@ def figure_filtering(runs: list[CoachRun], path: Path) -> dict[str, float]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out-dir", type=Path, default=OUT_DIR)
-    parser.add_argument("--window-s", type=float, default=30.0)
+    parser.add_argument("--window-s", type=float, default=60.0)
     parser.add_argument("--stride-s", type=float, default=5.0)
+    parser.add_argument("--warmup-s", type=float, default=20.0, help="Context at the start of each window that is not a training target.")
     parser.add_argument("--thesis-figures", action="store_true", help="Also redraw the thesis figures in docs/thesis/figures.")
     args = parser.parse_args()
 
@@ -347,6 +348,7 @@ def main() -> int:
         out / "dataset_coach_v1.npz",
         window_s=args.window_s,
         stride_s=args.stride_s,
+        warmup_s=args.warmup_s,
         description="Coach recordings (A121, one subject), labels snapped to the radar's own turning points.",
     )
     shifts_arr = np.asarray(shifts)

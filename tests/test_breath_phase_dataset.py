@@ -12,7 +12,7 @@ from respi_net.nn_dataset import (
     labelled_run,
     load_dataset,
     load_run,
-    normalise_window,
+    causal_normalise,
     save_run,
 )
 from respi_net.phase_baseline import detect_phases
@@ -54,12 +54,15 @@ def test_baseline_finds_breaths_and_the_hold() -> None:
     assert realtime.accuracy < offline.accuracy
 
 
-def test_normalised_windows_ignore_breath_depth() -> None:
+def test_causal_normalisation_ignores_depth_and_the_future() -> None:
     time_s, chest, _ = _paced_with_hold()
     deep = np.vstack([chest, np.gradient(chest) * FS, np.full(len(chest), 50.0)])
     shallow = np.vstack([0.05 * chest, np.gradient(0.05 * chest) * FS, np.full(len(chest), 20.0)])
-    assert np.allclose(normalise_window(deep), normalise_window(shallow), atol=1e-5)
-    assert abs(float(np.median(normalise_window(deep)[0]))) < 1e-6
+    # After the first seconds of history (warm-up) depth no longer matters.
+    assert np.allclose(causal_normalise(deep, FS)[:, 100:], causal_normalise(shallow, FS)[:, 100:], atol=1e-4)
+    changed_future = deep.copy()
+    changed_future[:, 1200:] *= 7.0
+    assert np.allclose(causal_normalise(deep, FS)[:, :1200], causal_normalise(changed_future, FS)[:, :1200])
 
 
 def test_runs_round_trip_and_export_splits_by_run(tmp_path: Path) -> None:
@@ -74,10 +77,11 @@ def test_runs_round_trip_and_export_splits_by_run(tmp_path: Path) -> None:
 
     splits = assign_splits(runs, seed=3)
     assert set(splits.values()) == {"train", "val", "test"}
-    meta = export_dataset(runs, tmp_path / "data.npz", window_s=30.0, stride_s=10.0, splits=splits)
+    meta = export_dataset(runs, tmp_path / "data.npz", window_s=60.0, stride_s=10.0, warmup_s=20.0, splits=splits)
     data = load_dataset(tmp_path / "data.npz")
-    assert data["X"].shape[1:] == (len(CHANNELS), 600)
-    assert data["y"].shape == (data["X"].shape[0], 600)
+    assert data["X"].shape[1:] == (len(CHANNELS), 1200)
+    assert data["y"].shape == (data["X"].shape[0], 1200)
+    assert np.all(data["y"][:, :400] == -1)
     for run_id in np.unique(data["run_id"]):
         assert len(set(data["split"][data["run_id"] == run_id])) == 1
     assert meta["fs"] == pytest.approx(FS)

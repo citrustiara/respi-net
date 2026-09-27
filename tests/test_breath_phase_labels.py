@@ -192,3 +192,30 @@ def test_alignment_flips_an_upside_down_reference() -> None:
     result = align_cues(time_s, chest, cues, fs=FS)
     assert result.sign == -1.0
     assert result.lag_s == pytest.approx(0.3, abs=0.1)
+
+
+def test_a_breath_finished_after_the_hold_is_labelled_as_that_breath() -> None:
+    # Exhale stopped halfway, 15 s hold, the rest of the exhale, then inhale:
+    # what people often do when a hold cue catches them mid-breath.
+    cues = _coach_cues()
+    time_s = np.arange(0, 92, 1 / FS)
+    lag = 0.4
+    chest = 8.0 * _breathing_from_boundaries(time_s, cues, [float(cue["start_s"]) + lag for cue in cues[1:]])
+    hold_start, hold_end, turn = 45.0 + lag, 60.0 + lag, 61.0 + lag
+    last_exhale = (time_s >= 42.0 + lag) & (time_s < hold_start)
+    u = (time_s[last_exhale] - (42.0 + lag)) / 3.0
+    chest[last_exhale] = 8.0 * (1.0 - 0.6 * (0.5 - 0.5 * np.cos(np.pi * u)))
+    chest[(time_s >= hold_start) & (time_s < hold_end)] = 8.0 * 0.4
+    rest = (time_s >= hold_end) & (time_s < turn)
+    chest[rest] = 8.0 * 0.4 * (0.5 + 0.5 * np.cos(np.pi * (time_s[rest] - hold_end) / (turn - hold_end)))
+    inhale = (time_s >= turn) & (time_s < 62.0 + lag)
+    chest[inhale] = 8.0 * (0.5 - 0.5 * np.cos(np.pi * (time_s[inhale] - turn) / (62.0 + lag - turn)))
+
+    result = align_cues(time_s, chest, cues, fs=FS)
+
+    kinds = [(b.before, b.after, b.method) for b in result.boundaries]
+    assert (HOLD_AFTER_EXHALE, EXHALE, "start") in kinds
+    assert transitions_allowed(result.labels)
+    assert result.labels[np.argmin(np.abs(time_s - (hold_end + 0.3)))] == EXHALE
+    assert result.labels[np.argmin(np.abs(time_s - (turn + 0.5)))] == INHALE
+    assert result.labels[np.argmin(np.abs(time_s - 52.0))] == HOLD_AFTER_EXHALE
