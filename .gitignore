@@ -44,3 +44,5 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 data/archive/
+# Derived labels, datasets and inspection charts (rebuilt by tools/build_breath_phase_labels.py)
+data/processed/
