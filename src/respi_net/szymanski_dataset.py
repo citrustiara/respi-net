@@ -26,23 +26,52 @@ So -1 is exhale, 0 hold after exhale, 1 inhale, 2 hold after inhale and 999
 noise; with that reading every common transition in the files is a natural
 one (exhale, hold, inhale, hold, exhale).  Here they become this project's
 classes, which are the paper's codes.
+
+The published labels are early, for two reasons found in the dataset's own
+code (``code/brp-ml-model-main/scripts``).  The labelling tool plots the
+first column of the labelled files, a smoothed and normalised copy of the
+signal, and not the raw signal:
+
+* the smoothing is ``np.convolve(x, ones(w) / w, mode="valid")`` written
+  against the untrimmed time stamps, so every value is the mean of the *next*
+  ``w`` samples and the copy runs (w-1)/2 samples ahead of the raw signal --
+  2 samples (0.2 s) on the belt, 5 (0.2 s) on the iNode accelerometer.
+  Rebuilt from the raw files with their code, the column matches exactly for
+  the whole iNode session, and the labelled turns sit 0.2 s before the turns
+  of the raw signal;
+* the normalisation is a running min-max over the last 15 s, so a breath
+  deeper than anything in that window is pinned at exactly +1 or -1 while it
+  is still moving.  The end of a deep inhale looks flat there and was
+  labelled as the start of the hold.
+
+:func:`corrected_labels` undoes both: it delays the labels by the smoothing
+lead and lets a breath run into a labelled hold for as long as the chest
+still moves that breath's way.  A quick settle the other way at the start of
+a hold (a little air let out after a deep inhale) is neither breath nor hold
+and is left unlabelled.  The WitMotion labels were copied from the belt by
+time stamp (``transfer_labels.py``) and sit 0.2-0.8 s early depending on the
+file, so no fixed rule corrects them; they are left as published.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from .breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, NOISE
+from .breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, NOISE, label_runs
 from .chest_signal import ChestSignal, light_filter
 from .nn_dataset import LabelledRun, labelled_run
 from .paths import DATA_DIR
 
 DEFAULT_ROOT = DATA_DIR / "external" / "szymanski2025" / "unpacked"
 FILE_CODE_TO_CLASS = {-1: EXHALE, 0: HOLD_AFTER_EXHALE, 1: INHALE, 2: HOLD_AFTER_INHALE, 999: NOISE}
+# Moving-average width in their preprocessing (categorise_automatically.py).
+SMOOTHING_WINDOW = {"tensometer": 5, "inode_acc": 11, "wit_motion_acc": 11}
+UNRELIABLE_TIMING = frozenset({"wit_motion_acc"})
+HOLD_OF = {INHALE: HOLD_AFTER_INHALE, EXHALE: HOLD_AFTER_EXHALE}
 
 
 @dataclass(frozen=True)
@@ -92,8 +121,12 @@ def read_labels(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return frame["seconds"].to_numpy(dtype=float), codes.map(FILE_CODE_TO_CLASS).to_numpy(dtype=np.int8)
 
 
-def recordings(root: Path = DEFAULT_ROOT) -> list[SzymanskiRecording]:
-    """Every labelled recording, with its raw signal cut to the labelled samples."""
+def recordings(root: Path = DEFAULT_ROOT, *, corrected: bool = True) -> list[SzymanskiRecording]:
+    """Every labelled recording, with its raw signal cut to the labelled samples.
+
+    With ``corrected`` (the default) the labels go through
+    :func:`corrected_labels`; without it they are as published.
+    """
 
     data_dir = root / "data"
     if not data_dir.is_dir():
@@ -110,8 +143,77 @@ def recordings(root: Path = DEFAULT_ROOT) -> list[SzymanskiRecording]:
         name = labelled.stem.split("_", 1)[1]
         subject = {"second_subject": "S2", "third_subject": "S3"}.get(name, "S1")
         paired = raw[nearest_index(raw_time, label_time)]
-        found.append(SzymanskiRecording(sensor, group, name, subject, label_time, paired, labels))
+        recording = SzymanskiRecording(sensor, group, name, subject, label_time, paired, labels)
+        if corrected:
+            recording = replace(recording, labels=corrected_labels(recording))
+        found.append(recording)
     return found
+
+
+def delay_labels(labels: np.ndarray, samples: int) -> np.ndarray:
+    """``labels`` moved ``samples`` later; the samples left uncovered get IGNORE."""
+
+    delayed = np.full_like(labels, IGNORE)
+    delayed[samples:] = labels[: len(labels) - samples]
+    return delayed
+
+
+def fix_hold_starts(
+    labels: np.ndarray,
+    chest: np.ndarray,
+    fs: float,
+    *,
+    motion_fraction: float = 0.2,
+    max_extend_s: float = 1.5,
+    max_settle_s: float = 2.0,
+    settle_gap_s: float = 0.3,
+    min_stop_s: float = 0.2,
+) -> np.ndarray:
+    """Start each hold where the chest stops moving the preceding breath's way.
+
+    ``chest`` rises on inhale.  Moving means faster than ``motion_fraction``
+    of the recording's typical breathing speed (80th percentile of |velocity|),
+    as in :func:`respi_net.label_alignment.align_cues`; the breath has stopped
+    once it stays slower than that for ``min_stop_s``, so a brief slowdown in
+    a two-step inhale does not end it.  Boundaries only move later and never
+    past the end of the hold; a settle the other way right after the breath
+    becomes IGNORE.
+    """
+
+    labels = np.array(labels, copy=True)
+    velocity = np.gradient(light_filter(chest - np.median(chest), fs, 2.0)) * fs
+    threshold = motion_fraction * float(np.percentile(np.abs(velocity), 80))
+    pause = max(1, int(round(min_stop_s * fs)))
+    runs = label_runs(labels)
+    for (_, _, before), (start, stop, after) in zip(runs[:-1], runs[1:]):
+        if before not in HOLD_OF or after != HOLD_OF[before]:
+            continue
+        direction = 1.0 if before == INHALE else -1.0
+        limit = min(stop, start + int(round(max_extend_s * fs)))
+        end = start
+        while end < limit and np.any(direction * velocity[end : min(limit, end + pause)] > threshold):
+            end += 1
+        labels[start:end] = before
+        # The settle starts once the chest has turned, which takes a moment.
+        limit = min(stop, end + int(round(max_settle_s * fs)))
+        turn = min(limit, end + int(round(settle_gap_s * fs)))
+        settled = next((index for index in range(end, turn) if -direction * velocity[index] > threshold), None)
+        if settled is None:
+            continue
+        while settled < limit and -direction * velocity[settled] > threshold:
+            settled += 1
+        labels[end:settled] = IGNORE
+    return labels
+
+
+def corrected_labels(recording: SzymanskiRecording) -> np.ndarray:
+    """The recording's labels with the timing faults described above undone."""
+
+    if recording.sensor in UNRELIABLE_TIMING:
+        return recording.labels
+    lead = (SMOOTHING_WINDOW[recording.sensor] - 1) // 2
+    labels = delay_labels(recording.labels, lead)
+    return fix_hold_starts(labels, orientation(recording) * recording.raw, recording.fs)
 
 
 def orientation(recording: SzymanskiRecording) -> float:
