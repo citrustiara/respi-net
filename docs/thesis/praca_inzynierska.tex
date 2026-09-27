@@ -3034,83 +3034,114 @@ z~etykietami to próbki surowego zapisu wybrane po czasie, lecz nie zawsze od
 pierwszej do ostatniej, więc próbki łączy się po czasie, a~nie po numerze
 wiersza.
 
-Na tych danych sprawdzono detektor deterministyczny
+Etykiety ręczne są przesunięte w~czasie z~dwóch powodów, które widać
+w~kodzie dołączonym do zbioru. Narzędzie do etykietowania pokazuje nie
+surowy sygnał, lecz jego wygładzoną i~znormalizowaną kopię. Wygładzanie to
+średnia ruchoma liczona funkcją \texttt{np.convolve} w~trybie
+\texttt{valid} i~zapisana z~czasami nieprzyciętego sygnału, więc każda
+wartość jest średnią \emph{następnych} pięciu próbek: kopia wyprzedza sygnał
+pasa o~dwie próbki (\SI{0.2}{s}; dla akcelerometru iNode o~pięć próbek,
+również \SI{0.2}{s}). Odtworzona tym samym kodem z~surowych plików, kopia
+zgadza się co do próbki w~23 z~24 plików sesji z~iNode. Etykiety dziedziczą
+to wyprzedzenie: opublikowane granice wdech--wydech i~wydech--wdech leżą
+w~medianie \SI{0.2}{s} przed zwrotem sygnału pasa, a~tylko 11--13\%
+z~nich mieści się w~$\pm$\SI{0.1}{s}. Normalizacja jest ponadto kroczącym
+min--max z~ostatnich \SI{15}{s}, więc oddech głębszy niż wszystkie w~tym
+oknie ma w~kopii wartość dokładnie $+1$ albo $-1$, choć klatka jeszcze się
+porusza; koniec głębokiego wdechu wygląda tam płasko i~bywał oznaczany jako
+początek pauzy.
+
+Przed użyciem etykiety pasa przesunięto więc o~dwie próbki, a~pauzę po
+oddechu rozpoczęto dopiero tam, gdzie klatka przestaje poruszać się
+w~kierunku tego oddechu (przez \SI{0.2}{s} wolniej niż 20\% typowej
+prędkości). Szybkie osiadanie tuż po głębokim wdechu --- niewielki wydech,
+który etykiety wliczają do pauzy --- nie jest ani wydechem (płuca pozostają
+prawie pełne), ani bezruchem, dlatego pozostawiono je bez etykiety
+(rys.~\ref{fig:fazy-szymanski}). Po korekcie granice wdech--wydech
+i~wydech--wdech leżą w~medianie dokładnie na zwrocie pasa, a~44--56\% z~nich
+mieści się w~$\pm$\SI{0.1}{s}, czyli w~jednej próbce. Zmieniło się 21\% próbek, a~2\% zostało bez etykiety. Etykiet
+akcelerometru WitMotion nie korygowano: skrypt zbioru kopiuje etykiety
+z~pasa na akcelerometr według znaczników czasu, a~w~tej sesji ich
+przesunięcie względem sygnału akcelerometru waha się między plikami od 0,2
+do \SI{0.8}{s}, więc nie da się go usunąć jedną regułą.
+
+Na poprawionych etykietach sprawdzono detektor deterministyczny
 (podrozdz.~\ref{sec:sieci-baseline}) bez żadnego dostrajania
-(tab.~\ref{tab:fazy-szymanski}). Zgodność z~etykietami ręcznymi pasa
-wynosi 70\%, wyraźnie mniej niż na nagraniach sterowanych. Główną
-przyczyną jest definicja pauzy. W~zbiorze \cite{szymanski2025} pauzą jest
-każde widoczne zatrzymanie: mediana trwania pauzy wynosi \SI{1.4}{s} po
-wydechu i~\SI{1.8}{s} po wdechu, a~co dziesiąta jest krótsza niż
+(tab.~\ref{tab:fazy-szymanski}). Zgodność z~pasem wynosi 76,8\% (69,9\% na
+etykietach opublikowanych), wyraźnie mniej niż na nagraniach sterowanych.
+Główną przyczyną jest definicja pauzy. W~zbiorze \cite{szymanski2025} pauzą
+jest każde widoczne zatrzymanie: mediana trwania pauzy wynosi \SI{1.4}{s}
+po wydechu i~\SI{1.8}{s} po wdechu, a~co dziesiąta jest krótsza niż
 \SI{0.6}{s}, czyli obejmuje też naturalny spoczynek na końcu spokojnego
 wydechu. W~nagraniach sterowanych pauzą jest tylko wstrzymanie zadane przez
 przewodnik, a~detektor wymaga \SI{2}{s} bezruchu. Skrócenie tego progu do
-\SI{1}{s} podnosi zgodność na pasie do 72,6\%, lecz obniża ją na własnych
+\SI{1}{s} podnosi zgodność na pasie do 79,3\%, lecz obniża ją na własnych
 danych z~92,1 do 86,4\% --- oba zbiory definiują pauzę inaczej i~przed ich
 łączeniem trzeba wybrać jedną definicję. Etykiety ręczne nazywają ponadto
 pauzę według stanu płuc: wstrzymanie po wdechu, podczas którego pas powoli
 opada, pozostaje pauzą po wdechu, a~detektor nazywa je według ostatniego
-ruchu, czyli pauzą po wydechu (rys.~\ref{fig:fazy-szymanski}).
+ruchu, czyli pauzą po wydechu.
 
 \begin{table}[H]
 \centering
 \caption{Detektor deterministyczny na etykietach ręcznych zbioru
-\cite{szymanski2025} i~na skorygowanych etykietach nagrań sterowanych A121
-(średnie po nagraniach).}
+\cite{szymanski2025} po korekcie czasu i~na skorygowanych etykietach nagrań
+sterowanych A121 (średnie po nagraniach).}
 \label{tab:fazy-szymanski}
-\begin{tabular}{@{}lrrrr@{}}
+\begin{tabular}{@{}lrrr@{}}
 \toprule
-Miara & pas & iNode & WitMotion & A121 \\
+Miara & pas & iNode & A121 \\
 \midrule
-Dokładność offline, pauza od \SI{2}{s} & 69,9\% & 66,7\% & 54,8\% & 92,1\% \\
-Dokładność offline, pauza od \SI{1}{s} & 72,6\% & 68,4\% & 53,5\% & 86,4\% \\
-Makro-F1 offline, pauza od \SI{2}{s} & 0,582 & 0,528 & 0,440 & 0,921 \\
-Dokładność w~czasie rzeczywistym & 45,0\% & 39,3\% & 30,1\% & 84,1\% \\
-\quad po usunięciu opóźnienia & 75,7\% & 64,8\% & 61,7\% & 92,3\% \\
-Opóźnienie granic w~czasie rzeczywistym & \SI{0.58}{s} & \SI{0.47}{s} & \SI{0.46}{s} & \SI{0.37}{s} \\
+Dokładność offline, pauza od \SI{2}{s} & 76,8\% & 73,1\% & 92,1\% \\
+Dokładność offline, pauza od \SI{1}{s} & 79,3\% & 74,5\% & 86,4\% \\
+Makro-F1 offline, pauza od \SI{2}{s} & 0,641 & 0,587 & 0,921 \\
+Dokładność w~czasie rzeczywistym & 57,5\% & 49,0\% & 84,1\% \\
+\quad po usunięciu opóźnienia & 80,2\% & 68,7\% & 92,3\% \\
+Opóźnienie granic w~czasie rzeczywistym & \SI{0.43}{s} & \SI{0.32}{s} & \SI{0.37}{s} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-W~czasie rzeczywistym detektor ogłasza zmianę fazy średnio \SI{0.6}{s} po
+W~czasie rzeczywistym detektor ogłasza zmianę fazy średnio \SI{0.4}{s} po
 granicy z~etykiety, a~początek pauzy jeszcze później, bo pauzę może uznać
 dopiero po \SI{1}{s} bezruchu. Przy oddechu tak szybkim jak hiperwentylacja
 w~tym zbiorze (75--83~oddechów/min, faza krótsza niż \SI{0.5}{s}) kosztuje to
-większość próbek: dokładność spada do 45\%. Po cofnięciu wyjścia o~najlepsze
-dla danego nagrania przesunięcie (około \SI{0.7}{s}) wraca do 76\%, a~więc
-strata wynika z~opóźnienia, a~nie z~błędnie rozpoznanych faz. Dlatego dla
-wariantów czasu rzeczywistego obok dokładności podaje się opóźnienie granic
-(podrozdz.~\ref{sec:sieci-uczenie}). Na sygnale pasa granice ręczne leżą
-średnio \SIrange{0.15}{0.20}{s} przed zwrotami wykrytymi offline, a~na
-własnych danych granica wydech--wdech leży \SI{0.25}{s} po nich:
-umiejscowienie granicy w~spoczynku na dnie oddechu jest umowne, co również
+wiele próbek: dokładność spada do 57,5\%. Po cofnięciu wyjścia o~najlepsze
+dla danego nagrania przesunięcie (około \SI{0.45}{s}) wraca do 80,2\%,
+a~więc strata wynika z~opóźnienia, a~nie z~błędnie rozpoznanych faz.
+Dlatego dla wariantów czasu rzeczywistego obok dokładności podaje się
+opóźnienie granic (podrozdz.~\ref{sec:sieci-uczenie}). Na własnych danych
+granica wydech--wdech leży \SI{0.25}{s} po zwrocie wykrytym przez detektor:
+w~spoczynku na dnie oddechu położenie granicy jest umowne, co również
 rozstrzygnie wspólna definicja pauzy.
 
-Akcelerometry na klatce dają detektorowi mniej niż pas: 67\% (iNode) i~55\%
-(WitMotion) wobec 70\% zgodności z~etykietami ręcznymi tego samego czujnika.
-Akcelerometr jest więc użytecznym, lecz słabszym od pasa torem odniesienia
-faz, zgodnie z~wynikiem dla telefonu powyżej.
+Akcelerometr iNode na klatce daje detektorowi 73,1\% zgodności z~etykietami
+tego czujnika wobec 76,8\% dla pasa. Akcelerometr jest więc użytecznym, choć
+nieco słabszym od pasa torem odniesienia faz, zgodnie z~wynikiem dla telefonu
+powyżej.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{fazy_zbior_szymanski.png}
     \caption[Etykiety ręczne i detektor na zbiorze z pasem]{Nagranie pasa
-    ze zbioru \cite{szymanski2025}: tło i~górny pasek --- etykiety ręczne,
-    dolny pasek --- detektor deterministyczny (wdech niebieski, wydech
-    zielony, pauza po wydechu pomarańczowa, pauza po wdechu czerwona).
-    Krótkie pauzy po wydechu detektor wlicza do wydechu, a~pauzy po wdechu
-    z~opadającym pasem (od \SI{91}{s}) nazywa pauzami po wydechu.}
+    ze zbioru \cite{szymanski2025}. Tło: etykiety ręczne po korekcie czasu;
+    paski: etykiety opublikowane, po korekcie i~detektor deterministyczny.
+    Po korekcie granice leżą na zwrotach pasa, pauza po wdechu zaczyna się
+    w~szczycie, a~szybkie osiadanie tuż po nim pozostaje bez etykiety
+    (biała przerwa). Krótkie pauzy po wydechu detektor wlicza do wydechu,
+    a~pauzy po wdechu z~opadającym pasem nazywa pauzami po wydechu.}
     \label{fig:fazy-szymanski}
 \end{figure}
 
 Zbiór pasuje do zadania: ma te same klasy i~to, czego brakuje w~danych
 własnych --- 562~pauzy po wdechu, fragmenty szumu, oddech szybki i~płytki oraz
-trzy osoby --- a~pas, podobnie jak radar, mierzy ruch klatki. Posłuży do
-wstępnego uczenia i~jako drugi sprawdzian etykiet i~detektora; z~23~nagrań
-pasa wycięto 847~okien w~tym samym formacie co dane własne. Ograniczenia:
-brak radaru (kanał echa jest zerowy, więc sieć uczy się wtedy na samym ruchu
-i~jego prędkości), próbkowanie \SI{10}{Hz}, przewaga jednej osoby, inna
-definicja pauzy oraz licencja, która pozwala na użycie, ale nie na
-publikację przetworzonych danych.
+trzy osoby --- a~pas, podobnie jak radar, mierzy ruch klatki. Po korekcie
+czasu etykiet posłuży do wstępnego uczenia i~jako drugi sprawdzian etykiet
+i~detektora; z~23~nagrań pasa wycięto 847~okien w~tym samym formacie co dane
+własne. Ograniczenia: brak radaru (kanał echa jest zerowy, więc sieć uczy się
+wtedy na samym ruchu i~jego prędkości), próbkowanie \SI{10}{Hz}, przewaga
+jednej osoby, inna definicja pauzy oraz licencja, która pozwala na użycie,
+ale nie na publikację przetworzonych danych.
 
 \subsection{Zbiór uczący}
 Oznaczone nagrania zapisano w~jednostkach fizycznych, a~okna tnie się
