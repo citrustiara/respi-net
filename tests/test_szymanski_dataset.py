@@ -75,7 +75,13 @@ def test_recordings_map_codes_pair_by_time_and_undo_the_lead(tmp_path: Path) -> 
 
 
 def test_delay_labels_moves_labels_later() -> None:
-    assert delay_labels(np.array([0, 0, 2, 2, 3], dtype=np.int8), 2).tolist() == [IGNORE, IGNORE, 0, 0, 2]
+    labels = np.array([0, 0, 2, 2, 3, 3], dtype=np.int8)
+    even = np.arange(6) * 0.1
+    assert delay_labels(labels, even, 2).tolist() == [IGNORE, IGNORE, 0, 0, 2, 2]
+    # Half a sample: with uneven time stamps each sample takes the nearest described moment.
+    uneven = np.array([0.0, 0.1, 0.2, 0.28, 0.41, 0.52])
+    # Labels 0-2 describe 0.24, 0.345 and 0.465 s; later ones fall past the end.
+    assert delay_labels(labels, uneven, 2.5).tolist() == [IGNORE, IGNORE, 0, 0, 2, 2]
 
 
 def test_holds_start_where_the_breath_stops() -> None:

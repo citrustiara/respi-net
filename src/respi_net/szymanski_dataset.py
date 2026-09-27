@@ -34,11 +34,13 @@ signal, and not the raw signal:
 
 * the smoothing is ``np.convolve(x, ones(w) / w, mode="valid")`` written
   against the untrimmed time stamps, so every value is the mean of the *next*
-  ``w`` samples and the copy runs (w-1)/2 samples ahead of the raw signal --
-  2 samples (0.2 s) on the belt, 5 (0.2 s) on the iNode accelerometer.
-  Rebuilt from the raw files with their code, the column matches exactly for
-  the whole iNode session, and the labelled turns sit 0.2 s before the turns
-  of the raw signal;
+  ``w`` samples and the copy runs (w-1)/2 samples ahead of the raw signal.
+  ``w`` is 5 for the belt of the iNode session and 6 for the belt of the
+  WitMotion session (0.20 and 0.25 s), 11 for the iNode and 12 for the
+  WitMotion accelerometer: rebuilt from the raw files with their code and
+  these widths, the column matches sample for sample in 44 of the 46 files.
+  The paper mentions only the normalisation.  The labelled turns sit 0.2 s before the turns of
+  the raw belt;
 * the normalisation is a running min-max over the last 15 s, so a breath
   deeper than anything in that window is pinned at exactly +1 or -1 while it
   is still moving.  The end of a deep inhale looks flat there and was
@@ -68,8 +70,18 @@ from .paths import DATA_DIR
 
 DEFAULT_ROOT = DATA_DIR / "external" / "szymanski2025" / "unpacked"
 FILE_CODE_TO_CLASS = {-1: EXHALE, 0: HOLD_AFTER_EXHALE, 1: INHALE, 2: HOLD_AFTER_INHALE, 999: NOISE}
-# Moving-average width in their preprocessing (categorise_automatically.py).
-SMOOTHING_WINDOW = {"tensometer": 5, "inode_acc": 11, "wit_motion_acc": 11}
+# Moving-average width of their preprocessing per recording group; with these
+# (and min-max spans of 150, or 375 for iNode) their code rebuilds the stored
+# normalised column exactly.
+SMOOTHING_WINDOW = {
+    "tens/synchronous_with_inode_acc": 5,
+    "tens/synchronous_with_wit_motion_acc": 6,
+    "inode_acc": 11,
+    "wit_motion_acc": 12,
+}
+# Files processed with another width than the rest of their group.  The
+# iNode "shallow" file matches no width and keeps its group's.
+SMOOTHING_WINDOW_BY_FILE = {("tens/synchronous_with_wit_motion_acc", "yellow"): 5}
 UNRELIABLE_TIMING = frozenset({"wit_motion_acc"})
 HOLD_OF = {INHALE: HOLD_AFTER_INHALE, EXHALE: HOLD_AFTER_EXHALE}
 
@@ -150,11 +162,23 @@ def recordings(root: Path = DEFAULT_ROOT, *, corrected: bool = True) -> list[Szy
     return found
 
 
-def delay_labels(labels: np.ndarray, samples: int) -> np.ndarray:
-    """``labels`` moved ``samples`` later; the samples left uncovered get IGNORE."""
+def delay_labels(labels: np.ndarray, time_s: np.ndarray, lead_samples: float) -> np.ndarray:
+    """Labels drawn on a copy running ``lead_samples`` ahead, put back on the signal.
 
-    delayed = np.full_like(labels, IGNORE)
-    delayed[samples:] = labels[: len(labels) - samples]
+    Label ``k`` describes the moment ``lead_samples`` after sample ``k`` (a
+    fraction of a sample when the smoothing width is even); each sample takes
+    the label describing the moment nearest to it.  Samples before the first
+    described moment get IGNORE.
+    """
+
+    time_s = np.asarray(time_s, dtype=float)
+    index = np.arange(len(time_s), dtype=float)
+    ahead = index + lead_samples
+    kept = ahead <= index[-1]
+    moments = np.interp(ahead[kept], index, time_s)
+    delayed = np.asarray(labels)[kept][nearest_index(moments, time_s)].copy()
+    half_step = 0.5 * float(np.median(np.diff(time_s)))
+    delayed[time_s < moments[0] - half_step] = IGNORE
     return delayed
 
 
@@ -209,10 +233,11 @@ def fix_hold_starts(
 def corrected_labels(recording: SzymanskiRecording) -> np.ndarray:
     """The recording's labels with the timing faults described above undone."""
 
-    if recording.sensor in UNRELIABLE_TIMING:
+    if recording.group in UNRELIABLE_TIMING:
         return recording.labels
-    lead = (SMOOTHING_WINDOW[recording.sensor] - 1) // 2
-    labels = delay_labels(recording.labels, lead)
+    window = SMOOTHING_WINDOW_BY_FILE.get((recording.group, recording.name), SMOOTHING_WINDOW[recording.group])
+    lead = (window - 1) / 2
+    labels = delay_labels(recording.labels, recording.time_s, lead)
     return fix_hold_starts(labels, orientation(recording) * recording.raw, recording.fs)
 
 
