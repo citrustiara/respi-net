@@ -2852,6 +2852,17 @@ sieci wprost, jest przybliżeniem objętości płuc, a~kilkanaście sekund
 kontekstu pokazuje poprzednie oddechy --- sieć może się tej zależności nauczyć
 jako prawdopodobieństwa.
 
+Granicą między wdechem a~wydechem jest chwila odwrócenia przepływu powietrza,
+czyli maksimum objętości płuc \cite{bates2000}. W~sygnałach pasów i~ruchu
+klatki przyjmuje się za nią lokalne maksimum i~minimum sygnału; dla
+pojedynczego pasa piersiowego tak wyznaczony czas wdechu różni się od
+wyznaczonego z~przepływu średnio o~\SI{0.02}{s} (odchylenie standardowe
+\SI{0.14}{s}) \cite{retory2016}. W~klasycznym podziale na dwie fazy
+spoczynek przed kolejnym wdechem wlicza się do wydechu \cite{bates2000};
+podział na cztery fazy, z~pauzami po wdechu i~po wydechu, stosuje się m.in.
+w~analizie oddechu w~badaniach węchu \cite{noto2018} i~w~zbiorze
+\cite{szymanski2025}, który przyjęto tu za wzór.
+
 Sieć ma działać w~czasie rzeczywistym, a~więc przyczynowo: decyzja dla chwili
 $t$ korzysta tylko z~przeszłości. Częstość oddechu wynika z~wykrytych
 oddechów (odstępów między początkami wdechów), a~nie z~osobnego modelu. Tor
@@ -3026,7 +3037,9 @@ około \SI{10}{min} od dwóch pozostałych. Każda próbka ma etykietę ręczną
 klasach (tab.~\ref{tab:klasy-faz}); w~plikach zapisano kody pomniejszone
 o~jeden ($-1$~wydech, 0~pauza po wydechu, 1~wdech, 2~pauza po wdechu), co
 potwierdzają dołączone do zbioru narzędzie do etykietowania i~kolejność
-przejść. Niemal wszystkie zmiany to wdech--wydech, wydech--wdech oraz wejście
+przejść. W~samym artykule sekcja metod przypisuje wydechowi kod~0,
+a~wdechowi~2, a~opis plików --- odwrotnie; przyjęto numerację z~sekcji metod,
+zgodną z~kodem narzędzia i~skryptu uczącego. Niemal wszystkie zmiany to wdech--wydech, wydech--wdech oraz wejście
 w~pauzę z~oddechu, który ją poprzedza; przejść niemożliwych z~definicji jest
 15 na około 8,6~tys. Po pauzie oddech bywa dokończony (151~razy po wdechu,
 129~po wydechu), co potwierdza przyjęte dozwolone przejścia. Wiersze plików
@@ -3039,11 +3052,14 @@ w~kodzie dołączonym do zbioru. Narzędzie do etykietowania pokazuje nie
 surowy sygnał, lecz jego wygładzoną i~znormalizowaną kopię. Wygładzanie to
 średnia ruchoma liczona funkcją \texttt{np.convolve} w~trybie
 \texttt{valid} i~zapisana z~czasami nieprzyciętego sygnału, więc każda
-wartość jest średnią \emph{następnych} pięciu próbek: kopia wyprzedza sygnał
-pasa o~dwie próbki (\SI{0.2}{s}; dla akcelerometru iNode o~pięć próbek,
-również \SI{0.2}{s}). Odtworzona tym samym kodem z~surowych plików, kopia
-zgadza się co do próbki w~23 z~24 plików sesji z~iNode. Etykiety dziedziczą
-to wyprzedzenie: opublikowane granice wdech--wydech i~wydech--wdech leżą
+wartość jest średnią \emph{następnych} $w$~próbek, a~kopia wyprzedza sygnał
+o~$(w-1)/2$ próbki. Dla pasa $w$~wynosi 5 w~sesji z~iNode i~6 w~sesji
+z~WitMotion, co daje \SIrange{0.20}{0.25}{s}. Z~tymi szerokościami kod
+zbioru odtwarza z~surowych plików zapisaną kopię co do próbki w~44 z~46
+plików; artykuł opisuje tylko normalizację. Standard ERS/ATS analizy oddechu
+spoczynkowego ostrzega właśnie przed tym: wygładzanie średnią ruchomą przesuwa chwile
+zmiany fazy, więc nie wolno ich brać z~sygnału wygładzonego
+\cite{bates2000}. Etykiety dziedziczą wyprzedzenie: opublikowane granice wdech--wydech i~wydech--wdech leżą
 w~medianie \SI{0.2}{s} przed zwrotem sygnału pasa, a~tylko 11--13\%
 z~nich mieści się w~$\pm$\SI{0.1}{s}. Normalizacja jest ponadto kroczącym
 min--max z~ostatnich \SI{15}{s}, więc oddech głębszy niż wszystkie w~tym
@@ -3051,15 +3067,17 @@ oknie ma w~kopii wartość dokładnie $+1$ albo $-1$, choć klatka jeszcze się
 porusza; koniec głębokiego wdechu wygląda tam płasko i~bywał oznaczany jako
 początek pauzy.
 
-Przed użyciem etykiety pasa przesunięto więc o~dwie próbki, a~pauzę po
-oddechu rozpoczęto dopiero tam, gdzie klatka przestaje poruszać się
+Przed użyciem etykiety pasa przesunięto więc o~wyprzedzenie kopii, a~pauzę
+po oddechu rozpoczęto dopiero tam, gdzie klatka przestaje poruszać się
 w~kierunku tego oddechu (przez \SI{0.2}{s} wolniej niż 20\% typowej
-prędkości). Szybkie osiadanie tuż po głębokim wdechu --- niewielki wydech,
-który etykiety wliczają do pauzy --- nie jest ani wydechem (płuca pozostają
-prawie pełne), ani bezruchem, dlatego pozostawiono je bez etykiety
-(rys.~\ref{fig:fazy-szymanski}). Po korekcie granice wdech--wydech
-i~wydech--wdech leżą w~medianie dokładnie na zwrocie pasa, a~44--56\% z~nich
-mieści się w~$\pm$\SI{0.1}{s}, czyli w~jednej próbce. Zmieniło się 21\% próbek, a~2\% zostało bez etykiety. Etykiet
+prędkości). Szybkie osiadanie tuż po głębokim wdechu, które etykiety
+wliczają do pauzy, nie musi być wydechem: przy zamkniętej głośni objętość
+przemieszcza się między klatką a~brzuchem bez przepływu powietrza
+\cite{konno1967}, więc pas na klatce może opadać, choć płuca pozostają
+prawie pełne. Nie jest to też bezruch, dlatego fragment ten pozostawiono bez
+etykiety (rys.~\ref{fig:fazy-szymanski}). Po korekcie granice wdech--wydech
+i~wydech--wdech leżą w~medianie dokładnie na zwrocie pasa, a~43--56\% z~nich
+mieści się w~$\pm$\SI{0.1}{s}, czyli w~jednej próbce. Zmieniło się 23\% próbek, a~2\% zostało bez etykiety. Etykiet
 akcelerometru WitMotion nie korygowano: skrypt zbioru kopiuje etykiety
 z~pasa na akcelerometr według znaczników czasu, a~w~tej sesji ich
 przesunięcie względem sygnału akcelerometru waha się między plikami od 0,2
@@ -3067,7 +3085,7 @@ do \SI{0.8}{s}, więc nie da się go usunąć jedną regułą.
 
 Na poprawionych etykietach sprawdzono detektor deterministyczny
 (podrozdz.~\ref{sec:sieci-baseline}) bez żadnego dostrajania
-(tab.~\ref{tab:fazy-szymanski}). Zgodność z~pasem wynosi 76,8\% (69,9\% na
+(tab.~\ref{tab:fazy-szymanski}). Zgodność z~pasem wynosi 76,7\% (69,9\% na
 etykietach opublikowanych), wyraźnie mniej niż na nagraniach sterowanych.
 Główną przyczyną jest definicja pauzy. W~zbiorze \cite{szymanski2025} pauzą
 jest każde widoczne zatrzymanie: mediana trwania pauzy wynosi \SI{1.4}{s}
@@ -3075,7 +3093,7 @@ po wydechu i~\SI{1.8}{s} po wdechu, a~co dziesiąta jest krótsza niż
 \SI{0.6}{s}, czyli obejmuje też naturalny spoczynek na końcu spokojnego
 wydechu. W~nagraniach sterowanych pauzą jest tylko wstrzymanie zadane przez
 przewodnik, a~detektor wymaga \SI{2}{s} bezruchu. Skrócenie tego progu do
-\SI{1}{s} podnosi zgodność na pasie do 79,3\%, lecz obniża ją na własnych
+\SI{1}{s} podnosi zgodność na pasie do 79,2\%, lecz obniża ją na własnych
 danych z~92,1 do 86,4\% --- oba zbiory definiują pauzę inaczej i~przed ich
 łączeniem trzeba wybrać jedną definicję. Etykiety ręczne nazywają ponadto
 pauzę według stanu płuc: wstrzymanie po wdechu, podczas którego pas powoli
@@ -3092,12 +3110,12 @@ sterowanych A121 (średnie po nagraniach).}
 \toprule
 Miara & pas & iNode & A121 \\
 \midrule
-Dokładność offline, pauza od \SI{2}{s} & 76,8\% & 73,1\% & 92,1\% \\
-Dokładność offline, pauza od \SI{1}{s} & 79,3\% & 74,5\% & 86,4\% \\
-Makro-F1 offline, pauza od \SI{2}{s} & 0,641 & 0,587 & 0,921 \\
-Dokładność w~czasie rzeczywistym & 57,5\% & 49,0\% & 84,1\% \\
-\quad po usunięciu opóźnienia & 80,2\% & 68,7\% & 92,3\% \\
-Opóźnienie granic w~czasie rzeczywistym & \SI{0.43}{s} & \SI{0.32}{s} & \SI{0.37}{s} \\
+Dokładność offline, pauza od \SI{2}{s} & 76,7\% & 73,1\% & 92,1\% \\
+Dokładność offline, pauza od \SI{1}{s} & 79,2\% & 74,5\% & 86,4\% \\
+Makro-F1 offline, pauza od \SI{2}{s} & 0,640 & 0,587 & 0,921 \\
+Dokładność w~czasie rzeczywistym & 58,3\% & 49,0\% & 84,1\% \\
+\quad po usunięciu opóźnienia & 79,8\% & 68,7\% & 92,3\% \\
+Opóźnienie granic w~czasie rzeczywistym & \SI{0.40}{s} & \SI{0.32}{s} & \SI{0.37}{s} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -3106,8 +3124,8 @@ W~czasie rzeczywistym detektor ogłasza zmianę fazy średnio \SI{0.4}{s} po
 granicy z~etykiety, a~początek pauzy jeszcze później, bo pauzę może uznać
 dopiero po \SI{1}{s} bezruchu. Przy oddechu tak szybkim jak hiperwentylacja
 w~tym zbiorze (75--83~oddechów/min, faza krótsza niż \SI{0.5}{s}) kosztuje to
-wiele próbek: dokładność spada do 57,5\%. Po cofnięciu wyjścia o~najlepsze
-dla danego nagrania przesunięcie (około \SI{0.45}{s}) wraca do 80,2\%,
+wiele próbek: dokładność spada do 58,3\%. Po cofnięciu wyjścia o~najlepsze
+dla danego nagrania przesunięcie (około \SI{0.4}{s}) wraca do 79,8\%,
 a~więc strata wynika z~opóźnienia, a~nie z~błędnie rozpoznanych faz.
 Dlatego dla wariantów czasu rzeczywistego obok dokładności podaje się
 opóźnienie granic (podrozdz.~\ref{sec:sieci-uczenie}). Na własnych danych
@@ -3116,7 +3134,7 @@ w~spoczynku na dnie oddechu położenie granicy jest umowne, co również
 rozstrzygnie wspólna definicja pauzy.
 
 Akcelerometr iNode na klatce daje detektorowi 73,1\% zgodności z~etykietami
-tego czujnika wobec 76,8\% dla pasa. Akcelerometr jest więc użytecznym, choć
+tego czujnika wobec 76,7\% dla pasa. Akcelerometr jest więc użytecznym, choć
 nieco słabszym od pasa torem odniesienia faz, zgodnie z~wynikiem dla telefonu
 powyżej.
 
@@ -4322,6 +4340,28 @@ P.~J.~Watkinson, \emph{An assessment of algorithms to estimate respiratory
 rate from the electrocardiogram and photoplethysmogram}, Physiological
 Measurement, t.~37, nr~4, s.~610--626, 2016,
 doi: 10.1088/0967-3334/37/4/610.
+
+\bibitem{bates2000}
+J.~H.~T.~Bates, G.~Schmalisch, D.~Filbrun, J.~Stocks,
+\emph{Tidal breath analysis for infant pulmonary function testing}, European
+Respiratory Journal, t.~16, nr~6, s.~1180--1192, 2000.
+
+\bibitem{retory2016}
+Y.~Retory, P.~Niedzialkowski, C.~de~Picciotto, M.~Bonay, M.~Petitjean,
+\emph{New Respiratory Inductive Plethysmography (RIP) Method for Evaluating
+Ventilatory Adaptation during Mild Physical Activities}, PLoS ONE, t.~11,
+nr~3, art.~e0151983, 2016, doi: 10.1371/journal.pone.0151983.
+
+\bibitem{noto2018}
+T.~Noto, G.~Zhou, S.~Schuele, J.~Templer, C.~Zelano, \emph{Automated analysis
+of breathing waveforms using BreathMetrics: a respiratory signal processing
+toolbox}, Chemical Senses, t.~43, nr~8, s.~583--597, 2018,
+doi: 10.1093/chemse/bjy045.
+
+\bibitem{konno1967}
+K.~Konno, J.~Mead, \emph{Measurement of the separate volume changes of rib
+cage and abdomen during breathing}, Journal of Applied Physiology, t.~22,
+nr~3, s.~407--422, 1967.
 
 \end{thebibliography}
 
