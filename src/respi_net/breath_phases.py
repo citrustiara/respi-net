@@ -4,9 +4,9 @@ The classes and their numbers follow the respiratory-phase datasets of
 Szymański et al. (Scientific Data, 2025, Gdańsk University of Technology), so
 labels exported from this project can sit next to that data:
 
-    0   inhale                (breath-in)
+    0   exhale                (breath-out)
     1   hold after exhale     (retention after breath-out)
-    2   exhale                (breath-out)
+    2   inhale                (breath-in)
     3   hold after inhale     (retention after breath-in)
     999 noise                 (too contaminated to use)
 
@@ -21,18 +21,18 @@ from typing import Iterable, Sequence
 
 import numpy as np
 
-INHALE = 0
+EXHALE = 0
 HOLD_AFTER_EXHALE = 1
-EXHALE = 2
+INHALE = 2
 HOLD_AFTER_INHALE = 3
 NOISE = 4
 IGNORE = -1
 
 NUM_CLASSES = 5
-PHASE_CLASSES = (INHALE, HOLD_AFTER_EXHALE, EXHALE, HOLD_AFTER_INHALE)
-CLASS_NAMES = ("inhale", "hold_after_exhale", "exhale", "hold_after_inhale", "noise")
-CLASS_NAMES_PL = ("wdech", "pauza po wydechu", "wydech", "pauza po wdechu", "szum")
-CLASS_COLOURS = ("#3b82f6", "#f59e0b", "#22c55e", "#dc2626", "#9ca3af")
+PHASE_CLASSES = (EXHALE, HOLD_AFTER_EXHALE, INHALE, HOLD_AFTER_INHALE)
+CLASS_NAMES = ("exhale", "hold_after_exhale", "inhale", "hold_after_inhale", "noise")
+CLASS_NAMES_PL = ("wydech", "pauza po wydechu", "wdech", "pauza po wdechu", "szum")
+CLASS_COLOURS = ("#22c55e", "#f59e0b", "#3b82f6", "#dc2626", "#9ca3af")
 
 NOISE_EXPORT_CODE = 999
 IGNORE_EXPORT_CODE = -1

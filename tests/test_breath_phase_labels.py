@@ -78,9 +78,9 @@ def _breathing_from_boundaries(time_s: np.ndarray, cues: list[dict[str, object]]
 
 
 def test_classes_follow_the_supervisors_codes() -> None:
-    assert [export_code(label) for label in (INHALE, HOLD_AFTER_EXHALE, EXHALE, HOLD_AFTER_INHALE, NOISE)] == [0, 1, 2, 3, 999]
+    assert [export_code(label) for label in (EXHALE, HOLD_AFTER_EXHALE, INHALE, HOLD_AFTER_INHALE, NOISE)] == [0, 1, 2, 3, 999]
     assert all(from_export_code(export_code(label)) == label for label in range(5))
-    assert export_codes(np.array([NOISE, IGNORE, EXHALE])).tolist() == [999, -1, 2]
+    assert export_codes(np.array([NOISE, IGNORE, INHALE])).tolist() == [999, -1, 2]
 
 
 def test_holds_take_the_class_of_the_breath_before_them() -> None:
@@ -107,6 +107,8 @@ def test_scores_boundaries_rate_and_decoding() -> None:
     boundaries = boundary_errors(reference, late, time_s)
     assert boundaries.detection_rate == 1.0
     assert boundaries.median_abs_error_s == pytest.approx(0.2)
+    assert boundaries.median_delay_s == pytest.approx(0.2)
+    assert boundary_errors(late, reference, time_s).median_delay_s == pytest.approx(-0.2)
     assert breath_rate_bpm(reference, time_s) == pytest.approx(12.0)
 
     flicker = reference.copy()
