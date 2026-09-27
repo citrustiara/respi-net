@@ -459,12 +459,33 @@ zaimplementowano jako baseline w rozdziale~\ref{chap:algorytmy}.}
 czasowych; uczenie na spektrogramach.}
 
 \section{Klasyfikacja faz oddechu}
-\miejsce{Detekcja wdechu, wydechu i pauzy oddechowej --- przegląd metod.
-To jest bezpośrednia podstawa teoretyczna dla rozdziału~\ref{chap:sieci}.}
+Najbliższym punktem odniesienia jest praca zespołu Politechniki Gdańskiej
+\cite{szymanski2025}: równoległe zapisy pasa tensometrycznego
+(\SI{10}{Hz}) i~dwóch akcelerometrów od trzech osób, oznaczone dla każdej
+próbki jako wdech, wydech, pauza po wdechu, pauza po wydechu lub szum.
+Etykiety wstępnie wyznaczono ze zmiany znaku pochodnej sygnału, a~następnie
+poprawiła je ręcznie jedna osoba i~zweryfikowała druga. Sieć GRU
+z~krótkim oknem osiągnęła około 90\% trafności dla pasa i~77--85\% dla
+akcelerometrów. Dla radaru analogiczne zadanie --- klasa dla każdej
+próbki --- rozwiązuje się najczęściej jednowymiarową siecią splotową typu
+U-Net \cite{perslev2019} z~dekodowaniem Viterbiego, które dopuszcza tylko
+fizjologicznie możliwe przejścia między fazami \cite{holosis_repo}. Przy
+niewielkiej liczbie nagrań radarowych skuteczne okazało się wstępne uczenie
+na sygnałach pasów z~badań polisomnograficznych i~dostrojenie na radarze
+\cite{lu2026}.
 
 \section{Dostępne zbiory danych}
-\miejsce{Publiczne zbiory radarowych sygnałów witalnych; problem braku
-etykiet faz oddechu i konieczność samodzielnej anotacji.}
+Publiczne zbiory radarowe z~synchronicznym torem odniesienia obejmują m.in.
+zapisy radaru \SI{24}{GHz} u~30~osób z~EKG, impedancją oddechową
+i~wstrzymaniami oddechu po wdechu i~po wydechu \cite{schellenberger2020},
+zapisy \SI{24}{GHz} z~czujnikiem przepływu przy nosie \cite{shi2020},
+nagrania radaru UWB z~pasem oddechowym \cite{mobivital2025} oraz zapisy
+radaru \SI{60}{GHz} FMCW od 110~osób z~EKG i~akcelerometrem na klatce
+\cite{parralejo2026}. Żaden z~nich nie zawiera etykiet faz oddechu i~żaden
+publiczny zbiór nie używa radaru Acconeer A121 z~torem odniesienia, dlatego
+etykiety w~tej pracy trzeba było wyznaczyć samodzielnie. Zbiór
+\cite{szymanski2025} ma dokładnie przyjęty tu podział na klasy, ale nie
+zawiera radaru.
 
 % =====================================================================
 % =====================================================================
@@ -2788,36 +2809,453 @@ końcowy aplikacji nie powinien zastępować analizy całego przebiegu.
 \chapter{Sieci neuronowe do analizy faz oddechu}
 \label{chap:sieci}
 
-\todo{Rozdział jeszcze nie zrealizowany --- kluczowa część pracy,
-do wykonania. Poniżej planowana struktura; zarezerwowano dużo miejsca.}
+\todo{Model nie został jeszcze wytrenowany. Rozdział opisuje przygotowany
+potok: klasy, sygnał wejściowy, korektę etykiet, zbiór uczący, metodę
+porównawczą i~plan uczenia. Wyniki sieci zostaną dopisane po zebraniu danych
+z~niezależnym torem odniesienia.}
 
 \section{Sformułowanie zadania}
-\miejsce{Klasyfikacja faz cyklu oddechowego (wdech / wydech / pauza) z~sygnału
-fazowego radaru A121. Alternatywnie: regresja fazy cyklu lub detekcja zdarzeń
-oddechowych.}
+\label{sec:sieci-zadanie}
+
+Zadaniem sieci jest przypisanie każdej ramce radaru A121 fazy cyklu
+oddechowego. Przyjęto podział na klasy ze zbioru danych opublikowanego przez
+zespół Politechniki Gdańskiej \cite{szymanski2025}, aby etykiety tej pracy
+można było zestawiać z~tamtymi danymi (tab.~\ref{tab:klasy-faz}). Wewnątrz
+tablic szum ma numer~4, a~wartość $-1$ oznacza próbkę bez etykiety:
+fragment, którego nikt nie oznaczył, albo niepewne otoczenie granicy fazy.
+
+\begin{table}[H]
+\centering
+\caption{Klasy faz oddechu (kody jak w~\cite{szymanski2025}).}
+\label{tab:klasy-faz}
+\begin{tabular}{@{}rll@{}}
+\toprule
+Kod & Klasa & Znaczenie \\
+\midrule
+0 & wydech & objętość płuc maleje \\
+1 & pauza po wydechu & oddech wstrzymany w~trakcie lub po wydechu \\
+2 & wdech & objętość płuc rośnie \\
+3 & pauza po wdechu & oddech wstrzymany w~trakcie lub po wdechu \\
+999 & szum & fragment zbyt zakłócony, by go używać \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Pauza nosi nazwę oddechu, który przerywa, więc można ją rozpocząć tylko z~tego
+oddechu --- przejście wydech $\to$ pauza po wdechu jest z~definicji
+niemożliwe. Zakończyć ją można jednak w~obie strony: oddech da się wstrzymać
+przy dowolnej objętości płuc, a~wydech przerwany w~połowie bywa po pauzie
+dokończony. Nie wprowadzono twardych reguł wynikających ze stanu płuc (np.
+,,pełne płuca, więc wkrótce wydech''): westchnienia, dobieranie powietrza czy
+długie pauzy łamią je w~zwykłym oddychaniu. Przemieszczenie klatki, podawane
+sieci wprost, jest przybliżeniem objętości płuc, a~kilkanaście sekund
+kontekstu pokazuje poprzednie oddechy --- sieć może się tej zależności nauczyć
+jako prawdopodobieństwa.
+
+Sieć ma działać w~czasie rzeczywistym, a~więc przyczynowo: decyzja dla chwili
+$t$ korzysta tylko z~przeszłości. Częstość oddechu wynika z~wykrytych
+oddechów (odstępów między początkami wdechów), a~nie z~osobnego modelu. Tor
+HB100 nie jest używany: jednokanałowy radar CW nie rozróżnia wiarygodnie
+wdechu od wydechu (rozdz.~\ref{chap:hb100-a121-pomiar}), a~więc nie może
+dostarczyć klas tego zadania.
+
+Punktem odniesienia jest deterministyczny detektor faz
+(podrozdz.~\ref{sec:sieci-baseline}). Na czystych, głębokich oddechach
+sterowanych osiąga on ponad 90\% zgodności, dlatego sieć nie musi go tam
+przewyższać. Ma go przewyższyć tam, gdzie reguły zawodzą: przy płytkim,
+nieregularnym, szybkim lub wolnym oddechu, w~obecności ruchu i~szumu oraz na
+większym dystansie.
+
+\section{Sygnał wejściowy: dlaczego bez filtru pasmowego}
+\label{sec:sieci-wejscie}
+
+Estymacja częstości oddechu (rozdz.~\ref{chap:algorytmy}) korzysta z~filtru
+pasmowego \SIrange{0.10}{0.50}{Hz}. Dla faz jest on niewłaściwy. Jego dolna
+krawędź działa jak filtr górnoprzepustowy: przepuszcza zmiany szybsze niż
+około dziesięć sekund na cykl, a~wolniejsze usuwa. Pauza oddechowa to klatka
+piersiowa nieruchoma przez \SI{15}{s}, czyli dla takiego filtru zmiana
+powolna. Filtr drugiego rzędu ,,zapomina'' utrzymywany poziom ze stałą
+czasową około $\sqrt{2}/(2\pi\cdot\SI{0.1}{Hz})\approx\SI{2.2}{s}$,
+a~filtracja zerofazowa, stosowana w~przód i~wstecz, robi to z~obu stron.
+Na rys.~\ref{fig:fazy-filtracja}a pauza po wydechu, utrzymywana na dnie
+oddechu, zostaje przesunięta w~stronę połowy jego głębokości (o~\SI{3.9}{mm}
+przy oddechu \SI{10}{mm}), a~na jej brzegach pojawia się pozorny ruch. Pauza
+wygląda wtedy jak powolny oddech i~traci informację, czy płuca są puste, czy
+pełne. Górna krawędź \SI{0.5}{Hz} dodatkowo zaokrągla ostre narożniki,
+w~których oddech się zatrzymuje i~rusza.
+
+W~torze faz jedynym filtrem jest więc dolnoprzepustowy \SI{2}{Hz}, który
+tłumi szum, nie zmieniając kształtu oddechu. Krótkie nagranie traci powolny
+dryf przez odjęcie jednej prostej, która nie może zgiąć plateau. Do sieci
+trafiają trzy kanały: przemieszczenie klatki (fazy rozplecione w~bramkach
+wybranych przez Acconeer, rosnące przy wdechu), jego prędkość oraz siła echa
+w~dB. Prędkość niesie kierunek ruchu i~jest prawie niewrażliwa na dryf.
+
+Rysunek~\ref{fig:fazy-filtracja}b pokazuje też cenę tej decyzji.
+W~rzeczywistej pauzie po wydechu klatka nie stoi w~miejscu: przez
+\SI{15}{s} opada jeszcze o~kilka milimetrów, a~na przebiegu widać pulsowanie
+serca. Filtr pasmowy ukrywał jedno i~drugie. W~nagraniu ze \SI{150}{cm} dryf
+w~czasie pauzy sięgał \SI{10}{mm}, a~więc głębokości oddechu. Dryf i~pauza
+trwają podobnie długo, więc żaden filtr liniowy nie usunie jednego,
+zostawiając drugie. Dlatego sieć dostaje prędkość obok przemieszczenia,
+a~w~uczeniu dryf jest dodawany jako augmentacja.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_filtracja_pauza.png}
+    \caption[Pauza oddechowa po filtrze pasmowym i dolnoprzepustowym]{Pauza po
+    wydechu po filtrze pasmowym \SIrange{0.1}{0.5}{Hz} (czerwony) i~po samym
+    filtrze dolnoprzepustowym \SI{2}{Hz} (niebieski). a)~Wzorzec: filtr
+    pasmowy przesuwa pauzę w~stronę połowy głębokości oddechu i~dodaje pozorny
+    ruch na jej brzegach. b)~Nagranie A121 z~\SI{2}{m}: rzeczywista pauza
+    z~powolnym opadaniem klatki i~pulsowaniem serca, które filtr pasmowy
+    usuwa.}
+    \label{fig:fazy-filtracja}
+\end{figure}
 
 \section{Zbiór danych i anotacja}
-\miejsce{Wykorzystanie zgromadzonej bazy nagrań (nagrania sterowane
-i~całonocne). Istniejący moduł \texttt{a121\_breaths} realizuje automatyczną
-wstępną anotację oddechów --- opisać jej zasadę i~sposób weryfikacji ręcznej.
-Podział na zbiór uczący / walidacyjny / testowy (rozłączny względem nagrań).}
+\label{sec:sieci-anotacja}
+
+\subsection{Nagrania sterowane}
+Pierwszym źródłem etykiet są nagrania A121 wykonane z~programowym
+przewodnikiem (podrozdz.~\ref{sec:programowy-przewodnik-oddechu}): 12~prób
+retestu z~\SI{2}{m} oraz 7~nagrań A121 z~porównania z~HB100
+(\SIrange{30}{150}{cm}), każde po \SI{90}{s}. Wszystkie wykonał jeden badany,
+oddychając głęboko w~rytmie \SI{12}{oddech\per\minute}. Oddechy te miały
+głębokość około \SI{10}{mm}, podczas gdy w~nagraniach nocnych mediana
+wynosiła około \SI{0.8}{mm} przy tle ruchu w~pauzach około \SI{0.5}{mm}
+RMS --- dane sterowane są więc zadaniem łatwym, a~trudność leży w~oddechu
+naturalnym.
+
+\subsection{Korekta etykiet oddech po oddechu}
+Komenda przewodnika jest zamiarem, a~nie pomiarem. Po jednym wspólnym
+przesunięciu czasowym granice faz nadal odbiegały od rzeczywistych zwrotów
+ruchu średnio o~\SI{0.21}{s} (IQR \SI{0.28}{s}); etykiety z~samych komend
+myliłyby się więc na około 7--8\% próbek oddechu sterowanego i~to
+systematycznie: wdechy trwały dłużej niż \SI{2}{s}, a~pierwszy wdech po
+oddechu swobodnym zaczynał się później niż kolejne. Etykiety korygowano
+dla każdej granicy osobno:
+\begin{enumerate}
+  \item wspólne opóźnienie wyznaczono, dopasowując prędkość przemieszczenia
+  do prędkości, jakiej wymagają komendy (\SIrange{0.35}{0.60}{s}, mediana
+  \SI{0.475}{s}); prędkość, w~przeciwieństwie do położenia, nie jest
+  zaburzana przez dryf;
+  \item każdą granicę przesunięto do chwili, w~której ruch faktycznie
+  \emph{zawraca} (wdech--wydech), \emph{zatrzymuje się} (oddech--pauza) albo
+  \emph{rusza} (pauza--oddech), szukając w~oknie od \SI{0.6}{s} przed do
+  \SI{0.9}{s} po przesuniętej komendzie. Zwrot uznawano tylko wtedy, gdy
+  przed nim i~po nim klatka porusza się w~przeciwne strony z~prędkością co
+  najmniej 20\% typowej dla danego nagrania;
+  \item jeśli po pauzie pierwszy ruch kontynuuje przerwany oddech (wydech
+  wstrzymany w~połowie i~dokończony po pauzie), fragment ten oznaczono jako
+  ten oddech aż do zwrotu --- zdarzyło się to w~8~z~19~nagrań;
+  \item zachowano kolejność i~minimalny czas fazy \SI{0.4}{s}; granica bez
+  wyraźnego zdarzenia (8,3\% granic) pozostaje w~miejscu komendy;
+  \item otoczenie każdej granicy ($\pm$\SI{0.2}{s}, dla granic bez zdarzenia
+  $\pm$\SI{0.5}{s}) wyłączono z~uczenia etykietą $-1$: dokładna próbka
+  zwrotu jest niepewna i~nie powinna być nauczana.
+\end{enumerate}
+Po korekcie mediana przesunięcia granic względem komend wynosi
+\SI{0.015}{s}, a~90\% granic przesunięto o~mniej niż \SI{0.46}{s}.
+Oznaczono łącznie \SI{21.5}{min} sygnału (76\% czasu nagrań); oddech
+swobodny na początku prób nie ma etykiet, bo przewodnik nie wskazywał w~nim
+faz. Rysunek~\ref{fig:fazy-etykiety} pokazuje wynik dla jednej próby.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_etykiety_skorygowane.png}
+    \caption[Skorygowane etykiety faz na przebiegu A121]{Etykiety faz po
+    korekcie oddech po oddechu na nagraniu A121 z~\SI{2}{m}. Tło: wdech
+    (niebieski), wydech (zielony), pauza po wydechu (pomarańczowy); białe
+    przerwy to wyłączone otoczenia granic. Dolny pasek porównuje komendy
+    przesunięte o~wspólne opóźnienie z~etykietami po korekcie.}
+    \label{fig:fazy-etykiety}
+\end{figure}
+
+Ograniczenie tej anotacji jest zasadnicze: granice wyznaczono na tym samym
+sygnale radaru, na którym ma pracować sieć. Dla czystych, głębokich oddechów
+jest to dopuszczalne, ale ocena na takich etykietach mierzy zgodność ze
+zwrotami tego samego przebiegu, a~nie z~fizjologią. Dane trudne --- płytkie
+i~zaszumione --- muszą być oznaczane niezależnym torem odniesienia.
+
+\subsection{IMU jako tor odniesienia}
+Najprostszym dostępnym torem niezależnym jest telefon z~aplikacją
+RespiPhoneIMU, przesyłającą przyspieszenie całkowite (grawitacja
+i~przyspieszenie ruchu), a~więc informację o~nachyleniu ciała. Sprawdzono
+to na istniejących nagraniach IMU z~przewodnikiem: każde nagranie oznaczono
+tą samą metodą względem jego własnych komend, a~nagrania iPhone'a i~LSM6DS3
+traktowano jako osobne. Z~czterech wcześniejszych nagrań iPhone'a transmisja
+BLE utraciła ponad 98\% paczek; takie próby odrzuca dopiero kontrola
+kompletności strumienia. W~dwóch kompletnych nagraniach iPhone'a
+dopasowanie ruchu do komend wyniosło 0,53--0,56 (radar A121: 0,64--0,83),
+granice bez wyraźnego zwrotu stanowiły 0--39\% (radar: 8\%), a~wspólne
+opóźnienie w~jednym z~nich trafiło na granicę przeszukiwanego zakresu.
+Przebieg telefonu leżącego na klatce ma postać krótkich skoków przy zmianach
+fazy, a~nie gładkiego narastania i~opadania, więc jego zwroty nie wyznaczają
+wiarygodnie granic faz (rys.~\ref{fig:fazy-imu}). LSM6DS3 dał przebieg
+bliższy oddechowi, lecz jego opóźnienie względem komend różniło się między
+sesjami od 0 do \SI{1.5}{s}.
+
+Wniosek: w~tych nagraniach IMU dobrze oddaje rytm i~pauzy, lecz nie jest
+dostatecznie dokładnym wzorcem granic faz. Rozstrzygnie to równoczesny zapis
+A121 z~telefonem, dla którego przygotowano osobny skrypt nagrań; etykiety
+z~telefonu i~z~radaru będzie można wtedy porównać w~tym samym czasie.
+Skrypt zapisuje też statystyki opóźnień paczek BLE, bo obecna aplikacja
+wiąże zegar telefonu z~zegarem hosta tylko przy pierwszej paczce.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_imu_etykiety.png}
+    \caption[Etykiety faz na nagraniach IMU]{Etykiety faz wyznaczone tą samą
+    metodą na osobnych nagraniach iPhone'a (góra) i~LSM6DS3 (dół), każde
+    względem własnych komend przewodnika.}
+    \label{fig:fazy-imu}
+\end{figure}
+
+\subsection{Zbiór zewnętrzny z~pasem oddechowym}
+\label{sec:sieci-zbior-szymanski}
+Zbiór \cite{szymanski2025} jest publiczny na licencji CC~BY-NC-ND (wolno go
+używać, nie wolno rozpowszechniać zmienionych kopii), dlatego leży poza
+repozytorium, a~czyta go osobny moduł. Zawiera 23~nagrania pasa
+tensometrycznego (\SI{92.8}{min}, około \SI{10}{Hz}) oraz nagrania dwóch
+akcelerometrów na klatce piersiowej: iNode (\SI{25}{Hz}, \SI{59.8}{min})
+i~WitMotion (\SI{10}{Hz}, \SI{33.0}{min}). Oddech był narzucony: swobodny,
+wolny, płytki, hiperwentylacja, kaszel, pauzy po wdechu i~po wydechu.
+Według nazw plików \SI{72.7}{min} zapisu pasa pochodzi od jednej osoby, po
+około \SI{10}{min} od dwóch pozostałych. Każda próbka ma etykietę ręczną w~tych samych pięciu
+klasach (tab.~\ref{tab:klasy-faz}); w~plikach zapisano kody pomniejszone
+o~jeden ($-1$~wydech, 0~pauza po wydechu, 1~wdech, 2~pauza po wdechu), co
+potwierdzają dołączone do zbioru narzędzie do etykietowania i~kolejność
+przejść. Niemal wszystkie zmiany to wdech--wydech, wydech--wdech oraz wejście
+w~pauzę z~oddechu, który ją poprzedza; przejść niemożliwych z~definicji jest
+15 na około 8,6~tys. Po pauzie oddech bywa dokończony (151~razy po wdechu,
+129~po wydechu), co potwierdza przyjęte dozwolone przejścia. Wiersze plików
+z~etykietami to próbki surowego zapisu wybrane po czasie, lecz nie zawsze od
+pierwszej do ostatniej, więc próbki łączy się po czasie, a~nie po numerze
+wiersza.
+
+Na tych danych sprawdzono detektor deterministyczny
+(podrozdz.~\ref{sec:sieci-baseline}) bez żadnego dostrajania
+(tab.~\ref{tab:fazy-szymanski}). Zgodność z~etykietami ręcznymi pasa
+wynosi 70\%, wyraźnie mniej niż na nagraniach sterowanych. Główną
+przyczyną jest definicja pauzy. W~zbiorze \cite{szymanski2025} pauzą jest
+każde widoczne zatrzymanie: mediana trwania pauzy wynosi \SI{1.4}{s} po
+wydechu i~\SI{1.8}{s} po wdechu, a~co dziesiąta jest krótsza niż
+\SI{0.6}{s}, czyli obejmuje też naturalny spoczynek na końcu spokojnego
+wydechu. W~nagraniach sterowanych pauzą jest tylko wstrzymanie zadane przez
+przewodnik, a~detektor wymaga \SI{2}{s} bezruchu. Skrócenie tego progu do
+\SI{1}{s} podnosi zgodność na pasie do 72,6\%, lecz obniża ją na własnych
+danych z~92,1 do 86,4\% --- oba zbiory definiują pauzę inaczej i~przed ich
+łączeniem trzeba wybrać jedną definicję. Etykiety ręczne nazywają ponadto
+pauzę według stanu płuc: wstrzymanie po wdechu, podczas którego pas powoli
+opada, pozostaje pauzą po wdechu, a~detektor nazywa je według ostatniego
+ruchu, czyli pauzą po wydechu (rys.~\ref{fig:fazy-szymanski}).
+
+\begin{table}[H]
+\centering
+\caption{Detektor deterministyczny na etykietach ręcznych zbioru
+\cite{szymanski2025} i~na skorygowanych etykietach nagrań sterowanych A121
+(średnie po nagraniach).}
+\label{tab:fazy-szymanski}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Miara & pas & iNode & WitMotion & A121 \\
+\midrule
+Dokładność offline, pauza od \SI{2}{s} & 69,9\% & 66,7\% & 54,8\% & 92,1\% \\
+Dokładność offline, pauza od \SI{1}{s} & 72,6\% & 68,4\% & 53,5\% & 86,4\% \\
+Makro-F1 offline, pauza od \SI{2}{s} & 0,582 & 0,528 & 0,440 & 0,921 \\
+Dokładność w~czasie rzeczywistym & 45,0\% & 39,3\% & 30,1\% & 84,1\% \\
+\quad po usunięciu opóźnienia & 75,7\% & 64,8\% & 61,7\% & 92,3\% \\
+Opóźnienie granic w~czasie rzeczywistym & \SI{0.58}{s} & \SI{0.47}{s} & \SI{0.46}{s} & \SI{0.37}{s} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+W~czasie rzeczywistym detektor ogłasza zmianę fazy średnio \SI{0.6}{s} po
+granicy z~etykiety, a~początek pauzy jeszcze później, bo pauzę może uznać
+dopiero po \SI{1}{s} bezruchu. Przy oddechu tak szybkim jak hiperwentylacja
+w~tym zbiorze (75--83~oddechów/min, faza krótsza niż \SI{0.5}{s}) kosztuje to
+większość próbek: dokładność spada do 45\%. Po cofnięciu wyjścia o~najlepsze
+dla danego nagrania przesunięcie (około \SI{0.7}{s}) wraca do 76\%, a~więc
+strata wynika z~opóźnienia, a~nie z~błędnie rozpoznanych faz. Dlatego dla
+wariantów czasu rzeczywistego obok dokładności podaje się opóźnienie granic
+(podrozdz.~\ref{sec:sieci-uczenie}). Na sygnale pasa granice ręczne leżą
+średnio \SIrange{0.15}{0.20}{s} przed zwrotami wykrytymi offline, a~na
+własnych danych granica wydech--wdech leży \SI{0.25}{s} po nich:
+umiejscowienie granicy w~spoczynku na dnie oddechu jest umowne, co również
+rozstrzygnie wspólna definicja pauzy.
+
+Akcelerometry na klatce dają detektorowi mniej niż pas: 67\% (iNode) i~55\%
+(WitMotion) wobec 70\% zgodności z~etykietami ręcznymi tego samego czujnika.
+Akcelerometr jest więc użytecznym, lecz słabszym od pasa torem odniesienia
+faz, zgodnie z~wynikiem dla telefonu powyżej.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_zbior_szymanski.png}
+    \caption[Etykiety ręczne i detektor na zbiorze z pasem]{Nagranie pasa
+    ze zbioru \cite{szymanski2025}: tło i~górny pasek --- etykiety ręczne,
+    dolny pasek --- detektor deterministyczny (wdech niebieski, wydech
+    zielony, pauza po wydechu pomarańczowa, pauza po wdechu czerwona).
+    Krótkie pauzy po wydechu detektor wlicza do wydechu, a~pauzy po wdechu
+    z~opadającym pasem (od \SI{91}{s}) nazywa pauzami po wydechu.}
+    \label{fig:fazy-szymanski}
+\end{figure}
+
+Zbiór pasuje do zadania: ma te same klasy i~to, czego brakuje w~danych
+własnych --- 562~pauzy po wdechu, fragmenty szumu, oddech szybki i~płytki oraz
+trzy osoby --- a~pas, podobnie jak radar, mierzy ruch klatki. Posłuży do
+wstępnego uczenia i~jako drugi sprawdzian etykiet i~detektora; z~23~nagrań
+pasa wycięto 847~okien w~tym samym formacie co dane własne. Ograniczenia:
+brak radaru (kanał echa jest zerowy, więc sieć uczy się wtedy na samym ruchu
+i~jego prędkości), próbkowanie \SI{10}{Hz}, przewaga jednej osoby, inna
+definicja pauzy oraz licencja, która pozwala na użycie, ale nie na
+publikację przetworzonych danych.
+
+\subsection{Zbiór uczący}
+Oznaczone nagrania zapisano w~jednostkach fizycznych, a~okna tnie się
+dopiero przy eksporcie. Sieć dostaje okna \SI{60}{s} co \SI{5}{s}; pierwsze
+\SI{20}{s} każdego okna są kontekstem i~nie wchodzą do funkcji straty, bo
+przyczynowy model ma pełny kontekst dopiero po takim czasie. Każdą próbkę
+normalizuje się tylko na podstawie poprzednich \SI{30}{s} --- przemieszczenie
+względem mediany i~w~skali rozrzutu oddechu (percentyle 5--95), prędkość
+w~tej samej skali, echo względem mediany --- dokładnie tak, jak będzie to
+możliwe na żywo. Głęboki oddech sterowany i~płytki oddech nocny wyglądają
+wtedy dla sieci podobnie; o~fazie decyduje kształt, nie głębokość. Podział
+jest rozłączny względem nagrań: 13, 3 i~3~nagrania (91, 21 i~21~okien) na
+zbiory uczący, walidacyjny i~testowy. W~danych sterowanych nie ma pauz po
+wdechu ani fragmentów szumu; nowe wzorce przewodnika obejmują pauzy obu
+rodzajów, różne tempa, oddech płytki i~głęboki oraz rytm nieregularny.
+
+\section{Detektor deterministyczny jako punkt odniesienia}
+\label{sec:sieci-baseline}
+
+Detektor odczytuje kierunek ruchu klatki: narastanie to wdech, opadanie
+wydech, a~bezruch trwający co najmniej \SI{2}{s} (w~trybie czasu
+rzeczywistego \SI{1}{s}) to pauza --- po wdechu, jeśli ostatni oddech był
+wdechem, w~przeciwnym razie po wydechu. Krótszy bezruch jest punktem zwrotu
+dzielonym między sąsiednie oddechy. Bezruch zdefiniowano względnie, jako
+prędkość mniejszą niż 40--50\% typowej prędkości oddychania w~ostatnich
+\SI{30}{s}, bo rzeczywista pauza nie jest nieruchoma
+(rys.~\ref{fig:fazy-filtracja}b). Tryb offline wygładza zerofazowo
+i~oznacza pauzę od jej pierwszej próbki. Tryb czasu rzeczywistego korzysta
+wyłącznie z~przeszłości i~musi odczekać, aż bezruch potrwa wystarczająco
+długo; to opóźnienie dotyczy każdej decyzji przyczynowej, nie tylko tego
+detektora. Parametry dobrano małą siatką na 19~nagraniach sterowanych.
+
+\begin{table}[H]
+\centering
+\caption{Detektor deterministyczny na skorygowanych etykietach 19~nagrań
+sterowanych (średnie po nagraniach).}
+\label{tab:fazy-baseline}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Miara & offline & czas rzeczywisty \\
+\midrule
+Dokładność & 92,1\% & 84,1\% \\
+Makro-F1 & 0,921 & 0,837 \\
+F1: wdech / wydech & 0,934 / 0,941 & 0,834 / 0,883 \\
+F1: pauza po wydechu & 0,889 & 0,795 \\
+Wykryte granice & 91\% & 81\% \\
+Mediana błędu granicy & \SI{0.21}{s} & \SI{0.37}{s} \\
+Fałszywe granice & 1,8/min & 7,4/min \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Najtrudniejsze są pauzy i~momenty zwrotu, a~w~czasie rzeczywistym wyraźnie
+rośnie liczba fałszywych granic. Wartości te są zawyżone przez sposób
+anotacji --- granice wyznaczono na tym samym sygnale --- i~stanowią górne
+ograniczenie tego, co można wykazać na tych danych. Właściwym sprawdzianem
+sieci będzie trudny zbiór testowy z~niezależnym torem odniesienia.
 
 \section{Architektura modelu}
-\miejsce{Proponowane architektury: 1D-CNN na oknach sygnału, sieć
-rekurencyjna (LSTM/GRU), ewentualnie model hybrydowy. Wejście: przefiltrowany
-sygnał fazowy i/lub spektrogram. Uzasadnienie wyboru.}
+\label{sec:sieci-architektura}
 
-\section{Uczenie i metryki}
-\miejsce{Funkcja straty, augmentacja danych, walidacja krzyżowa po nagraniach.
-Metryki: dokładność klasyfikacji faz, F1, błąd wyznaczenia momentów przejścia.}
+Przygotowano dwie przyczynowe architektury o~tym samym wejściu (trzy kanały
+po \SI{20}{Hz}) i~wyjściu (logity pięciu klas dla każdej próbki):
+\begin{itemize}
+  \item \textbf{TCN} --- bloki resztkowe z~przyczynowymi splotami
+  jednowymiarowymi (jądro 5, dylatacje 1--64, 32~kanały), normalizacja
+  warstwowa po kanałach w~każdej chwili, bez uśredniania po czasie. Pole
+  recepcyjne wynosi 509~próbek, czyli \SI{25.45}{s}: więcej niż jeden oddech
+  przy \SI{6}{oddech\per\minute} i~cała \SI{15}{s} pauza. Model ma
+  44\,261~parametrów;
+  \item \textbf{GRU} --- dwuwarstwowa, jednokierunkowa sieć rekurencyjna
+  (64~jednostki, 38\,533~parametry), naturalnie działająca strumieniowo.
+\end{itemize}
+Obie pracują strumieniowo: kolejne porcje ramek dają wyniki identyczne
+z~przetworzeniem całego nagrania naraz (TCN przechowuje ostatnie wejścia
+każdego splotu, GRU --- stan ukryty). Wyjście dekoduje się algorytmem
+Viterbiego z~dozwolonymi przejściami (tab.~\ref{tab:klasy-faz}), a~w~czasie
+rzeczywistym prostszym wygładzaczem: nowa klasa jest przyjmowana, gdy
+utrzyma pewność przez kilka ramek, faza trwa co najmniej \SI{0.3}{s},
+a~przejście jest dozwolone. Zapobiega to migotaniu decyzji na granicach.
+
+\section{Uczenie, dane syntetyczne i metryki}
+\label{sec:sieci-uczenie}
+
+Funkcja straty to entropia krzyżowa z~pominięciem próbek $-1$ i~wagami klas
+odwrotnie proporcjonalnymi do ich częstości w~zbiorze uczącym. Uczenie
+przerywa się, gdy przestaje rosnąć makro-F1 na zbiorze walidacyjnym po
+dekodowaniu Viterbiego. Raportowane są: dokładność, F1 dla każdej klasy,
+makro-F1, macierz pomyłek, odsetek wykrytych granic, mediana błędu granicy,
+liczba fałszywych granic na minutę oraz częstość oddechu wynikająca
+z~wykrytych oddechów, a~dla wariantów czasu rzeczywistego także opóźnienie
+granic: sama dokładność próbek karze opóźnienie tym mocniej, im szybszy
+oddech (podrozdz.~\ref{sec:sieci-zbior-szymanski}).
+
+Ponieważ danych oznaczonych jest mało, przygotowano generator oddechu
+syntetycznego z~etykietami znanymi z~konstrukcji: tempo \SIrange{5}{35}{oddech\per\minute}
+zmieniające się w~czasie, głębokość \SIrange{0.2}{12}{mm}, pauzy po
+wdechu i~po wydechu, westchnienia, ruch serca, dryf oraz fragmenty ruchu
+ciała oznaczone jako szum. Przebieg przemieszczenia przechodzi przez model
+radaru A121 (faza $4\pi d/\lambda$, echo rozłożone na kilka bramek, stałe
+odbicia i~szum zespolony) i~ten sam tor odtwarzania, więc przy niskim SNR
+powstają prawdziwe błędy rozplatania fazy. Rzeczywiste nagrania są dodatkowo
+augmentowane: zmniejszenie głębokości oddechu (do poziomu snu), zmiana tempa
+z~przeskalowaniem etykiet, dodanie nagranego szumu i~dryfu. Nie planuje się
+generatywnej sieci (GAN, dyfuzja): wymagałaby dużo więcej danych i~nie
+gwarantuje poprawnych etykiet, a~realizm zapewnia wstrzykiwanie rzeczywistego
+szumu. Podobne podejście --- wstępne uczenie na innym źródle i~dostrojenie
+na radarze --- poprawiło segmentację bezdechów radarem \SI{60}{GHz}
+z~F1 0,61 do 0,82 \cite{lu2026}.
+
+Plan walidacji: najpierw zostanie nagrany trudny zbiór testowy (kilka osób,
+oddech płytki, szybki, wolny i~nieregularny, ruch, \SIrange{1}{3}{m}), który
+nie będzie używany do strojenia. Na nim porównane zostaną: detektor
+deterministyczny, sieć uczona tylko na danych rzeczywistych, tylko na
+syntetycznych, wstępnie na syntetycznych i~dostrojona na rzeczywistych oraz
+na mieszance --- każdy wariant z~kilku ziaren losowych.
 
 \section{Wyniki}
-\miejsce{Tabele i~wykresy wyników; porównanie z~metodą klasyczną
-(baseline oparty na detekcji pików z~rozdziału~\ref{chap:algorytmy}).}
+\todo{Wyniki sieci po zebraniu danych z~niezależnym torem odniesienia.
+Tymczasowym punktem odniesienia jest tab.~\ref{tab:fazy-baseline}.}
 
-\section{Dyskusja}
-\miejsce{Ograniczenia (jeden badany, ograniczona liczba nagrań), możliwości
-uogólnienia, potencjał zastosowania w~czasie rzeczywistym.}
+\section{Dyskusja i dalsze kroki}
+Ograniczenia obecnego etapu są jasne: jeden badany, etykiety wyznaczone na
+sygnale samego radaru, brak pauz po wdechu i~fragmentów szumu we własnych
+danych oznaczonych (ma je zbiór \cite{szymanski2025}) oraz niezweryfikowany
+tor odniesienia. Kolejne kroki:
+\begin{enumerate}
+  \item równoczesne nagrania A121 i~telefonu z~nowymi wzorcami przewodnika
+  i~porównanie etykiet z~obu torów w~tym samym czasie; jeśli telefon okaże
+  się niewystarczający --- pas oddechowy;
+  \item nagrania kilku osób, w~tym trudny zbiór testowy;
+  \item wybór jednej definicji pauzy dla danych własnych i~zbioru
+  \cite{szymanski2025} (podrozdz.~\ref{sec:sieci-zbior-szymanski}), a~potem
+  wstępne uczenie na pasie i~dostrajanie na radarze;
+  \item uczenie i~porównanie wariantów opisanych wyżej.
+\end{enumerate}
+
+Tętno będzie osobnym modelem. Etykiety da EKG z~modułu AD8232 podłączonego do
+wejścia ADC istniejącego firmware ESP32 (\SI{250}{Hz}): przygotowano
+wykrywanie załamków R, szereg tętna z~odrzucaniem nieprawdopodobnych
+odstępów oraz etykiety tętna dla okien. Radar widzi mechaniczne skurcze serca
+około \SI{0.1}{s} po załamku R, co trzeba uwzględnić przy etykietach
+pojedynczych uderzeń. Oddechu z~EKG (EDR) nie użyto do etykiet faz:
+dokładność częstości wynosi tam około $\pm 4.7$~oddechu/min \cite{charlton2016},
+a~pojedyncze oddechy są próbkowane tylko raz na uderzenie serca.
 
 % =====================================================================
 % =====================================================================
@@ -3801,6 +4239,59 @@ Astrophysical Journal Supplement Series, tom~236, nr~1, s.~16, 2018,
 
 \todo{Uzupełnić pozostałą bibliografię do części klinicznej, optycznej,
 UWB i~uczenia maszynowego.}
+\bibitem{szymanski2025}
+J.~Szymański, M.~Szefler, K.~Karski, F.~Krawczak, D.~Jankowski,
+\emph{Parallel Datasets for Classification of Respiratory Rhythm Phases},
+Scientific Data, t.~12, nr~1, art.~346, 2025,
+doi: 10.1038/s41597-025-04625-5; dane: doi: 10.34808/ray2-4g53.
+
+\bibitem{perslev2019}
+M.~Perslev, M.~H.~Jensen, S.~Darkner, P.~J.~Jennum, C.~Igel,
+\emph{U-Time: A Fully Convolutional Network for Time Series Segmentation
+Applied to Sleep Staging}, Advances in Neural Information Processing
+Systems~32 (NeurIPS), 2019.
+
+\bibitem{holosis_repo}
+Holosis, \emph{inhale-exhale-training: per-sample inhale/exhale
+segmentation of radar respiration}, repozytorium GitHub,
+\url{https://github.com/yael-holosis/inhale-exhale-training}
+(dostęp: 27.09.2026).
+
+\bibitem{lu2026}
+S.~Lu, P.~Wang, Z.~Li, P.~Wu, X.~Chen, L.~Du, L.~Jiang, Z.~Fang,
+\emph{Cross-Modality Transfer Learning from PSG to FMCW Radar for
+Event-Level Apnea-Hypopnea Segmentation}, Bioengineering, t.~13, 2026,
+doi: 10.3390/bioengineering13030283.
+
+\bibitem{schellenberger2020}
+S.~Schellenberger, K.~Shi, T.~Steigleder, A.~Malessa, F.~Michler,
+L.~Hameyer, N.~Neumann, F.~Lurz i~in., \emph{A dataset of clinically
+recorded radar vital signs with synchronised reference sensor signals},
+Scientific Data, t.~7, art.~291, 2020, doi: 10.1038/s41597-020-00629-5.
+
+\bibitem{shi2020}
+K.~Shi, S.~Schellenberger, C.~Will, T.~Steigleder, F.~Michler, J.~Fuchs,
+R.~Weigel, C.~Ostgathe i~in., \emph{A dataset of radar-recorded heart
+sounds and vital signs including synchronised reference sensor signals},
+Scientific Data, t.~7, art.~50, 2020, doi: 10.1038/s41597-020-0390-1.
+
+\bibitem{mobivital2025}
+Z.~Wang, D.~Hua, W.~Jiang, T.~Xing, X.~Chen, M.~Srivastava,
+\emph{MobiVital: A Dataset for Contactless Respiration Monitoring Using UWB
+Radar}, Zenodo, 2025, doi: 10.5281/zenodo.15022885.
+
+\bibitem{parralejo2026}
+F.~Parralejo, J.~A.~Paredes, F.~J.~Álvarez, Á.~Vicario, \emph{Extensive
+Age-Balanced and Subject-Varied mmWave Radar Dataset of Referenced Records
+for Vital Signs}, Zenodo, 2026, doi: 10.5281/zenodo.18599983.
+
+\bibitem{charlton2016}
+P.~H.~Charlton, T.~Bonnici, L.~Tarassenko, D.~A.~Clifton, R.~Beale,
+P.~J.~Watkinson, \emph{An assessment of algorithms to estimate respiratory
+rate from the electrocardiogram and photoplethysmogram}, Physiological
+Measurement, t.~37, nr~4, s.~610--626, 2016,
+doi: 10.1088/0967-3334/37/4/610.
+
 \end{thebibliography}
 
 \end{document}
