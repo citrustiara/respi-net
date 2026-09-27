@@ -198,10 +198,60 @@ def a121_chest_signal(
     )
 
 
-def _first_principal_component(values: np.ndarray) -> np.ndarray:
-    centred = values - values.mean(axis=0, keepdims=True)
-    _, _, vt = np.linalg.svd(centred, full_matrices=False)
-    return centred @ vt[0]
+def estimate_time_offset(
+    reference: ChestSignal,
+    other: ChestSignal,
+    *,
+    max_offset_s: float = 3.0,
+    grid_hz: float = 20.0,
+) -> tuple[float, float]:
+    """``(offset_s, |correlation|)``: how late ``other``'s clock runs against ``reference``.
+
+    Two sensors watching the same chest move together, so the shift that best
+    lines up their motion is the error between their clocks; subtract it from
+    ``other.time_s``.  One number per recording: the phase boundaries still
+    come from ``other`` alone, the reference only fixes its clock.
+
+    Breathing -- paced breathing above all -- repeats itself, and an IMU axis
+    can point either way, so lining up the signals directly is ambiguous: a
+    shift by half a breath with the sign flipped matches as well as the right
+    one.  The coarse step therefore lines up how *much* each sensor moves (a
+    sign-free envelope with unique features: holds, free breathing, changes
+    of depth), and only then are the velocities matched within one second.
+    """
+
+    start = max(reference.time_s[0], other.time_s[0]) + max_offset_s
+    stop = min(reference.time_s[-1], other.time_s[-1]) - max_offset_s
+    if stop - start < 10.0:
+        raise ValueError("The two signals overlap for less than 10 s.")
+    grid = np.arange(start, stop, 1.0 / grid_hz)
+    envelope_width = max(1, int(round(2.0 * grid_hz)))
+    kernel = np.ones(envelope_width) / envelope_width
+
+    def velocity_at(signal: ChestSignal, shift: float) -> np.ndarray:
+        return np.gradient(np.interp(grid + shift, signal.time_s, signal.chest)) * grid_hz
+
+    def envelope(velocity: np.ndarray) -> np.ndarray:
+        return np.sqrt(np.convolve(velocity**2, kernel, mode="same"))
+
+    ref_velocity = velocity_at(reference, 0.0)
+    ref_envelope = envelope(ref_velocity)
+    shifts = np.arange(-max_offset_s, max_offset_s + 1e-9, 1.0 / grid_hz)
+    coarse = max(shifts, key=lambda shift: float(np.corrcoef(ref_envelope, envelope(velocity_at(other, shift)))[0, 1]))
+    best = (float(coarse), 0.0)
+    for shift in shifts[np.abs(shifts - coarse) <= 1.0]:
+        correlation = abs(float(np.corrcoef(ref_velocity, velocity_at(other, shift))[0, 1]))
+        if correlation > best[1]:
+            best = (float(shift), correlation)
+    return best
+
+
+def _first_principal_component(values: np.ndarray, direction_from: np.ndarray | None = None) -> np.ndarray:
+    """Project ``values`` on their main axis, or on the main axis of ``direction_from``."""
+
+    basis = values if direction_from is None else direction_from
+    _, _, vt = np.linalg.svd(basis - basis.mean(axis=0, keepdims=True), full_matrices=False)
+    return (values - values.mean(axis=0, keepdims=True)) @ vt[0]
 
 
 def imu_chest_signal(
@@ -236,8 +286,13 @@ def imu_chest_signal(
     fs = sample_rate(time_s)
     accel = df[["ax", "ay", "az"]].to_numpy(dtype=float)[order] * 1000.0
     filtered = light_filter(accel, fs, low_pass_hz, axis=0)
-    motion = _first_principal_component(filtered)
-    raw = _first_principal_component(accel)
+    # The breathing *direction* is found in the breathing band, where slow
+    # drift and settling cannot outweigh it; the signal projected on that
+    # direction is only low-passed, so holds keep their shape.
+    band = butter(2, list(RATE_BAND_HZ), btype="bandpass", fs=fs, output="sos")
+    breathing_band = sosfiltfilt(band, accel, axis=0)
+    motion = _first_principal_component(filtered, direction_from=breathing_band)
+    raw = _first_principal_component(accel, direction_from=breathing_band)
     if detrend_linear:
         motion = detrend(motion, type="linear")
         raw = detrend(raw, type="linear")
