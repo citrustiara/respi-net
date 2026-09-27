@@ -18,6 +18,12 @@ dependencies = [
     "acconeer-exptool[app]>=7.18.1",
 ]
 
+[project.optional-dependencies]
+# Neural-network model and training script (tools/train_breath_phase_model.py).
+ml = [
+    "torch>=2.2",
+]
+
 [project.scripts]
 respi = "respi_net.cli:cli"
 
