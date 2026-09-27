@@ -35,6 +35,9 @@ class BoundaryScores:
     median_abs_error_s: float
     mean_abs_error_s: float
     false_per_minute: float
+    # Median of (predicted - reference) over matched changes: how late a
+    # detector announces a change, which a real-time one always does.
+    median_delay_s: float = float("nan")
 
 
 def confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, num_classes: int = NUM_CLASSES) -> np.ndarray:
@@ -112,6 +115,7 @@ def boundary_errors(
     pred = phase_boundaries(predicted, time_s)
     used = np.zeros(len(pred), dtype=bool)
     errors: list[float] = []
+    delays: list[float] = []
     for moment, before, after in ref:
         best, best_error = -1, math.inf
         for index, (candidate, cand_before, cand_after) in enumerate(pred):
@@ -123,6 +127,7 @@ def boundary_errors(
         if best >= 0 and best_error <= tolerance_s:
             used[best] = True
             errors.append(best_error)
+            delays.append(pred[best][0] - moment)
     duration_min = (time_s[-1] - time_s[0]) / 60.0 if len(time_s) > 1 else float("nan")
     # Only predicted changes inside the labelled span can be false: outside it
     # there is nothing to compare against.
@@ -139,6 +144,7 @@ def boundary_errors(
         median_abs_error_s=float(np.median(errors)) if errors else float("nan"),
         mean_abs_error_s=float(np.mean(errors)) if errors else float("nan"),
         false_per_minute=extra / duration_min if duration_min and duration_min > 0 else float("nan"),
+        median_delay_s=float(np.median(delays)) if delays else float("nan"),
     )
 
 

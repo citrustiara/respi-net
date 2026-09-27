@@ -46,5 +46,7 @@ DerivedData/
 data/archive/
 # Derived labels, datasets and inspection charts (rebuilt by tools/build_breath_phase_labels.py)
 data/processed/
+# Third-party datasets (licences forbid redistribution, e.g. CC BY-NC-ND)
+data/external/
 # Model checkpoints and training metrics (tools/train_breath_phase_model.py)
 runs/
