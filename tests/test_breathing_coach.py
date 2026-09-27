@@ -6,7 +6,7 @@ import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from respi_net.breathing import discover_patterns, load_pattern  # noqa: E402
-from respi_net.breathing_coach import BreathingCoach, phase_levels  # noqa: E402
+from respi_net.breathing_coach import LUNGS_EMPTY, LUNGS_FULL, BreathingCoach, phase_shapes  # noqa: E402
 from respi_net.coach_app import CoachWindow  # noqa: E402
 
 
@@ -61,15 +61,20 @@ def test_coach_without_a_schedule_only_shows_the_message(qapp: QApplication) -> 
     assert coach.cue_label.text() == "DECYZJA O ZASIĘGU"
 
 
-def test_holds_inside_cycles_keep_the_height_of_the_last_breath() -> None:
-    box = load_pattern("box_breathing")
-    levels = phase_levels(box)
-    assert levels[1:5] == [levels[1], levels[1], levels[3], levels[3]]
-    assert levels[1] > levels[3]
+def test_timeline_draws_what_the_lungs_do() -> None:
+    inhale, hold_full, exhale, hold_empty = phase_shapes(load_pattern("box_breathing"))[1:5]
+    assert inhale == (LUNGS_EMPTY, LUNGS_FULL)
+    assert hold_full == (LUNGS_FULL, LUNGS_FULL)
+    assert exhale == (LUNGS_FULL, LUNGS_EMPTY)
+    assert hold_empty == (LUNGS_EMPTY, LUNGS_EMPTY)
 
     paced = load_pattern("paced_12_hold")
-    standalone_hold = paced.sections[2].first_phase
-    assert phase_levels(paced)[standalone_hold] == max(phase_levels(paced))
+    shapes = phase_shapes(paced)
+    assert shapes[paced.sections[2].first_phase] == (LUNGS_EMPTY, LUNGS_EMPTY)
+
+    settle, free, hold = phase_shapes(load_pattern("natural_hold"))
+    assert settle[0] == settle[1] and free[0] == free[1]
+    assert hold == (LUNGS_EMPTY, LUNGS_EMPTY)
 
 
 def test_coach_window_counts_in_pauses_and_finishes(qapp: QApplication) -> None:

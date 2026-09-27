@@ -339,10 +339,11 @@ uv run respi live-radar --port COM6
 ## Breathing coach and pattern files
 
 Every guided-breathing screen uses one coach panel and one pattern format. The
-panel shows the whole session along the top as a colour-coded timeline (width is
-time; blue inhale, green exhale, red hold, grey free breathing, amber empty
-scene), the current cue with a bar draining as the phase runs out and the
-seconds left, and the next cue. In the last three seconds of a long phase such
+panel shows the whole session along the top as a timeline drawn the way the
+lungs move: width is time, inhales (blue) climb, exhales (green) fall, holds
+(red) stay high after an inhale and low after an exhale, and free breathing
+(grey) or an empty scene (amber) are flat. Under it are the current cue with a
+bar draining as the phase runs out and the seconds left, and the next cue. In the last three seconds of a long phase such
 as a breath hold, the next cue is highlighted. The HB100/A121, A121 lens/foil
 and LSM6DS3/iPhone recording tools all use it, and it can also run on its own:
 

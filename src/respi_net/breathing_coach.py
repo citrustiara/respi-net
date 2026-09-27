@@ -3,9 +3,11 @@
 It is read from a bed or a chair a few metres from the screen, so it is dark,
 large, and says three things:
 
-* along the top, the whole session as one bar per phase -- width is time,
-  colour is what the phase asks for, height is how much it asks -- with each
-  section named underneath and a cursor where the session has got to;
+* along the top, the whole session as one shape per phase -- width is time,
+  colour is what the phase asks for, and the outline is what the lungs do:
+  an inhale climbs, an exhale falls, a hold stays high after an inhale and low
+  after an exhale -- with each section named underneath and a cursor where
+  the session has got to;
 * the cue, with a bar draining as the phase runs out and the seconds left;
 * the phase after this one and, inside a run of cycles, when the next stretch
   of the session starts.
@@ -33,19 +35,24 @@ from .breathing import BreathPhase, BreathingPattern, CoachPosition, format_cloc
 class KindStyle:
     colour: str
     ink: str
-    level: float
 
 
-# Height is effort: a hold is the tallest thing in a session, settling the
-# lowest, and inhales stand above exhales so a run of cycles reads as a rhythm.
 KIND_STYLES = {
-    "inhale": KindStyle("#3b82f6", "#bfdbfe", 0.82),
-    "exhale": KindStyle("#22c55e", "#bbf7d0", 0.60),
-    "hold": KindStyle("#ef4444", "#fecaca", 1.00),
-    "normal": KindStyle("#94a3b8", "#e2e8f0", 0.44),
-    "settle": KindStyle("#64748b", "#cbd5e1", 0.32),
-    "interference": KindStyle("#eab308", "#fef08a", 0.44),
+    "inhale": KindStyle("#3b82f6", "#bfdbfe"),
+    "exhale": KindStyle("#22c55e", "#bbf7d0"),
+    "hold": KindStyle("#ef4444", "#fecaca"),
+    "normal": KindStyle("#94a3b8", "#e2e8f0"),
+    "settle": KindStyle("#64748b", "#cbd5e1"),
+    "interference": KindStyle("#eab308", "#fef08a"),
 }
+
+# The timeline is a picture of the lungs, in shares of the plot's height.
+# Empty stays well clear of the floor so a hold after an exhale is still a
+# visible strip rather than a line.
+LUNGS_EMPTY = 0.18
+LUNGS_FULL = 1.0
+# Phases that prescribe no breathing are flat, each at a height of its own.
+FLAT_LEVELS = {"normal": 0.44, "settle": 0.32, "interference": 0.44}
 
 PANEL = "#0b1220"
 PANEL_EDGE = "#1e293b"
@@ -70,23 +77,32 @@ def seconds_left(remaining_s: float) -> int:
     return max(0, math.ceil(remaining_s - 1e-6))
 
 
-def phase_levels(pattern: BreathingPattern) -> list[float]:
-    """Bar height for every phase of ``pattern``.
+def phase_shapes(pattern: BreathingPattern) -> list[tuple[float, float]]:
+    """``(start, end)`` height of every phase of ``pattern`` on the timeline.
 
-    A pause inside a run of cycles holds the lungs where the last breath left
-    them, so it keeps that breath's height and box breathing draws as the box
-    it is named after; a hold standing on its own is the tallest thing there.
+    An inhale climbs from empty to full and an exhale falls back, so a run of
+    cycles draws as the breaths themselves.  A hold stays where the last
+    breath left the lungs: high after an inhale, low after an exhale -- and
+    low after free breathing too, because the protocols hold after breathing
+    out.  Box breathing comes out as the box it is named after.
     """
 
-    levels: list[float] = []
-    for index, phase in enumerate(pattern.phases):
-        level = kind_style(phase.kind).level
-        if phase.kind == "hold" and index > 0 and levels:
-            section = pattern.sections[pattern.section_index_of(index)]
-            if section.kind == "paced" and index > section.first_phase:
-                level = levels[-1]
-        levels.append(level)
-    return levels
+    shapes: list[tuple[float, float]] = []
+    lungs = LUNGS_EMPTY
+    for phase in pattern.phases:
+        if phase.kind == "inhale":
+            shapes.append((LUNGS_EMPTY, LUNGS_FULL))
+            lungs = LUNGS_FULL
+        elif phase.kind == "exhale":
+            shapes.append((LUNGS_FULL, LUNGS_EMPTY))
+            lungs = LUNGS_EMPTY
+        elif phase.kind == "hold":
+            shapes.append((lungs, lungs))
+        else:
+            level = FLAT_LEVELS.get(phase.kind, FLAT_LEVELS["normal"])
+            shapes.append((level, level))
+            lungs = LUNGS_EMPTY
+    return shapes
 
 
 def _keep_space_when_hidden(widget: QWidget) -> None:
@@ -97,17 +113,18 @@ def _keep_space_when_hidden(widget: QWidget) -> None:
     widget.setSizePolicy(policy)
 
 
-def _top_rounded(rect: QRectF, radius: float) -> QPainterPath:
-    radius = min(radius, rect.width() / 2.0, rect.height())
+def _phase_outline(left: float, right: float, bottom: float, top_left: float, top_right: float) -> QPainterPath:
     path = QPainterPath()
-    path.setFillRule(Qt.FillRule.WindingFill)
-    path.addRoundedRect(rect, radius, radius)
-    path.addRect(QRectF(rect.left(), rect.bottom() - radius, rect.width(), radius))
+    path.moveTo(left, bottom)
+    path.lineTo(left, top_left)
+    path.lineTo(right, top_right)
+    path.lineTo(right, bottom)
+    path.closeSubpath()
     return path
 
 
 class CoachTimeline(QWidget):
-    """The whole session as bars; the running one fills and a cursor marks now."""
+    """The whole session as shapes; the running one fills and a cursor marks now."""
 
     PLOT_HEIGHT = 54
     LABEL_HEIGHT = 19
@@ -115,7 +132,7 @@ class CoachTimeline(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._pattern: BreathingPattern | None = None
-        self._levels: list[float] = []
+        self._shapes: list[tuple[float, float]] = []
         self._elapsed: float | None = None
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(self.PLOT_HEIGHT + self.LABEL_HEIGHT)
@@ -126,7 +143,7 @@ class CoachTimeline(QWidget):
 
     def set_pattern(self, pattern: BreathingPattern | None) -> None:
         self._pattern = pattern
-        self._levels = phase_levels(pattern) if pattern is not None else []
+        self._shapes = phase_shapes(pattern) if pattern is not None else []
         self._elapsed = None
         self.update()
 
@@ -149,25 +166,26 @@ class CoachTimeline(QWidget):
             return
         scale = width / pattern.duration_s
         position = pattern.position(self._elapsed) if self._elapsed is not None else None
-        headroom = 8.0
+        bottom = plot.bottom()
+        usable = plot.height() - 8.0
         for index, phase in enumerate(pattern.phases):
             span = phase.duration_s * scale
             gap = 1.5 if span > 6.0 else 0.5 if span > 2.0 else 0.0
-            style = kind_style(phase.kind)
-            height = max(5.0, self._levels[index] * (plot.height() - headroom))
-            rect = QRectF(phase.start_s * scale, plot.bottom() - height, max(1.0, span - gap), height)
+            left = phase.start_s * scale
+            right = left + max(1.0, span - gap)
+            start_level, end_level = self._shapes[index]
+            outline = _phase_outline(left, right, bottom, bottom - start_level * usable, bottom - end_level * usable)
             active = position is not None and not position.finished and index == position.index
             past = position is not None and (position.finished or phase.end_s <= position.elapsed_s)
-            colour = QColor(style.colour)
+            colour = QColor(kind_style(phase.kind).colour)
             colour.setAlphaF(1.0 if active else 0.28 if past else 0.78)
-            painter.fillPath(_top_rounded(rect, 2.5), colour)
+            painter.fillPath(outline, colour)
             if active:
-                done = QRectF(rect.left(), rect.top(), rect.width() * position.fraction, rect.height())
-                painter.fillRect(done, QColor(255, 255, 255, 84))
-                painter.setPen(QPen(QColor(255, 255, 255, 210), 1.0))
-                painter.setBrush(Qt.BrushStyle.NoBrush)
-                painter.drawRect(rect.adjusted(0.5, 0.5, -0.5, 0.0))
-                painter.setPen(Qt.PenStyle.NoPen)
+                painter.save()
+                painter.setClipPath(outline)
+                painter.fillRect(QRectF(left, 0.0, (right - left) * position.fraction, bottom), QColor(255, 255, 255, 84))
+                painter.restore()
+                painter.strokePath(outline, QPen(QColor(255, 255, 255, 210), 1.0))
         if position is not None:
             x = min(width - 1.0, max(1.0, position.elapsed_s * scale))
             painter.fillRect(QRectF(x - 1.0, 0.0, 2.0, plot.height()), QColor("#ffffff"))
