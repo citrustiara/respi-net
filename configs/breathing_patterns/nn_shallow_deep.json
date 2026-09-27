@@ -1,0 +1,146 @@
+{
+  "name": "Sieć faz — oddech płytki i głęboki",
+  "description": "Te same tempa (6, 10, 15, 20 i 25 oddechów/min) oddychane na zmianę płytko i głęboko, z krótkimi przerwami na swobodny oddech. Głęboki oddech wykonuj bez forsowania; przy zawrotach głowy przerwij próbę klawiszem Esc.",
+  "blocks": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Ustabilizuj pozycję i oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "label": "6/min płytko",
+      "cycles": 2,
+      "inhale_seconds": 4,
+      "exhale_seconds": 6,
+      "inhale_cue": "PŁYTKI WDECH",
+      "exhale_cue": "PŁYTKI WYDECH",
+      "inhale_detail": "Płytko — tylko niewielki ruch klatki, 4 s.",
+      "exhale_detail": "Płytko — lekki wydech, 6 s."
+    },
+    {
+      "kind": "paced",
+      "label": "6/min głęboko",
+      "cycles": 2,
+      "inhale_seconds": 4,
+      "exhale_seconds": 6,
+      "inhale_cue": "GŁĘBOKI WDECH",
+      "exhale_cue": "GŁĘBOKI WYDECH",
+      "inhale_detail": "Głęboko — nabierz pełne płuca, 4 s.",
+      "exhale_detail": "Głęboko — wypuść całe powietrze, 6 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 5,
+      "detail": "Krótka przerwa — oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "label": "10/min głęboko",
+      "cycles": 3,
+      "inhale_seconds": 2.5,
+      "exhale_seconds": 3.5,
+      "inhale_cue": "GŁĘBOKI WDECH",
+      "exhale_cue": "GŁĘBOKI WYDECH",
+      "inhale_detail": "Głęboko — nabierz pełne płuca, 2.5 s.",
+      "exhale_detail": "Głęboko — wypuść całe powietrze, 3.5 s."
+    },
+    {
+      "kind": "paced",
+      "label": "10/min płytko",
+      "cycles": 3,
+      "inhale_seconds": 2.5,
+      "exhale_seconds": 3.5,
+      "inhale_cue": "PŁYTKI WDECH",
+      "exhale_cue": "PŁYTKI WYDECH",
+      "inhale_detail": "Płytko — tylko niewielki ruch klatki, 2.5 s.",
+      "exhale_detail": "Płytko — lekki wydech, 3.5 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 5,
+      "detail": "Krótka przerwa — oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "label": "15/min płytko",
+      "cycles": 4,
+      "inhale_seconds": 1.6,
+      "exhale_seconds": 2.4,
+      "inhale_cue": "PŁYTKI WDECH",
+      "exhale_cue": "PŁYTKI WYDECH",
+      "inhale_detail": "Płytko — tylko niewielki ruch klatki, 1.6 s.",
+      "exhale_detail": "Płytko — lekki wydech, 2.4 s."
+    },
+    {
+      "kind": "paced",
+      "label": "15/min głęboko",
+      "cycles": 4,
+      "inhale_seconds": 1.6,
+      "exhale_seconds": 2.4,
+      "inhale_cue": "GŁĘBOKI WDECH",
+      "exhale_cue": "GŁĘBOKI WYDECH",
+      "inhale_detail": "Głęboko — nabierz pełne płuca, 1.6 s.",
+      "exhale_detail": "Głęboko — wypuść całe powietrze, 2.4 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 5,
+      "detail": "Krótka przerwa — oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "label": "20/min głęboko",
+      "cycles": 4,
+      "inhale_seconds": 1.2,
+      "exhale_seconds": 1.8,
+      "inhale_cue": "GŁĘBOKI WDECH",
+      "exhale_cue": "GŁĘBOKI WYDECH",
+      "inhale_detail": "Głęboko, ale bez forsowania, 1.2 s.",
+      "exhale_detail": "Głęboko — wypuść powietrze, 1.8 s."
+    },
+    {
+      "kind": "paced",
+      "label": "20/min płytko",
+      "cycles": 5,
+      "inhale_seconds": 1.2,
+      "exhale_seconds": 1.8,
+      "inhale_cue": "PŁYTKI WDECH",
+      "exhale_cue": "PŁYTKI WYDECH",
+      "inhale_detail": "Płytko — tylko niewielki ruch klatki, 1.2 s.",
+      "exhale_detail": "Płytko — lekki wydech, 1.8 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 5,
+      "detail": "Krótka przerwa — oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "label": "25/min płytko",
+      "cycles": 6,
+      "inhale_seconds": 1,
+      "exhale_seconds": 1.4,
+      "inhale_cue": "PŁYTKI WDECH",
+      "exhale_cue": "PŁYTKI WYDECH",
+      "inhale_detail": "Płytko — tylko niewielki ruch klatki, 1 s.",
+      "exhale_detail": "Płytko — lekki wydech, 1.4 s."
+    },
+    {
+      "kind": "paced",
+      "label": "25/min głęboko",
+      "cycles": 4,
+      "inhale_seconds": 1,
+      "exhale_seconds": 1.4,
+      "inhale_cue": "GŁĘBOKI WDECH",
+      "exhale_cue": "GŁĘBOKI WYDECH",
+      "inhale_detail": "Głęboko, ale bez forsowania, 1 s.",
+      "exhale_detail": "Głęboko — wypuść powietrze, 1.4 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Oddychaj swobodnie do końca próby."
+    }
+  ]
+}

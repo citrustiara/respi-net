@@ -1,0 +1,76 @@
+{
+  "name": "Sieć faz — różne tempa oddechu",
+  "description": "Pięć bloków rytmu: 6, 10, 15, 20 i 25 oddechów/min, każdy z innym stosunkiem wdechu do wydechu (w dwóch wdech jest dłuższy od wydechu), rozdzielonych krótkimi przerwami na swobodny oddech. Przy zawrotach głowy przerwij próbę klawiszem Esc.",
+  "blocks": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Ustabilizuj pozycję i oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 3,
+      "inhale_seconds": 5,
+      "exhale_seconds": 5,
+      "inhale_detail": "Powolny wdech przez 5 s.",
+      "exhale_detail": "Powolny wydech przez 5 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 6,
+      "detail": "Krótka przerwa — oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 5,
+      "inhale_seconds": 3.5,
+      "exhale_seconds": 2.5,
+      "inhale_detail": "Długi wdech przez 3.5 s.",
+      "exhale_detail": "Krótszy wydech przez 2.5 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 6,
+      "detail": "Krótka przerwa — oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 7,
+      "inhale_seconds": 1.5,
+      "exhale_seconds": 2.5,
+      "inhale_detail": "Wdech przez 1.5 s.",
+      "exhale_detail": "Dłuższy wydech przez 2.5 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 6,
+      "detail": "Krótka przerwa — oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 9,
+      "inhale_seconds": 1,
+      "exhale_seconds": 2,
+      "inhale_detail": "Szybki wdech (1 s) — nie pogłębiaj oddechu.",
+      "exhale_detail": "Wydech przez 2 s."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 6,
+      "detail": "Krótka przerwa — oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 11,
+      "inhale_seconds": 1.3,
+      "exhale_seconds": 1.1,
+      "inhale_detail": "Wdech przez 1.3 s — płytko, bez forsowania.",
+      "exhale_detail": "Szybki wydech (1.1 s)."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Oddychaj swobodnie do końca próby."
+    }
+  ]
+}

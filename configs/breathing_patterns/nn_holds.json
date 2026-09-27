@@ -1,0 +1,122 @@
+{
+  "name": "Sieć faz — pauzy po wdechu i po wydechu",
+  "description": "Rytmiczny oddech przeplatany pauzami od 3 do 15 s: zarówno po wdechu (pełne płuca), jak i po wydechu (puste płuca), pojedynczo i w cyklach. Nie forsuj — przy dyskomforcie przerwij próbę klawiszem Esc.",
+  "blocks": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Ustabilizuj pozycję i oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 3,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 5,
+      "label": "Pauza po wydechu 5 s",
+      "detail": "Po wydechu: puste płuca — nie nabieraj powietrza."
+    },
+    {
+      "kind": "paced",
+      "cycles": 2,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3
+    },
+    {
+      "kind": "inhale",
+      "duration_seconds": 2.5,
+      "detail": "Weź wdech i zatrzymaj powietrze w płucach."
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 8,
+      "label": "Pauza po wdechu 8 s",
+      "detail": "Po wdechu: pełne płuca — nie wypuszczaj powietrza."
+    },
+    {
+      "kind": "exhale",
+      "duration_seconds": 3,
+      "detail": "Spokojny wydech."
+    },
+    {
+      "kind": "paced",
+      "cycles": 3,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3
+    },
+    {
+      "kind": "paced",
+      "cycles": 3,
+      "inhale_seconds": 3,
+      "hold_after_inhale_seconds": 3,
+      "exhale_seconds": 3,
+      "hold_after_exhale_seconds": 3
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 8,
+      "detail": "Oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 3,
+      "inhale_seconds": 1.5,
+      "exhale_seconds": 2.5
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 12,
+      "label": "Pauza po wydechu 12 s",
+      "detail": "Po wydechu: puste płuca. Przy dyskomforcie naciśnij Esc."
+    },
+    {
+      "kind": "paced",
+      "cycles": 2,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3
+    },
+    {
+      "kind": "inhale",
+      "duration_seconds": 3,
+      "detail": "Weź głęboki wdech i zatrzymaj powietrze w płucach."
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 15,
+      "label": "Pauza po wdechu 15 s",
+      "detail": "Po wdechu: pełne płuca. Przy dyskomforcie naciśnij Esc."
+    },
+    {
+      "kind": "exhale",
+      "duration_seconds": 4,
+      "detail": "Powolny wydech."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 8,
+      "detail": "Oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 2,
+      "inhale_seconds": 2.5,
+      "hold_after_inhale_seconds": 5,
+      "exhale_seconds": 3.5
+    },
+    {
+      "kind": "paced",
+      "cycles": 2,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3,
+      "hold_after_exhale_seconds": 4
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Oddychaj swobodnie do końca próby."
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Sieć faz — oddech swobodny",
+  "description": "15 s uspokojenia pozycji, potem 3 min 15 s oddechu bez narzuconego rytmu. Fazy oddechu zostaną oznaczone później z ruchu telefonu (IMU), dlatego nie kontroluj oddechu.",
+  "blocks": [
+    {
+      "kind": "settle",
+      "duration_seconds": 15,
+      "detail": "Pozostań nieruchomo, bez celowych ruchów; oddychaj jak zwykle."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 195,
+      "detail": "Oddychaj naturalnie, we własnym rytmie. Nie kontroluj oddechu i nie ruszaj się."
+    }
+  ]
+}
