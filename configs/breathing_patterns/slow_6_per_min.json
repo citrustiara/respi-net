@@ -1,0 +1,17 @@
+{
+  "name": "Spokojny rytm 6/min",
+  "description": "Pięć minut oddechu 6/min z wydłużonym wydechem: wdech 4 s, wydech 6 s.",
+  "blocks": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Usiądź wygodnie i oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 30,
+      "inhale_seconds": 4,
+      "exhale_seconds": 6
+    }
+  ]
+}

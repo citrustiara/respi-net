@@ -1,0 +1,19 @@
+{
+  "name": "Oddech pudełkowy 4-4-4-4",
+  "description": "Wdech, zatrzymanie, wydech i zatrzymanie po 4 s — osiem cykli po krótkim wyciszeniu.",
+  "blocks": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Usiądź wygodnie i oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 8,
+      "inhale_seconds": 4,
+      "hold_after_inhale_seconds": 4,
+      "exhale_seconds": 4,
+      "hold_after_exhale_seconds": 4
+    }
+  ]
+}

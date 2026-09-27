@@ -7,6 +7,10 @@ supine trials with both devices fixed beside one another on the upper chest:
 * two 60 s recordings: 10 s settling, 35 s natural breathing, 15 s hold;
 * two 90 s recordings: the paced 2 s inhale / 3 s exhale protocol.
 
+Both schedules are pattern files in ``configs/breathing_patterns`` and are
+shown by the shared breathing coach: the whole trial as a timeline, the time
+left in each phase and the cue that follows.
+
 Each accepted trial contains two sensor CSV files, a common cue sidecar and a
 manifest.  Press Escape or use ``Przerwij i odrzuć`` to discard a running
 trial; after a completed recording use ``Odrzuć i powtórz`` before accepting
@@ -46,10 +50,8 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QProgressBar,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -63,12 +65,13 @@ from respi_net.imu import (
     BreathCapture,
     summarize_lsm6ds3_capture_rows,
 )
+from respi_net.breathing import phases_from_cues
+from respi_net.breathing_coach import BreathingCoach
 from respi_net.imu_guided_protocol import (
     Cue,
     Trial,
     build_trials,
     counter_delta,
-    cue_at,
     delete_trial_outputs,
     output_paths,
     sample_timing_summary,
@@ -255,10 +258,10 @@ class MeasurementWorker(QObject):
             iphone_preflight_start = self.iphone.data_count()
             preflight_start_wall_ms = time.time() * 1000.0
             for remaining in range(self.prep_seconds, 0, -1):
+                self.prep_changed.emit(remaining)
                 if self.abort_event.wait(1.0):
                     self._abort()
                     return
-                self.prep_changed.emit(remaining - 1)
 
             assert self.lsm is not None and self.iphone is not None
             if self.prep_seconds >= 3:
@@ -410,12 +413,11 @@ class GuidedImuWindow(QWidget):
         self.active_worker: MeasurementWorker | None = None
         self.active_thread: QThread | None = None
         self.pending_summary: dict[str, Any] | None = None
-        self.current_cue_window: tuple[float, float] | None = None
         self.manifest_path = session_dir / "manifest.json"
         self.manifest = self._load_manifest()
 
         self.setWindowTitle("LSM6DS3 + iPhone — prowadzony pomiar na plecach")
-        self.resize(860, 700)
+        self.resize(940, 840)
         self._build_ui()
         self.show_trial()
         self.abort_shortcut = QShortcut(QKeySequence("Esc"), self)
@@ -454,23 +456,8 @@ class GuidedImuWindow(QWidget):
         self.instructions.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(self.instructions)
 
-        cue_box = QGroupBox("Wspólne komendy oddechowe")
-        cue_layout = QVBoxLayout(cue_box)
-        self.cue_label = QLabel()
-        self.cue_label.setAlignment(Qt.AlignCenter)
-        self.cue_detail = QLabel()
-        self.cue_detail.setAlignment(Qt.AlignCenter)
-        self.cue_detail.setWordWrap(True)
-        self.cue_timer = QLabel()
-        self.cue_timer.setAlignment(Qt.AlignCenter)
-        cue_layout.addWidget(self.cue_label)
-        cue_layout.addWidget(self.cue_detail)
-        cue_layout.addWidget(self.cue_timer)
-        layout.addWidget(cue_box)
-
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 1000)
-        layout.addWidget(self.progress)
+        self.coach = BreathingCoach("Wspólne komendy oddechowe")
+        layout.addWidget(self.coach)
         self.status = QLabel("Gotowy.")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -499,28 +486,9 @@ class GuidedImuWindow(QWidget):
     def current_trial(self) -> Trial | None:
         return self.trials[self.current_index] if 0 <= self.current_index < len(self.trials) else None
 
-    def _show_cue(self, title: str, detail: str, timer: str, kind: str) -> None:
-        colours = {
-            "settle": ("#eeeeee", "#222222"),
-            "normal": ("#eeeeee", "#222222"),
-            "inhale": ("#cfe8ff", "#063b66"),
-            "exhale": ("#dcf5df", "#174d20"),
-            "hold": ("#ffe0e0", "#6d1111"),
-        }
-        background, foreground = colours.get(kind, colours["normal"])
-        self.cue_label.setText(title)
-        self.cue_label.setStyleSheet(
-            "font-size: 30px; font-weight: bold; padding: 12px; "
-            f"background: {background}; color: {foreground}; border-radius: 6px;"
-        )
-        self.cue_detail.setText(detail)
-        self.cue_timer.setText(timer)
-
     def show_trial(self, message: str | None = None) -> None:
         trial = self.current_trial()
         self.pending_summary = None
-        self.current_cue_window = None
-        self.progress.setValue(0)
         self.summary.clear()
         self.abort_button.setEnabled(False)
         self.keep_button.setEnabled(False)
@@ -530,7 +498,8 @@ class GuidedImuWindow(QWidget):
             self.instructions.setText(f"Zaakceptowane pliki i manifest znajdują się w:\n{self.session_dir}")
             self.start_button.setEnabled(False)
             self.status.setText("Gotowe.")
-            self._show_cue("KONIEC BADANIA", "", "", "normal")
+            self.coach.set_phases(())
+            self.coach.show_message("KONIEC BADANIA")
             return
         self.trial_label.setText(f"Próba {trial.number}/4 — {trial.label}")
         self.instructions.setText(
@@ -541,7 +510,8 @@ class GuidedImuWindow(QWidget):
             "niepełny strumień jest automatycznie odrzucany."
         )
         first = trial.cues[0]
-        self._show_cue(first.title, first.detail, "", first.kind)
+        self.coach.set_phases(phases_from_cues(trial.cues))
+        self.coach.show_idle(f"PO STARCIE: {first.title}", first.detail, kind=first.kind)
         self.status.setText(message or "Sprawdź ułożenie czujników, uruchom aplikację RespiPhoneIMU i wybierz Start próby.")
         self.start_button.setEnabled(True)
 
@@ -583,38 +553,30 @@ class GuidedImuWindow(QWidget):
 
     @Slot(int)
     def on_preparation(self, remaining: int) -> None:
-        self._show_cue("PRZYGOTUJ SIĘ", "Ustabilizuj ułożenie czujników i ciała.", f"Start za {remaining} s", "settle")
+        self.coach.show_countdown(remaining, self.prep_seconds, detail="Ustabilizuj ułożenie czujników i ciała.")
 
     @Slot(float, float)
     def on_progress(self, elapsed_s: float, total_s: float) -> None:
-        trial = self.current_trial()
-        if trial is None:
+        if self.current_trial() is None:
             return
-        state = cue_at(trial.cues, elapsed_s)
-        if state is not None:
-            cue, remaining = state
-            key = (cue.start_s, cue.end_s)
-            if key != self.current_cue_window:
-                self.current_cue_window = key
-                QApplication.beep()
-            self._show_cue(cue.title, cue.detail, f"Jeszcze {remaining:.1f} s • pomiar {elapsed_s:.1f}/{total_s:.0f} s", cue.kind)
-        self.progress.setValue(int(round(1000 * elapsed_s / max(total_s, 1e-9))))
+        if self.coach.set_elapsed(elapsed_s):
+            QApplication.beep()
 
     @Slot(object)
     def on_finished(self, result: object) -> None:
         self.pending_summary = dict(result)  # type: ignore[arg-type]
-        self.progress.setValue(1000)
         self.abort_button.setEnabled(False)
         self.keep_button.setEnabled(True)
         self.discard_button.setEnabled(True)
         self.summary.setPlainText(format_summary(self.pending_summary))
         self.status.setText("Próba zapisana tymczasowo. Zachowaj ją albo odrzuć i powtórz.")
-        self._show_cue("KONIEC", "Oddychaj swobodnie.", "", "normal")
+        self.coach.show_message("KONIEC", "Oddychaj swobodnie.", finished=True)
 
     @Slot(str)
     def on_failed(self, message: str) -> None:
         self.abort_button.setEnabled(False)
         self.start_button.setEnabled(True)
+        self.coach.show_message("PRÓBA PRZERWANA", "Oddychaj swobodnie.", kind="hold")
         self.status.setText(f"Próba nieudana: {message}")
         self.summary.setPlainText("Bieżące pliki usunięto. Popraw połączenie lub ustawienie i uruchom próbę ponownie.")
 
@@ -622,6 +584,7 @@ class GuidedImuWindow(QWidget):
     def on_aborted(self) -> None:
         self.abort_button.setEnabled(False)
         self.start_button.setEnabled(True)
+        self.coach.show_message("ODRZUCONO", "Oddychaj swobodnie.", kind="hold")
         self.status.setText("Bieżąca próba została odrzucona, a jej pliki usunięte.")
         self.summary.setPlainText("Przerwany zapis został usunięty.")
 

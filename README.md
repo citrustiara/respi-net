@@ -138,6 +138,16 @@ firmware. The audited serial compatibility repair remains only as a fallback
 for the older 921600-baud image and is recorded in the session manifest if it
 is ever used.
 
+Every guided run shows the same breathing coach: a colour-coded timeline of the
+whole trial, the time left in the current phase and the next cue. The breathing
+protocols are JSON pattern files in `configs/breathing_patterns/`, and the coach
+also runs on its own for any pattern:
+
+```powershell
+uv run respi coach                  # pick a pattern and follow it
+uv run respi coach --print paced_12_hold  # validate/expand a pattern file
+```
+
 IMU comparison commands are still available when needed:
 
 ```powershell

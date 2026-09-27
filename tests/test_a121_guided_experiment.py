@@ -73,6 +73,31 @@ def test_foil_2m_breathing_protocol_boundaries() -> None:
     assert breathing_cue_at(cues, 89.99)[0].kind == "exhale"
 
 
+def test_inline_protocol_keeps_its_own_wording() -> None:
+    cues = parse_breathing_protocol(load_config(FOIL_2M_CONFIG))
+
+    assert cues[15].kind == "hold"
+    assert cues[15].detail == "Zatrzymaj po zakończonym wydechu. Nie forsuj — przy dyskomforcie naciśnij Esc."
+    assert cues[-1].detail == "Spokojny wydech przez 3 sekundy."
+
+
+def test_config_can_name_a_shared_pattern_file() -> None:
+    from_file = parse_breathing_protocol({"measurement_seconds": 90, "breathing_pattern": "paced_12_hold"})
+    inline = parse_breathing_protocol(load_config(FOIL_2M_CONFIG))
+
+    assert [(c.start_s, c.end_s, c.kind, c.cue) for c in from_file] == [(c.start_s, c.end_s, c.kind, c.cue) for c in inline]
+    with pytest.raises(ValueError, match="not both"):
+        parse_breathing_protocol(
+            {
+                "measurement_seconds": 90,
+                "breathing_pattern": "paced_12_hold",
+                "breathing_protocol": [{"kind": "normal", "duration_seconds": 90}],
+            }
+        )
+    with pytest.raises(ValueError, match="lasts 90 s, but measurement_seconds is 60 s"):
+        parse_breathing_protocol({"measurement_seconds": 60, "breathing_pattern": "paced_12_hold"})
+
+
 def test_breathing_protocol_must_fill_the_measurement() -> None:
     with pytest.raises(ValueError, match="lasts 5 s, but measurement_seconds is 10 s"):
         parse_breathing_protocol(

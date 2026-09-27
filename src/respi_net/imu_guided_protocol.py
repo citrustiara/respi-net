@@ -2,6 +2,8 @@
 
 Keeping these definitions outside the Qt runner makes the prescribed timing,
 file naming and discard behaviour independently testable on a headless host.
+The breathing schedules themselves are the shared pattern files
+``natural_hold`` and ``paced_12_hold`` in ``configs/breathing_patterns``.
 """
 
 from __future__ import annotations
@@ -12,6 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from .breathing import cue_at as _cue_at
+from .breathing import load_pattern
 
 
 @dataclass(frozen=True)
@@ -40,46 +45,22 @@ class Trial:
         return data
 
 
-def _append_cue(cues: list[Cue], kind: str, duration_s: float, title: str, detail: str) -> None:
-    start_s = cues[-1].end_s if cues else 0.0
-    cues.append(Cue(start_s, start_s + duration_s, kind, title, detail))
+def _pattern_cues(pattern_id: str, duration_s: float) -> tuple[Cue, ...]:
+    pattern = load_pattern(pattern_id)
+    if not math.isclose(pattern.duration_s, duration_s):
+        raise AssertionError(f"Breathing pattern {pattern_id} must last {duration_s:g} s, got {pattern.duration_s:g} s")
+    return tuple(
+        Cue(start_s=phase.start_s, end_s=phase.end_s, kind=phase.kind, title=phase.cue, detail=phase.detail)
+        for phase in pattern.phases
+    )
 
 
 def natural_hold_cues() -> tuple[Cue, ...]:
-    cues: list[Cue] = []
-    _append_cue(cues, "settle", 10.0, "USPOKÓJ POZYCJĘ", "Leż spokojnie, bez celowych ruchów.")
-    _append_cue(cues, "normal", 35.0, "ODDYCHAJ SWOBODNIE", "Oddychaj naturalnie, bez narzuconego rytmu.")
-    _append_cue(
-        cues,
-        "hold",
-        15.0,
-        "WSTRZYMAJ ODDECH",
-        "Zatrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę.",
-    )
-    if not math.isclose(cues[-1].end_s, 60.0):
-        raise AssertionError("Natural/hold protocol must last 60 s")
-    return tuple(cues)
+    return _pattern_cues("natural_hold", 60.0)
 
 
 def paced_cues() -> tuple[Cue, ...]:
-    cues: list[Cue] = []
-    _append_cue(cues, "normal", 10.0, "ODDYCHAJ SWOBODNIE", "Ustabilizuj pozycję.")
-    for _ in range(7):
-        _append_cue(cues, "inhale", 2.0, "WDECH", "Spokojny wdech przez 2 s.")
-        _append_cue(cues, "exhale", 3.0, "WYDECH", "Spokojny wydech przez 3 s.")
-    _append_cue(
-        cues,
-        "hold",
-        15.0,
-        "WSTRZYMAJ ODDECH",
-        "Wstrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę.",
-    )
-    for _ in range(6):
-        _append_cue(cues, "inhale", 2.0, "WDECH", "Spokojny wdech przez 2 s.")
-        _append_cue(cues, "exhale", 3.0, "WYDECH", "Spokojny wydech przez 3 s.")
-    if not math.isclose(cues[-1].end_s, 90.0):
-        raise AssertionError("Paced protocol must last 90 s")
-    return tuple(cues)
+    return _pattern_cues("paced_12_hold", 90.0)
 
 
 def build_trials() -> list[Trial]:
@@ -94,10 +75,7 @@ def build_trials() -> list[Trial]:
 
 
 def cue_at(cues: tuple[Cue, ...], elapsed_s: float) -> tuple[Cue, float] | None:
-    for index, cue in enumerate(cues):
-        if elapsed_s < cue.end_s or index == len(cues) - 1:
-            return cue, max(0.0, cue.end_s - elapsed_s)
-    return None
+    return _cue_at(cues, elapsed_s)
 
 
 def _safe_name(value: str) -> str:

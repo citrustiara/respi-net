@@ -57,6 +57,48 @@ def app(sensor: str, port: str | None, baud: int | None) -> None:
     raise SystemExit(launch_app(default_sensor=sensor.lower().replace("-", "_"), default_port=port, default_baud=baud))
 
 
+@cli.command("coach")
+@click.argument("pattern", required=False)
+@click.option("--list", "list_only", is_flag=True, help="List the pattern files in configs/breathing_patterns and exit.")
+@click.option("--print", "print_only", is_flag=True, help="Print the expanded schedule of PATTERN and exit.")
+@click.option("--lead-in", default=3, show_default=True, type=click.IntRange(0, 60), help="Countdown before the first phase [s].")
+@click.option("--sound/--no-sound", default=True, show_default=True, help="Beep at every phase change.")
+def coach(pattern: str | None, list_only: bool, print_only: bool, lead_in: int, sound: bool) -> None:
+    """Open the breathing coach, or check pattern files without the UI.
+
+    PATTERN is a file name from configs/breathing_patterns (without .json) or a
+    path to any pattern file.
+    """
+    from .breathing import PatternError, discover_patterns, format_clock, load_pattern
+
+    if list_only:
+        patterns, problems = discover_patterns()
+        for item in patterns:
+            click.echo(f"{item.pattern_id:<20} {format_clock(item.duration_s):>6}  {item.name}")
+        for path, message in problems:
+            click.echo(f"{path.stem:<20} invalid: {message}", err=True)
+        if problems:
+            raise SystemExit(1)
+        return
+    if print_only and pattern is None:
+        raise click.UsageError("--print needs a PATTERN.")
+    try:
+        chosen = load_pattern(pattern) if pattern is not None else None
+    except PatternError as exc:
+        raise click.ClickException(str(exc)) from None
+    if print_only and chosen is not None:
+        click.echo(f"{chosen.name} ({chosen.pattern_id}): {format_clock(chosen.duration_s)}, {len(chosen.phases)} phases")
+        for section in chosen.sections:
+            click.echo(f"  {format_clock(section.start_s)}-{format_clock(section.end_s)}  {section.label}")
+            for phase in chosen.phases[section.first_phase : section.stop_phase]:
+                click.echo(f"      {phase.start_s:7.2f}-{phase.end_s:7.2f} s  {phase.kind:<12} {phase.cue}")
+        return
+
+    from .coach_app import launch_coach
+
+    raise SystemExit(launch_coach(pattern, lead_in_s=lead_in, sound=sound))
+
+
 @cli.command("plot-imu")
 @click.argument("csv_path", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=IMU_PLOTS_DIR, show_default=True)

@@ -336,6 +336,63 @@ uv run respi live-radar --port COM6
 
 `live-radar` now opens the unified app in HB100 radar mode.
 
+## Breathing coach and pattern files
+
+Every guided-breathing screen uses one coach panel and one pattern format. The
+panel shows the whole session along the top as a colour-coded timeline (width is
+time; blue inhale, green exhale, red hold, grey free breathing, amber empty
+scene), the current cue with a bar draining as the phase runs out and the
+seconds left, and the next cue. In the last three seconds of a long phase such
+as a breath hold, the next cue is highlighted. The HB100/A121, A121 lens/foil
+and LSM6DS3/iPhone recording tools all use it, and it can also run on its own:
+
+```powershell
+uv run respi coach                    # pick a pattern in the window
+uv run respi coach box_breathing      # start with a named pattern
+uv run respi coach path\to\mine.json   # any pattern file
+uv run respi coach --list             # list configs/breathing_patterns
+uv run respi coach --print paced_12_hold  # check a file: expanded schedule
+```
+
+Space starts, pauses and resumes; Esc stops. `Wczytaj ponownie` reloads the
+selected file after you edit it, and the cue grows with the window, so it can
+run full screen.
+
+Patterns live in `configs/breathing_patterns/*.json`:
+
+```json
+{
+  "name": "Rytm 12/min + wstrzymanie",
+  "description": "Optional text shown above the coach.",
+  "blocks": [
+    {"kind": "normal", "duration_seconds": 10},
+    {"kind": "paced", "cycles": 7, "inhale_seconds": 2, "exhale_seconds": 3},
+    {"kind": "hold", "duration_seconds": 15},
+    {"kind": "repeat", "times": 2, "blocks": [
+      {"kind": "paced", "cycles": 3, "inhale_seconds": 4, "exhale_seconds": 6},
+      {"kind": "normal", "duration_seconds": 20, "label": "Przerwa"}
+    ]}
+  ]
+}
+```
+
+- Single phases: `settle`, `normal`, `inhale`, `exhale`, `hold`,
+  `interference`, each with `duration_seconds` and optional `cue`, `detail`
+  and `label` (the name on the timeline).
+- `paced`: `cycles`, `inhale_seconds`, `exhale_seconds`, and optionally
+  `hold_after_inhale_seconds` / `hold_after_exhale_seconds` (box breathing),
+  `inhale_cue`, `exhale_cue`, `hold_cue`, `inhale_detail`, `exhale_detail`,
+  `hold_detail`, `label`.
+- `repeat`: `times` and nested `blocks`.
+
+Unknown keys are errors, not silently ignored, and every error names the block
+and key it is about. `paced_12_hold` and `natural_hold` are the protocols the
+recording tools use. The recorded cue CSVs and manifests keep their previous
+columns, and tests pin both protocols to the schedule already recorded. An A121
+experiment config can name a pattern with `"breathing_pattern": "paced_12_hold"`
+instead of listing inline `breathing_protocol` blocks. The inline blocks use
+the same format.
+
 ## A121 implementation notes
 
 The A121 capture code uses Acconeer's low-level client:
@@ -409,5 +466,8 @@ src/respi_net/radar.py    # HB100 radar analysis/capture
 src/respi_net/imu.py      # IMU analysis/capture
 src/respi_net/iphone_imu.py # iPhone BLE IMU batch receiver
 src/respi_net/cli.py      # Click CLI commands
+src/respi_net/breathing.py        # Breathing pattern files: format, loading, timeline lookups
+src/respi_net/breathing_coach.py  # Coach panel shared by every guided-breathing screen
+src/respi_net/coach_app.py        # Standalone `respi coach` window
 src/respi_net/paths.py    # Data/output paths
 ```

@@ -51,6 +51,33 @@ def test_breathing_protocol_boundaries_fill_90_seconds() -> None:
     assert breathing_cue_at(cues, 60)[0].kind == "inhale"
 
 
+def _hard_coded_range_protocol() -> list[tuple[float, float, str, str, str]]:
+    """The 90 s protocol exactly as the runner hard-coded it before the pattern files."""
+    rows: list[tuple[float, float, str, str, str]] = []
+    cursor = 0.0
+
+    def add(kind: str, duration: float, cue: str, detail: str) -> None:
+        nonlocal cursor
+        rows.append((cursor, cursor + duration, cue, detail, kind))
+        cursor += duration
+
+    add("normal", 10.0, "ODDYCHAJ SWOBODNIE", "Ustabilizuj pozycję i nie wykonuj dodatkowych ruchów.")
+    for _ in range(7):
+        add("inhale", 2.0, "WDECH", "Spokojny wdech przez 2 sekundy.")
+        add("exhale", 3.0, "WYDECH", "Spokojny wydech przez 3 sekundy.")
+    add("hold", 15.0, "WSTRZYMAJ ODDECH", "Zatrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę.")
+    for _ in range(6):
+        add("inhale", 2.0, "WDECH", "Spokojny wdech przez 2 sekundy.")
+        add("exhale", 3.0, "WYDECH", "Spokojny wydech przez 3 sekundy.")
+    return rows
+
+
+def test_range_protocol_read_from_its_pattern_file_is_the_recorded_one() -> None:
+    cues = build_breathing_cues()
+
+    assert [(cue.start_s, cue.end_s, cue.cue, cue.detail, cue.kind) for cue in cues] == _hard_coded_range_protocol()
+
+
 def test_ch9102_compatibility_mapping_recovers_only_valid_csv_rows() -> None:
     # Bit 6 set: p-y map to 0-9 and l maps to comma.
     corrupted = b"q23tlqypulqwrv\r\ninvalid\r\n"

@@ -8,7 +8,9 @@ implements the short HB100 protocol used in the thesis:
 * two 90 s recordings at 30, 60, and 100 cm,
 * optional extension from 150 cm in 50 cm increments,
 * one repositioned retry after the first failed extension distance,
-* visible/audible natural-breathing, 12/min, and breath-hold cues,
+* visible/audible natural-breathing, 12/min, and breath-hold cues, read from
+  ``configs/breathing_patterns/paced_12_hold.json`` and shown by the shared
+  breathing coach (session timeline, time left in each phase, next cue),
 * Esc/button abort that discards the current recording.
 
 Run from the repository root::
@@ -51,10 +53,8 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
-    QProgressBar,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -63,11 +63,14 @@ from PySide6.QtWidgets import (
 from scipy.signal import butter, detrend, periodogram, sosfiltfilt
 
 from respi_net.a121 import A121_CAPTURE_COLUMNS, A121Config, A121Capture, find_a121_serial_ports
+from respi_net.breathing import BreathPhase, cue_at, load_pattern, phases_from_cues
+from respi_net.breathing_coach import BreathingCoach
 
 
 HB100_COLUMNS = ["Timestamp_ms", "HostTimestamp_ms", "RawADC", "Voltage_mV"]
 HB100_LINE_RE = re.compile(rb"^(\d+),(\d+),(\d+)$")
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "raw" / "hb100_a121" / "guided"
+RANGE_BREATHING_PATTERN = "paced_12_hold"
 
 # The current HB100 firmware uses 230400 baud and should produce strict ASCII.
 # Keep the audited workaround below only as a fallback for the older 921600-baud
@@ -134,45 +137,30 @@ class HB100ProbeAttempt:
 
 def build_breathing_cues() -> list[BreathingCue]:
     """Return the fixed 90 s protocol: 10 s natural, 7 cycles, hold, 6 cycles."""
-    cues: list[BreathingCue] = []
-    cursor = 0.0
-
-    def add(kind: str, duration: float, cue: str, detail: str) -> None:
-        nonlocal cursor
-        cues.append(BreathingCue(cursor, cursor + duration, cue, detail, kind))
-        cursor += duration
-
-    add(
-        "normal",
-        10.0,
-        "ODDYCHAJ SWOBODNIE",
-        "Ustabilizuj pozycję i nie wykonuj dodatkowych ruchów.",
-    )
-    for _ in range(7):
-        add("inhale", 2.0, "WDECH", "Spokojny wdech przez 2 sekundy.")
-        add("exhale", 3.0, "WYDECH", "Spokojny wydech przez 3 sekundy.")
-    add(
-        "hold",
-        15.0,
-        "WSTRZYMAJ ODDECH",
-        "Zatrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę.",
-    )
-    for _ in range(6):
-        add("inhale", 2.0, "WDECH", "Spokojny wdech przez 2 sekundy.")
-        add("exhale", 3.0, "WYDECH", "Spokojny wydech przez 3 sekundy.")
-    if not math.isclose(cursor, 90.0):
-        raise AssertionError(f"Breathing protocol should last 90 s, got {cursor:g} s")
-    return cues
+    pattern = load_pattern(RANGE_BREATHING_PATTERN)
+    if not math.isclose(pattern.duration_s, 90.0):
+        raise AssertionError(f"Breathing protocol should last 90 s, got {pattern.duration_s:g} s")
+    return [
+        BreathingCue(start_s=phase.start_s, end_s=phase.end_s, cue=phase.cue, detail=phase.detail, kind=phase.kind)
+        for phase in pattern.phases
+    ]
 
 
 def breathing_cue_at(cues: list[BreathingCue], elapsed_s: float) -> tuple[BreathingCue, float] | None:
-    if not cues:
-        return None
-    elapsed_s = max(0.0, float(elapsed_s))
-    for index, cue in enumerate(cues):
-        if elapsed_s < cue.end_s or index == len(cues) - 1:
-            return cue, max(0.0, cue.end_s - elapsed_s)
-    return None
+    return cue_at(cues, elapsed_s)
+
+
+def interference_phases(duration_s: float) -> tuple[BreathPhase, ...]:
+    """The empty-scene screen as one coach phase: nobody moves until it ends."""
+    return (
+        BreathPhase(
+            0.0,
+            float(duration_s),
+            "interference",
+            "PUSTA I NIERUCHOMA SCENA",
+            "Nie poruszaj niczym w polu widzenia radarów.",
+        ),
+    )
 
 
 def build_initial_steps(*, include_interference: bool, hb100_only: bool) -> list[ExperimentStep]:
@@ -899,12 +887,12 @@ class GuidedExperimentWindow(QWidget):
         self.active_thread: QThread | None = None
         self.pending_summary: dict[str, Any] | None = None
         self.cached_transport: HB100Transport | None = None
-        self.current_cue_key: tuple[float, float] | None = None
+        self.range_phases = phases_from_cues(cues)
         self.manifest_path = session_dir / "manifest.json"
         self.manifest = self._load_manifest()
 
         self.setWindowTitle("HB100 + A121 — prowadzony test zasięgu oddechu")
-        self.resize(900, 800)
+        self.resize(940, 860)
         self._build_ui()
         self.show_step()
         self.abort_shortcut = QShortcut(QKeySequence("Esc"), self)
@@ -942,23 +930,8 @@ class GuidedExperimentWindow(QWidget):
         self.instructions.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(self.instructions)
 
-        cue_box = QGroupBox("Przebieg próby")
-        cue_layout = QVBoxLayout(cue_box)
-        self.cue_label = QLabel()
-        self.cue_label.setAlignment(Qt.AlignCenter)
-        self.cue_detail = QLabel()
-        self.cue_detail.setAlignment(Qt.AlignCenter)
-        self.cue_detail.setWordWrap(True)
-        self.cue_countdown = QLabel()
-        self.cue_countdown.setAlignment(Qt.AlignCenter)
-        cue_layout.addWidget(self.cue_label)
-        cue_layout.addWidget(self.cue_detail)
-        cue_layout.addWidget(self.cue_countdown)
-        layout.addWidget(cue_box)
-
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 1000)
-        layout.addWidget(self.progress)
+        self.coach = BreathingCoach("Przebieg próby")
+        layout.addWidget(self.coach)
         self.status = QLabel("Gotowy.")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -999,23 +972,6 @@ class GuidedExperimentWindow(QWidget):
     def current_step(self) -> ExperimentStep | None:
         return self.steps[self.current_index] if 0 <= self.current_index < len(self.steps) else None
 
-    def _set_cue(self, cue: str, detail: str, countdown: str, kind: str) -> None:
-        colors = {
-            "inhale": ("#cfe8ff", "#063b66"),
-            "exhale": ("#dcf5df", "#174d20"),
-            "hold": ("#ffe0e0", "#6d1111"),
-            "normal": ("#eeeeee", "#222222"),
-            "interference": ("#fff2bf", "#5b4300"),
-        }
-        background, foreground = colors.get(kind, colors["normal"])
-        self.cue_label.setText(cue)
-        self.cue_label.setStyleSheet(
-            "font-size: 32px; font-weight: bold; padding: 12px; "
-            f"background: {background}; color: {foreground}; border-radius: 6px;"
-        )
-        self.cue_detail.setText(detail)
-        self.cue_countdown.setText(countdown)
-
     def _set_review_buttons(self, step: ExperimentStep, enabled: bool) -> None:
         self.accept_button.setVisible(step.kind != "range")
         self.pass_button.setVisible(step.kind == "range")
@@ -1028,12 +984,10 @@ class GuidedExperimentWindow(QWidget):
     def show_step(self, message: str | None = None) -> None:
         step = self.current_step()
         self.pending_summary = None
-        self.current_cue_key = None
         self.start_button.setEnabled(False)
         self.abort_button.setEnabled(False)
         self.extend_button.setVisible(False)
         self.finish_button.setVisible(False)
-        self.progress.setValue(0)
         self.summary.clear()
         if step is None:
             self._show_extension_decision(message)
@@ -1045,18 +999,17 @@ class GuidedExperimentWindow(QWidget):
             f"Czujniki: {sensor_label}\n{distance_line}Czas: {step.duration_s:g} s\n\n{step.instruction}"
         )
         if step.kind == "range":
-            self._set_cue(
+            self.coach.set_phases(self.range_phases)
+            self.coach.show_idle(
                 "PO STARCIE: ODDYCHAJ SWOBODNIE",
                 "Następnie program poprowadzi 12 oddechów/min, wstrzymanie i drugi blok 12/min.",
-                "",
-                "normal",
             )
         else:
-            self._set_cue(
+            self.coach.set_phases(interference_phases(step.duration_s))
+            self.coach.show_idle(
                 "PUSTA I NIERUCHOMA SCENA",
-                "Podczas 30 sekund nie poruszaj się w polu widzenia radarów.",
-                "",
-                "interference",
+                f"Podczas {step.duration_s:g} sekund nie poruszaj się w polu widzenia radarów.",
+                kind="interference",
             )
         self.status.setText(message or "Sprawdź ustawienie i uruchom pomiar.")
         self.start_button.setEnabled(True)
@@ -1104,7 +1057,8 @@ class GuidedExperimentWindow(QWidget):
         self.finish_button.setVisible(True)
         self.finish_button.setEnabled(True)
         self.status.setText(message or "Wybierz dalszy krok.")
-        self._set_cue("DECYZJA O ZASIĘGU", "", "", "normal")
+        self.coach.set_phases(())
+        self.coach.show_message("DECYZJA O ZASIĘGU")
 
     @Slot()
     def start_measurement(self) -> None:
@@ -1144,34 +1098,19 @@ class GuidedExperimentWindow(QWidget):
 
     @Slot(int)
     def on_prep(self, remaining: int) -> None:
-        self._set_cue("PRZYGOTUJ SIĘ", "Ustabilizuj pozycję i nie zmieniaj ustawienia czujników.", f"Start za {remaining} s", "normal")
+        self.coach.show_countdown(
+            remaining,
+            self.prep_seconds,
+            detail="Ustabilizuj pozycję i nie zmieniaj ustawienia czujników.",
+        )
         self.status.setText(f"Przygotowanie: {remaining} s.")
 
     @Slot(float, float)
     def on_progress(self, elapsed: float, total: float) -> None:
         step = self.current_step()
-        if step is not None and step.kind == "range":
-            state = breathing_cue_at(self.cues, elapsed)
-            if state is not None:
-                cue, remaining = state
-                cue_key = (cue.start_s, cue.end_s)
-                if cue_key != self.current_cue_key:
-                    self.current_cue_key = cue_key
-                    QApplication.beep()
-                self._set_cue(
-                    cue.cue,
-                    cue.detail,
-                    f"Jeszcze {remaining:.1f} s • pomiar {elapsed:.1f}/{total:.0f} s",
-                    cue.kind,
-                )
-        else:
-            self._set_cue(
-                "PUSTA I NIERUCHOMA SCENA",
-                "Nie poruszaj niczym w polu widzenia radarów.",
-                f"Jeszcze {max(0.0, total - elapsed):.1f} s",
-                "interference",
-            )
-        self.progress.setValue(int(round(1000 * elapsed / max(total, 1e-9))))
+        new_phase = self.coach.set_elapsed(elapsed)
+        if new_phase and step is not None and step.kind == "range":
+            QApplication.beep()
 
     @Slot(object)
     def on_finished(self, result: object) -> None:
@@ -1180,10 +1119,9 @@ class GuidedExperimentWindow(QWidget):
         if isinstance(transport_dict, dict):
             self.cached_transport = HB100Transport(**transport_dict)
         self.abort_button.setEnabled(False)
-        self.progress.setValue(1000)
         self.summary.setPlainText(format_summary(self.pending_summary))
         self.status.setText("Zapis gotowy. Zachowaj go z oceną użyteczności albo odrzuć i powtórz.")
-        self._set_cue("KONIEC", "Oddychaj swobodnie.", "", "normal")
+        self.coach.show_message("KONIEC", "Oddychaj swobodnie.", finished=True)
         step = self.current_step()
         if step is not None:
             self._set_review_buttons(step, True)
@@ -1191,6 +1129,7 @@ class GuidedExperimentWindow(QWidget):
     @Slot(str)
     def on_failed(self, message: str) -> None:
         self.abort_button.setEnabled(False)
+        self.coach.show_message("POMIAR PRZERWANY", "Oddychaj swobodnie.", kind="hold")
         self.status.setText(f"Pomiar nieudany: {message}")
         self.summary.setPlainText("Nie zapisano bieżącej próby. Popraw połączenie/ustawienie i uruchom ją ponownie.")
         self.start_button.setEnabled(True)
@@ -1198,6 +1137,7 @@ class GuidedExperimentWindow(QWidget):
     @Slot()
     def on_aborted(self) -> None:
         self.abort_button.setEnabled(False)
+        self.coach.show_message("ODRZUCONO", "Oddychaj swobodnie.", kind="hold")
         self.status.setText("Bieżąca próba została odrzucona i nie zapisana.")
         self.summary.setPlainText("Przerwany zapis usunięto.")
         self.start_button.setEnabled(True)
@@ -1274,7 +1214,8 @@ class GuidedExperimentWindow(QWidget):
         self.finish_button.setVisible(False)
         if self.steps:
             self._set_review_buttons(self.steps[-1], False)
-        self._set_cue("KONIEC BADANIA", "", "", "normal")
+        self.coach.set_phases(())
+        self.coach.show_message("KONIEC BADANIA")
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 - Qt API
         if self.active_worker is not None:

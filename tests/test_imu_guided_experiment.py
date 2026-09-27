@@ -26,6 +26,24 @@ def test_guided_imu_protocol_contains_two_60s_and_two_90s_trials() -> None:
     assert cue_at(trials[2].cues, 45)[0].kind == "hold"
 
 
+def test_protocols_read_from_pattern_files_keep_the_recorded_schedule() -> None:
+    trials = build_trials()
+
+    assert [(cue.start_s, cue.end_s, cue.kind, cue.title, cue.detail) for cue in trials[0].cues] == [
+        (0.0, 10.0, "settle", "USPOKÓJ POZYCJĘ", "Leż spokojnie, bez celowych ruchów."),
+        (10.0, 45.0, "normal", "ODDYCHAJ SWOBODNIE", "Oddychaj naturalnie, bez narzuconego rytmu."),
+        (45.0, 60.0, "hold", "WSTRZYMAJ ODDECH", "Zatrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę."),
+    ]
+    expected: list[tuple[float, float, str, str]] = [(0.0, 10.0, "normal", "ODDYCHAJ SWOBODNIE")]
+    for block_start, cycles in ((10.0, 7), (60.0, 6)):
+        if block_start == 60.0:
+            expected.append((45.0, 60.0, "hold", "WSTRZYMAJ ODDECH"))
+        for cycle in range(cycles):
+            start = block_start + 5.0 * cycle
+            expected += [(start, start + 2.0, "inhale", "WDECH"), (start + 2.0, start + 5.0, "exhale", "WYDECH")]
+    assert [(cue.start_s, cue.end_s, cue.kind, cue.title) for cue in trials[2].cues] == expected
+
+
 def test_phone_timing_summary_estimates_gap_from_device_time_axis() -> None:
     summary = sample_timing_summary(
         [[0.0, 0, 0, 1, 0, 0, 0], [10.0, 0, 0, 1, 0, 0, 0], [20.0, 0, 0, 1, 0, 0, 0], [40.0, 0, 0, 1, 0, 0, 0]]

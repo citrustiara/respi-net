@@ -1,0 +1,32 @@
+{
+  "name": "Rytm 12/min + wstrzymanie",
+  "description": "Protokół 90 s z pomiarów radarowych i IMU: 10 s swobodnego oddechu, 7 cykli wdech 2 s / wydech 3 s, 15 s wstrzymania po wydechu i 6 kolejnych cykli.",
+  "blocks": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Ustabilizuj pozycję i nie wykonuj dodatkowych ruchów."
+    },
+    {
+      "kind": "paced",
+      "cycles": 7,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3,
+      "inhale_detail": "Spokojny wdech przez 2 sekundy.",
+      "exhale_detail": "Spokojny wydech przez 3 sekundy."
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 15,
+      "detail": "Zatrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę."
+    },
+    {
+      "kind": "paced",
+      "cycles": 6,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3,
+      "inhale_detail": "Spokojny wdech przez 2 sekundy.",
+      "exhale_detail": "Spokojny wydech przez 3 sekundy."
+    }
+  ]
+}

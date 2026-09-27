@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BREATHING_PATTERNS_DIR = PROJECT_ROOT / "configs" / "breathing_patterns"
 DATA_DIR = PROJECT_ROOT / "data"
 RAW_IMU_DIR = DATA_DIR / "raw" / "imu"
 RAW_RADAR_DIR = DATA_DIR / "raw" / "radar"

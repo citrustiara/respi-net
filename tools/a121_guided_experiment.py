@@ -16,6 +16,11 @@ The sequence, timing, A121 settings, and instructions are read from the JSON con
 file in configs/a121_foil_lens_experiment.json.  Use --start-step to begin at any
 1-based expanded measurement run, and --end-step to stop after a selected run.
 The default configuration repeats each of the 12 conditions three times, for 36 runs.
+
+A config may prescribe breathing either inline, as ``breathing_protocol`` blocks in
+the shared pattern format (see ``respi_net.breathing``), or by naming a file from
+configs/breathing_patterns in ``breathing_pattern``.  The shared breathing coach
+shows the schedule as a timeline with the time left in each phase and the next cue.
 """
 
 from __future__ import annotations
@@ -49,7 +54,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -57,6 +61,8 @@ from PySide6.QtWidgets import (
 )
 
 from respi_net.a121 import A121_CAPTURE_COLUMNS, A121Config, A121Capture, find_a121_serial_ports
+from respi_net.breathing import BreathingPattern, BreathPhase, cue_at, load_pattern, pattern_from_blocks
+from respi_net.breathing_coach import BreathingCoach
 
 
 DEFAULT_CONFIG_PATH = ROOT / "configs" / "a121_foil_lens_experiment.json"
@@ -282,79 +288,50 @@ def _positive_float(value: Any, description: str) -> float:
     return result
 
 
-def parse_breathing_protocol(payload: dict[str, Any]) -> list[BreathingCue]:
+def parse_breathing_pattern(payload: dict[str, Any]) -> BreathingPattern | None:
+    """The config's breathing schedule, or ``None`` when it prescribes none.
+
+    ``breathing_protocol`` holds blocks in the shared pattern format and
+    ``breathing_pattern`` names a file in configs/breathing_patterns instead.
+    Either way the schedule has to fill ``measurement_seconds``.
+    """
     blocks = payload.get("breathing_protocol")
-    if blocks in (None, []):
-        return []
-    if not isinstance(blocks, list):
+    reference = payload.get("breathing_pattern")
+    if reference not in (None, "") and blocks not in (None, []):
+        raise ValueError("Use either breathing_protocol or breathing_pattern, not both.")
+    if reference not in (None, ""):
+        pattern = load_pattern(str(reference))
+    elif blocks in (None, []):
+        return None
+    elif not isinstance(blocks, list):
         raise ValueError("breathing_protocol must be a list.")
-
-    cues: list[BreathingCue] = []
-    cursor = 0.0
-
-    def append_cue(kind: str, duration_s: float, cue: str, detail: str) -> None:
-        nonlocal cursor
-        cues.append(
-            BreathingCue(
-                start_s=cursor,
-                end_s=cursor + duration_s,
-                cue=cue,
-                detail=detail,
-                kind=kind,
-            )
-        )
-        cursor += duration_s
-
-    for block_number, raw in enumerate(blocks, start=1):
-        if not isinstance(raw, dict):
-            raise ValueError(f"Breathing protocol block {block_number} must be a JSON object.")
-        kind = str(raw.get("kind", "")).strip().lower()
-        if kind == "paced":
-            try:
-                cycles = int(raw.get("cycles", 0))
-            except (TypeError, ValueError) as exc:
-                raise ValueError(f"Breathing protocol block {block_number} cycles must be an integer.") from exc
-            if cycles < 1:
-                raise ValueError(f"Breathing protocol block {block_number} needs at least one cycle.")
-            inhale_s = _positive_float(raw.get("inhale_seconds"), f"Block {block_number} inhale_seconds")
-            exhale_s = _positive_float(raw.get("exhale_seconds"), f"Block {block_number} exhale_seconds")
-            inhale_cue = str(raw.get("inhale_cue") or "WDECH")
-            exhale_cue = str(raw.get("exhale_cue") or "WYDECH")
-            inhale_detail = str(raw.get("inhale_detail") or "Spokojny, równy wdech.")
-            exhale_detail = str(raw.get("exhale_detail") or "Spokojny, równy wydech.")
-            for _ in range(cycles):
-                append_cue("inhale", inhale_s, inhale_cue, inhale_detail)
-                append_cue("exhale", exhale_s, exhale_cue, exhale_detail)
-            continue
-
-        if not kind:
-            raise ValueError(f"Breathing protocol block {block_number} needs 'kind'.")
-        duration_s = _positive_float(raw.get("duration_seconds"), f"Block {block_number} duration_seconds")
-        default_cues = {
-            "normal": "ODDYCHAJ SWOBODNIE",
-            "hold": "WSTRZYMAJ ODDECH",
-        }
-        cue = str(raw.get("cue") or default_cues.get(kind, kind.upper()))
-        detail = str(raw.get("detail") or "")
-        append_cue(kind, duration_s, cue, detail)
+    else:
+        pattern = pattern_from_blocks(blocks, name="breathing_protocol", where="breathing_protocol")
 
     measurement_seconds = _positive_float(payload.get("measurement_seconds", 60), "measurement_seconds")
-    if abs(cursor - measurement_seconds) > 0.05:
+    if abs(pattern.duration_s - measurement_seconds) > 0.05:
         raise ValueError(
             "Expanded breathing protocol lasts "
-            f"{cursor:g} s, but measurement_seconds is {measurement_seconds:g} s."
+            f"{pattern.duration_s:g} s, but measurement_seconds is {measurement_seconds:g} s."
         )
-    return cues
+    return pattern
+
+
+def cues_from_pattern(pattern: BreathingPattern | None) -> list[BreathingCue]:
+    if pattern is None:
+        return []
+    return [
+        BreathingCue(start_s=phase.start_s, end_s=phase.end_s, cue=phase.cue, detail=phase.detail, kind=phase.kind)
+        for phase in pattern.phases
+    ]
+
+
+def parse_breathing_protocol(payload: dict[str, Any]) -> list[BreathingCue]:
+    return cues_from_pattern(parse_breathing_pattern(payload))
 
 
 def breathing_cue_at(cues: list[BreathingCue], elapsed_s: float) -> tuple[BreathingCue, float] | None:
-    if not cues:
-        return None
-    elapsed_s = max(0.0, float(elapsed_s))
-    for index, cue in enumerate(cues):
-        if elapsed_s < cue.end_s or index == len(cues) - 1:
-            return cue, max(0.0, cue.end_s - elapsed_s)
-    return None
+    return cue_at(cues, elapsed_s)
 
 
 def make_a121_config(payload: dict[str, Any]) -> A121Config:
@@ -648,7 +625,7 @@ class GuidedExperimentWindow(QWidget):
         *,
         config: dict[str, Any],
         steps: list[ExperimentStep],
-        breathing_cues: list[BreathingCue],
+        breathing_pattern: BreathingPattern | None,
         a121_config: A121Config,
         start_step: int,
         end_step: int,
@@ -658,7 +635,8 @@ class GuidedExperimentWindow(QWidget):
         super().__init__()
         self.config = config
         self.steps = steps
-        self.breathing_cues = breathing_cues
+        self.breathing_pattern = breathing_pattern
+        self.breathing_cues = cues_from_pattern(breathing_pattern)
         self.a121_config = a121_config
         self.current_index = start_step - 1
         self.end_index = end_step - 1
@@ -668,12 +646,11 @@ class GuidedExperimentWindow(QWidget):
         self.active_thread: QThread | None = None
         self.active_worker: MeasurementWorker | None = None
         self.pending_summary: dict[str, Any] | None = None
-        self.current_cue_key: tuple[float, float] | None = None
         self.manifest_path = self.session_dir / "manifest.json"
         self.manifest = self._load_or_create_manifest()
 
         self.setWindowTitle(str(config.get("experiment_name", "A121 guided experiment")))
-        self.resize(820, 760)
+        self.resize(900, 880)
         self._build_ui()
         self.show_step()
 
@@ -729,32 +706,14 @@ class GuidedExperimentWindow(QWidget):
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
 
-        self.cue_box = QGroupBox("Polecenie oddechowe")
-        cue_layout = QVBoxLayout(self.cue_box)
-        self.cue_label = QLabel("PRZYGOTUJ SIĘ")
-        self.cue_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cue_label.setStyleSheet("font-size: 32px; font-weight: bold; padding: 12px;")
-        self.cue_detail = QLabel()
-        self.cue_detail.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cue_detail.setWordWrap(True)
-        self.cue_countdown = QLabel()
-        self.cue_countdown.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cue_countdown.setStyleSheet("font-size: 18px; font-weight: bold;")
-        cue_layout.addWidget(self.cue_label)
-        cue_layout.addWidget(self.cue_detail)
-        cue_layout.addWidget(self.cue_countdown)
-        self.cue_box.setVisible(bool(self.breathing_cues))
-        layout.addWidget(self.cue_box)
-
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        layout.addWidget(self.progress)
+        self.coach = BreathingCoach("Polecenie oddechowe")
+        layout.addWidget(self.coach)
 
         summary_box = QGroupBox("Latest measurement")
         summary_layout = QVBoxLayout(summary_box)
         self.summary = QTextEdit()
         self.summary.setReadOnly(True)
-        self.summary.setMinimumHeight(210)
+        self.summary.setMinimumHeight(150)
         summary_layout.addWidget(self.summary)
         layout.addWidget(summary_box, stretch=1)
 
@@ -789,21 +748,14 @@ class GuidedExperimentWindow(QWidget):
         keyboard.setStyleSheet("color: #666;")
         layout.addWidget(keyboard)
 
-    def _set_cue_display(self, cue: str, detail: str, countdown: str, kind: str) -> None:
-        colors = {
-            "inhale": ("#dbeafe", "#1d4ed8"),
-            "exhale": ("#dcfce7", "#15803d"),
-            "hold": ("#fee2e2", "#b91c1c"),
-            "normal": ("#f3f4f6", "#374151"),
-        }
-        background, foreground = colors.get(kind, colors["normal"])
-        self.cue_label.setText(cue)
-        self.cue_label.setStyleSheet(
-            "font-size: 32px; font-weight: bold; padding: 12px; "
-            f"background: {background}; color: {foreground}; border-radius: 6px;"
+    def _coach_pattern(self) -> BreathingPattern:
+        """The configured schedule, or one still, freely breathing phase for the whole run."""
+        if self.breathing_pattern is not None:
+            return self.breathing_pattern
+        measurement_seconds = max(1.0, float(self.config.get("measurement_seconds", 60)))
+        return BreathingPattern.from_phases(
+            [BreathPhase(0.0, measurement_seconds, "normal", "ODDYCHAJ SWOBODNIE", "Pozostań nieruchomo do końca pomiaru.")]
         )
-        self.cue_detail.setText(detail)
-        self.cue_countdown.setText(countdown)
 
     def current_step(self) -> ExperimentStep | None:
         if 0 <= self.current_index < len(self.steps) and self.current_index <= self.end_index:
@@ -813,20 +765,13 @@ class GuidedExperimentWindow(QWidget):
     def show_step(self, status_text: str | None = None) -> None:
         step = self.current_step()
         self.pending_summary = None
-        self.current_cue_key = None
         self.accept_button.setEnabled(False)
         self.redo_button.setEnabled(False)
         self.abort_button.setEnabled(False)
-        self.progress.setValue(0)
         self.summary.clear()
-        if self.breathing_cues:
-            self._set_cue_display(
-                "PO STARCIE: ODDYCHAJ SWOBODNIE",
-                "Program następnie poprowadzi wdech, wydech i wstrzymanie oddechu.",
-                "",
-                "normal",
-            )
         if step is None:
+            self.coach.set_pattern(None)
+            self.coach.show_message("KONIEC BADANIA")
             self.step_label.setText("Experiment complete")
             self.instructions.setText(
                 f"All selected measurements are complete. Accepted files and manifest are in:\n{self.session_dir}"
@@ -850,6 +795,14 @@ class GuidedExperimentWindow(QWidget):
             f"{step.instruction}\n\n"
             "Check the setup, then click Start measurement."
         )
+        self.coach.set_pattern(self._coach_pattern())
+        if self.breathing_cues:
+            self.coach.show_idle(
+                "PO STARCIE: ODDYCHAJ SWOBODNIE",
+                "Program następnie poprowadzi wdech, wydech i wstrzymanie oddechu.",
+            )
+        else:
+            self.coach.show_idle("ODDYCHAJ SWOBODNIE", "Po starcie pozostań nieruchomo do końca pomiaru.")
         self.status.setText(status_text or "Ready.")
         self.start_button.setEnabled(True)
 
@@ -879,8 +832,6 @@ class GuidedExperimentWindow(QWidget):
         self.redo_button.setEnabled(False)
         self.summary.clear()
         self.status.setText("Starting…")
-        self.current_cue_key = None
-        self.progress.setValue(0)
 
         worker = MeasurementWorker(
             step=step,
@@ -910,51 +861,36 @@ class GuidedExperimentWindow(QWidget):
     @Slot(int)
     def on_prep_changed(self, remaining: int) -> None:
         self.status.setText(f"Preparation: {remaining} seconds remaining. Hold still.")
-        if self.breathing_cues:
-            self._set_cue_display(
-                "PRZYGOTUJ SIĘ",
-                "Usiądź nieruchomo. Pierwsze 10 sekund nagrania to swobodny oddech.",
-                f"Start za {remaining} s",
-                "normal",
-            )
-        self.progress.setValue(0)
+        self.coach.show_countdown(
+            remaining,
+            max(0, int(round(float(self.config.get("prep_seconds", 10))))),
+            detail="Usiądź nieruchomo i nie zmieniaj ustawienia stanowiska.",
+        )
 
     @Slot(float, float)
     def on_measurement_changed(self, elapsed: float, total: float) -> None:
-        cue_state = breathing_cue_at(self.breathing_cues, elapsed)
-        if cue_state is not None:
-            cue, remaining = cue_state
-            cue_key = (cue.start_s, cue.end_s)
-            if cue_key != self.current_cue_key:
-                self.current_cue_key = cue_key
-                if bool(self.config.get("audible_cues", True)):
-                    QApplication.beep()
-            self._set_cue_display(
-                cue.cue,
-                cue.detail,
-                f"Jeszcze {remaining:.1f} s  •  pomiar {elapsed:.1f}/{total:.0f} s",
-                cue.kind,
-            )
+        new_phase = self.coach.set_elapsed(elapsed)
+        if self.breathing_cues:
+            if new_phase and bool(self.config.get("audible_cues", True)):
+                QApplication.beep()
             self.status.setText(f"Measuring: {elapsed:.1f}/{total:.0f} seconds. Follow the cue.")
         else:
             self.status.setText(f"Measuring: {elapsed:.1f}/{total:.0f} seconds. Stay still.")
-        self.progress.setValue(int(round(100.0 * elapsed / max(total, 1e-9))))
 
     @Slot(object)
     def on_measurement_finished(self, summary: object) -> None:
         self.pending_summary = dict(summary)  # type: ignore[arg-type]
         self.abort_button.setEnabled(False)
-        self.progress.setValue(100)
         self.summary.setPlainText(format_summary(self.pending_summary))
         self.status.setText("Review the result. Accept it or redo it before continuing.")
-        if self.breathing_cues:
-            self._set_cue_display("KONIEC", "Oddychaj swobodnie.", "Nagranie gotowe do oceny.", "normal")
+        self.coach.show_message("KONIEC", "Oddychaj swobodnie. Nagranie gotowe do oceny.", finished=True)
         self.accept_button.setEnabled(True)
         self.redo_button.setEnabled(True)
 
     @Slot(str)
     def on_measurement_failed(self, message: str) -> None:
         self.abort_button.setEnabled(False)
+        self.coach.show_message("POMIAR PRZERWANY", "Oddychaj swobodnie.", kind="hold")
         self.status.setText(f"Measurement failed: {message}")
         self.summary.setPlainText("No accepted recording was created. Fix the setup and click Start again.")
         self.start_button.setEnabled(True)
@@ -964,8 +900,7 @@ class GuidedExperimentWindow(QWidget):
         self.abort_button.setEnabled(False)
         self.status.setText("Current measurement discarded. Click Start measurement to redo it.")
         self.summary.setPlainText("Interrupted capture was not saved.")
-        if self.breathing_cues:
-            self._set_cue_display("ODRZUCONO", "Oddychaj swobodnie.", "Uruchom ponownie, gdy będziesz gotowy.", "hold")
+        self.coach.show_message("ODRZUCONO", "Oddychaj swobodnie. Uruchom ponownie, gdy będziesz gotowy.", kind="hold")
         self.start_button.setEnabled(True)
 
     @Slot()
@@ -1091,7 +1026,8 @@ def main(
     try:
         config = apply_overrides(load_config(args.config), args)
         steps = parse_steps(config)
-        breathing_cues = parse_breathing_protocol(config)
+        breathing_pattern = parse_breathing_pattern(config)
+        breathing_cues = cues_from_pattern(breathing_pattern)
         a121_config = make_a121_config(config)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
@@ -1134,7 +1070,7 @@ def main(
     window = GuidedExperimentWindow(
         config=config,
         steps=steps,
-        breathing_cues=breathing_cues,
+        breathing_pattern=breathing_pattern,
         a121_config=a121_config,
         start_step=args.start_step,
         end_step=end_step,

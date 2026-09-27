@@ -1,0 +1,21 @@
+{
+  "name": "Oddech naturalny + wstrzymanie",
+  "description": "Protokół 60 s z porównania IMU: 10 s uspokojenia pozycji, 35 s oddechu bez narzuconego rytmu i 15 s wstrzymania po wydechu.",
+  "blocks": [
+    {
+      "kind": "settle",
+      "duration_seconds": 10,
+      "detail": "Leż spokojnie, bez celowych ruchów."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 35,
+      "detail": "Oddychaj naturalnie, bez narzuconego rytmu."
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 15,
+      "detail": "Zatrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę."
+    }
+  ]
+}
