@@ -22,7 +22,8 @@ Two datasets in the nn_dataset format, ready for
 
 ``artificial_summary.json`` lists the labelled minutes per source, class and
 split, and ``--thesis-figure`` draws ``docs/thesis/figures/fazy_dane_sztuczne.png``
-(a synthetic run, and a real run next to one of its copies).  Run
+(a synthetic run, and a real run next to one of its copies); ``--notes-figure
+PNG`` draws the same in English for local notes.  Run
 ``tools/build_breath_phase_labels.py`` and
 ``tools/analyze_szymanski_dataset.py --export`` first.
 
@@ -66,6 +67,26 @@ from respi_net.szymanski_dataset import recordings, to_labelled_run
 
 OUT = ROOT / "data" / "processed" / "breath_phases"
 FIGURE = ROOT / "docs" / "thesis" / "figures" / "fazy_dane_sztuczne.png"
+TEXT = {
+    "pl": {
+        "y": "ruch klatki [mm]",
+        "x": "czas [s]",
+        "a": "a) nagranie syntetyczne po modelu radaru A121 (SNR {snr:.0f} dB)",
+        "b": "b) fragment rzeczywistego nagrania A121",
+        "c": "c) te same oddechy w kopii: {stretch} raza dłużej, z szumem radaru i dryfem",
+        "decimal": ",",
+        "names": CLASS_NAMES_PL,
+    },
+    "en": {
+        "y": "chest motion [mm]",
+        "x": "time [s]",
+        "a": "a) synthetic recording after the A121 radar model (SNR {snr:.0f} dB)",
+        "b": "b) part of a real A121 recording",
+        "c": "c) the same breaths in a copy: {stretch}x as long, with radar noise and drift",
+        "decimal": ".",
+        "names": tuple(name.replace("_", " ") for name in CLASS_NAMES),
+    },
+}
 STRETCH = (0.7, 0.8, 0.9, 1.1, 1.25, 1.4)  # one augmented copy per factor
 NOISE_RATIO = (0.03, 0.3)  # noise std over breath size, log-uniform per copy
 FS = 20.0
@@ -98,18 +119,18 @@ def augment(runs: list[LabelledRun], splits: dict[str, str], bank, rng: np.rando
     ]
 
 
-def _shade(ax: plt.Axes, time_s: np.ndarray, chest: np.ndarray, labels: np.ndarray, title: str) -> None:
+def _shade(ax: plt.Axes, time_s: np.ndarray, chest: np.ndarray, labels: np.ndarray, title: str, ylabel: str) -> None:
     for start, stop, label in label_runs(labels):
         if label != IGNORE:
             ax.axvspan(time_s[start], time_s[min(stop, len(time_s) - 1)], color=CLASS_COLOURS[label], alpha=0.28, lw=0)
     ax.plot(time_s, chest, color="#111827", lw=1.0)
     ax.set_xlim(time_s[0], time_s[-1])
-    ax.set_ylabel("ruch klatki [mm]")
+    ax.set_ylabel(ylabel)
     ax.set_title(title, loc="left", fontsize=10)
     ax.grid(alpha=0.25)
 
 
-def plot_examples(synthetic: list[LabelledRun], real: LabelledRun, copy: LabelledRun, path: Path) -> None:
+def plot_examples(synthetic: list[LabelledRun], real: LabelledRun, copy: LabelledRun, path: Path, language: str = "pl") -> None:
     """a) 60 s of a synthetic run with both kinds of hold; b) 30 s of a real run; c) the same breaths in its copy."""
 
     width = int(60 * FS)
@@ -124,17 +145,18 @@ def plot_examples(synthetic: list[LabelledRun], real: LabelledRun, copy: Labelle
     stretch = float(copy.meta["stretch"])
     fig, axes = plt.subplots(3, 1, figsize=(11, 8.2), gridspec_kw={"hspace": 0.55})
     part = slice(start, start + width)
+    text = TEXT[language]
     _shade(axes[0], run.time_s[part] - run.time_s[start], run.features[0][part], run.labels[part],
-           f"a) nagranie syntetyczne po modelu radaru A121 (SNR {run.meta['snr_db']:.0f} dB)")
+           text["a"].format(snr=run.meta["snr_db"]), text["y"])
     original = slice(int(10 * FS), int(40 * FS))
-    _shade(axes[1], real.time_s[original], real.features[0][original], real.labels[original], "b) fragment rzeczywistego nagrania A121")
+    _shade(axes[1], real.time_s[original], real.features[0][original], real.labels[original], text["b"], text["y"])
     copied = slice(int(10 * FS * stretch), int(40 * FS * stretch))
     _shade(axes[2], copy.time_s[copied], copy.features[0][copied], copy.labels[copied],
-           f"c) te same oddechy w kopii: {stretch:g} raza dłużej, z szumem radaru i dryfem".replace(".", ","))
-    axes[2].set_xlabel("czas [s]")
+           text["c"].format(stretch=f"{stretch:g}".replace(".", text["decimal"])), text["y"])
+    axes[2].set_xlabel(text["x"])
     shown = (INHALE, EXHALE, HOLD_AFTER_INHALE, HOLD_AFTER_EXHALE, NOISE)
     handles = [plt.Rectangle((0, 0), 1, 1, color=CLASS_COLOURS[label], alpha=0.5) for label in shown]
-    fig.legend(handles, [CLASS_NAMES_PL[label] for label in shown], loc="lower center", ncol=5, frameon=False, fontsize=9, bbox_to_anchor=(0.5, -0.02))
+    fig.legend(handles, [text["names"][label] for label in shown], loc="lower center", ncol=5, frameon=False, fontsize=9, bbox_to_anchor=(0.5, -0.02))
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=160, bbox_inches="tight")
     plt.close(fig)
@@ -147,6 +169,7 @@ def main() -> int:
     parser.add_argument("--stride-s", type=float, default=10.0, help="window stride of the exported sets")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--thesis-figure", action="store_true")
+    parser.add_argument("--notes-figure", type=Path, default=None, metavar="PNG", help="the same examples in English")
     args = parser.parse_args()
     rng = np.random.default_rng(args.seed)
 
@@ -194,11 +217,14 @@ def main() -> int:
     print(header)
     for source, values in summary["sources"].items():
         print(f"{source:22} {values['labelled']:9.1f} " + " ".join(f"{values[name]:12.1f}" for name in CLASS_NAMES))
+    copy = next(run for run in coach_aug if run.meta["stretch"] == 1.25)
+    real = next(run for run in coach if run.run_id == copy.meta["augmented_from"])
     if args.thesis_figure:
-        copy = next(run for run in coach_aug if run.meta["stretch"] == 1.25)
-        real = next(run for run in coach if run.run_id == copy.meta["augmented_from"])
-        plot_examples(synthetic, real, copy, FIGURE)
+        plot_examples(synthetic, real, copy, FIGURE, "pl")
         print(f"\nFigure: {FIGURE}")
+    if args.notes_figure:
+        plot_examples(synthetic, real, copy, args.notes_figure, "en")
+        print(f"Notes figure: {args.notes_figure}")
     return 0
 
 
