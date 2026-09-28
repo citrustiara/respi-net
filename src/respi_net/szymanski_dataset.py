@@ -49,10 +49,12 @@ signal, and not the raw signal:
 :func:`corrected_labels` undoes both: it delays the labels by the smoothing
 lead and lets a breath run into a labelled hold for as long as the chest
 still moves that breath's way.  A quick settle the other way at the start of
-a hold (a little air let out after a deep inhale) is neither breath nor hold
-and is left unlabelled.  The WitMotion labels were copied from the belt by
-time stamp (``transfer_labels.py``) and sit 0.2-0.8 s early depending on the
-file, so no fixed rule corrects them; they are left as published.
+a hold stays part of the hold, as the labellers had it: with the glottis
+closed, volume shifts between chest and belly without air moving, so a
+chest belt can drop while the lungs stay full.  The WitMotion labels were
+copied from the belt by time stamp (``transfer_labels.py``) and sit 0.2-0.8 s
+early depending on the file, so no fixed rule corrects them; they are left
+as published.
 """
 
 from __future__ import annotations
@@ -189,8 +191,6 @@ def fix_hold_starts(
     *,
     motion_fraction: float = 0.2,
     max_extend_s: float = 1.5,
-    max_settle_s: float = 2.0,
-    settle_gap_s: float = 0.3,
     min_stop_s: float = 0.2,
 ) -> np.ndarray:
     """Start each hold where the chest stops moving the preceding breath's way.
@@ -200,8 +200,8 @@ def fix_hold_starts(
     as in :func:`respi_net.label_alignment.align_cues`; the breath has stopped
     once it stays slower than that for ``min_stop_s``, so a brief slowdown in
     a two-step inhale does not end it.  Boundaries only move later and never
-    past the end of the hold; a settle the other way right after the breath
-    becomes IGNORE.
+    past the end of the hold.  Motion the other way after the breath (a
+    settle) is left in the hold.
     """
 
     labels = np.array(labels, copy=True)
@@ -218,15 +218,6 @@ def fix_hold_starts(
         while end < limit and np.any(direction * velocity[end : min(limit, end + pause)] > threshold):
             end += 1
         labels[start:end] = before
-        # The settle starts once the chest has turned, which takes a moment.
-        limit = min(stop, end + int(round(max_settle_s * fs)))
-        turn = min(limit, end + int(round(settle_gap_s * fs)))
-        settled = next((index for index in range(end, turn) if -direction * velocity[index] > threshold), None)
-        if settled is None:
-            continue
-        while settled < limit and -direction * velocity[settled] > threshold:
-            settled += 1
-        labels[end:settled] = IGNORE
     return labels
 
 

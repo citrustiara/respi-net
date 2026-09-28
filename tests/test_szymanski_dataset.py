@@ -97,10 +97,10 @@ def test_holds_start_where_the_breath_stops() -> None:
     labels[tail] = np.where(t < 2.0, INHALE, HOLD_AFTER_INHALE)
 
     fixed = fix_hold_starts(labels, chest, fs)
-    hold_start = int(np.flatnonzero((fixed == HOLD_AFTER_INHALE) & tail)[0])
-    assert 22.4 <= time_s[hold_start] <= 23.2
+    hold_start = time_s[np.flatnonzero((fixed == HOLD_AFTER_INHALE) & tail)[0]]
+    assert 22.35 <= hold_start <= 22.7
     assert np.all(fixed[(time_s >= 20.2) & (time_s < 22.3)] == INHALE)
-    assert np.any(fixed[(time_s >= 22.4) & (time_s < 23.0)] == IGNORE)
-    assert np.all(fixed[time_s >= 23.3] == HOLD_AFTER_INHALE)
+    # The settle after the peak stays part of the hold.
+    assert np.all(fixed[time_s >= 22.7] == HOLD_AFTER_INHALE)
     # Nothing else changes.
     assert np.array_equal(fixed[time_s < 19.5], labels[time_s < 19.5])

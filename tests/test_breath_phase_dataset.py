@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from respi_net.breath_phases import EXHALE, HOLD_AFTER_EXHALE, IGNORE, INHALE
+from respi_net.breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE
 from respi_net.chest_signal import ChestSignal
 from respi_net.nn_dataset import (
     CHANNELS,
@@ -86,3 +86,32 @@ def test_runs_round_trip_and_export_splits_by_run(tmp_path: Path) -> None:
         assert len(set(data["split"][data["run_id"] == run_id])) == 1
     assert meta["fs"] == pytest.approx(FS)
     assert data["meta"]["channels"] == list(CHANNELS)
+
+
+def test_a_settle_into_a_hold_belongs_to_the_hold() -> None:
+    """Deep inhale, a quick settle down by a quarter of it, then a 10 s hold."""
+    time_s = np.arange(0.0, 60.0, 1.0 / FS)
+    chest = np.zeros(len(time_s))
+    for start in np.arange(0.0, 30.0, 5.0):
+        inhale = (time_s >= start) & (time_s < start + 2.0)
+        exhale = (time_s >= start + 2.0) & (time_s < start + 5.0)
+        chest[inhale] = 0.5 - 0.5 * np.cos(np.pi * (time_s[inhale] - start) / 2.0)
+        chest[exhale] = 0.5 + 0.5 * np.cos(np.pi * (time_s[exhale] - start - 2.0) / 3.0)
+    t = time_s - 30.0
+    rise, settle, held, out = (t >= 0) & (t < 2.5), (t >= 2.5) & (t < 3.0), (t >= 3.0) & (t < 13.0), t >= 13.0
+    chest[rise] = 0.6 - 0.6 * np.cos(np.pi * t[rise] / 2.5)
+    chest[settle] = 1.2 - 0.3 * (0.5 - 0.5 * np.cos(np.pi * (t[settle] - 2.5) / 0.5))
+    chest[held] = 0.9
+    chest[out] = 0.45 + 0.45 * np.cos(np.pi * np.clip(t[out] - 13.0, 0.0, 3.0) / 3.0)
+    chest = 8.0 * chest + 0.02 * np.random.default_rng(4).standard_normal(len(chest))
+
+    offline = detect_phases(chest, FS)
+    hold = (t >= 3.5) & (t < 12.5)
+    assert np.mean(offline[hold] == HOLD_AFTER_INHALE) > 0.95
+    assert not np.any(offline[(t >= 2.6) & (t < 12.5)] == EXHALE)
+    assert not np.any(offline[(t >= 2.6) & (t < 12.5)] == HOLD_AFTER_EXHALE)
+
+    realtime = detect_phases(chest, FS, causal=True)
+    late_hold = (t >= 5.0) & (t < 12.5)
+    assert np.mean(realtime[late_hold] == HOLD_AFTER_INHALE) > 0.95
+    assert not np.any(realtime[(t >= 3.0) & (t < 13.0)] == HOLD_AFTER_EXHALE)

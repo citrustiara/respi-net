@@ -5,6 +5,15 @@ exhale, and standing still for at least ``min_hold_s`` a hold -- after inhale
 if the last breath went in, after exhale otherwise.  Shorter still moments
 are turning points and are split between the breaths on either side.
 
+A hold after a deep breath often begins with a quick settle the other way:
+with the glottis closed, volume shifts between chest and belly without air
+moving, so the chest drops a little while the lungs stay full.  A short move
+back (``max_settle_s``) followed by a hold that stays near where the breath
+before it ended -- within ``max_settle_fraction`` of that breath's depth --
+is therefore part of the hold, and the hold is named after that breath.  A
+real exhale into a hold takes the chest most of the way down and keeps its
+own name, even when its fast part is short and it finishes slowly.
+
 Offline it sees the whole recording: smoothing is zero-phase and a hold is
 labelled from its first still sample.  In real-time mode it sees only the
 past: the smoothing lags, a reversal must be confirmed, and a hold can only
@@ -45,6 +54,43 @@ def _speed_scale(speed: np.ndarray, fs: float, window_s: float, *, causal: bool)
     return np.where(np.isfinite(scale) & (scale > 0), scale, fallback)
 
 
+HOLD_OF = {INHALE: HOLD_AFTER_INHALE, EXHALE: HOLD_AFTER_EXHALE}
+BREATH_OF = {1: INHALE, -1: EXHALE}
+
+
+def _absorb_settles(
+    direction: np.ndarray,
+    smooth: np.ndarray,
+    fs: float,
+    min_hold_s: float,
+    max_settle_s: float,
+    max_settle_fraction: float,
+) -> np.ndarray:
+    """Direction with every settle into a hold turned into stillness (see module docstring)."""
+
+    direction = np.array(direction, copy=True)
+    runs = label_runs(direction)
+    min_hold = int(round(min_hold_s * fs))
+    max_settle = int(round(max_settle_s * fs))
+    for index, (start, stop, value) in enumerate(runs[:-1]):
+        following = runs[index + 1]
+        if value == 0 or stop - start > max_settle or following[2] != 0 or following[1] - following[0] < min_hold:
+            continue
+        # The breath before, past a short pause at its turning point.
+        before = index - 1
+        while before >= 0 and runs[before][2] == 0 and runs[before][1] - runs[before][0] < min_hold:
+            before -= 1
+        if before < 0 or runs[before][2] != -value:
+            continue
+        breath_start, breath_stop, _ = runs[before]
+        breath_end = smooth[breath_stop - 1]
+        depth = abs(breath_end - smooth[breath_start])
+        hold_level = float(np.median(smooth[following[0] : following[1]]))
+        if abs(hold_level - breath_end) <= max_settle_fraction * depth:
+            direction[start:stop] = 0
+    return direction
+
+
 def _offline(direction: np.ndarray, fs: float, min_hold_s: float) -> np.ndarray:
     labels = np.full(len(direction), IGNORE, dtype=np.int8)
     runs = label_runs(direction)
@@ -68,13 +114,25 @@ def _offline(direction: np.ndarray, fs: float, min_hold_s: float) -> np.ndarray:
     return labels
 
 
-def _causal(direction: np.ndarray, fs: float, min_hold_s: float, min_phase_s: float) -> np.ndarray:
+def _causal(
+    direction: np.ndarray,
+    smooth: np.ndarray,
+    fs: float,
+    min_hold_s: float,
+    min_phase_s: float,
+    max_settle_s: float,
+    max_settle_fraction: float,
+) -> np.ndarray:
     labels = np.full(len(direction), IGNORE, dtype=np.int8)
     min_hold = int(round(min_hold_s * fs))
     min_phase = int(round(min_phase_s * fs))
+    max_settle = int(round(max_settle_s * fs))
     current = IGNORE
     since_switch = min_phase
     still = 0
+    breath_start = 0
+    # The breath before this one: its class, depth and where it ended.
+    previous: tuple[int, float, float] = (IGNORE, 0.0, 0.0)
     for index, value in enumerate(direction):
         since_switch += 1
         wanted = current
@@ -86,9 +144,20 @@ def _causal(direction: np.ndarray, fs: float, min_hold_s: float, min_phase_s: fl
             wanted = EXHALE
         else:
             still += 1
-            if still >= min_hold and current in (INHALE, EXHALE):
-                wanted = HOLD_AFTER_INHALE if current == INHALE else HOLD_AFTER_EXHALE
+            if still >= min_hold and current in HOLD_OF:
+                wanted = HOLD_OF[current]
+                # Was this "breath" only the settle after the one before?
+                label, depth, end = previous
+                short = index - still - breath_start <= max_settle
+                if label in HOLD_OF and label != current and short and abs(smooth[index] - end) <= max_settle_fraction * depth:
+                    wanted = HOLD_OF[label]
         if wanted != current and (current == IGNORE or since_switch >= min_phase):
+            if wanted in HOLD_OF:
+                if current in HOLD_OF:
+                    previous = (current, abs(smooth[index] - smooth[breath_start]), float(smooth[index]))
+                else:
+                    previous = (IGNORE, 0.0, 0.0)
+                breath_start = index
             current = wanted
             since_switch = 0
         labels[index] = current
@@ -116,6 +185,8 @@ def detect_phases(
     min_hold_s: float | None = None,
     min_phase_s: float = 0.4,
     scale_window_s: float = 30.0,
+    max_settle_s: float = 0.8,
+    max_settle_fraction: float = 0.4,
 ) -> np.ndarray:
     """Phase labels (0-3, IGNORE before the first motion) for a chest signal rising on inhale.
 
@@ -137,5 +208,6 @@ def detect_phases(
     threshold = still_fraction * scale
     direction = np.where(velocity > threshold, 1, np.where(velocity < -threshold, -1, 0)).astype(np.int8)
     if causal:
-        return _causal(direction, fs, min_hold_s, min_phase_s)
+        return _causal(direction, smooth, fs, min_hold_s, min_phase_s, max_settle_s, max_settle_fraction)
+    direction = _absorb_settles(direction, smooth, fs, min_hold_s, max_settle_s, max_settle_fraction)
     return enforce_min_duration(_offline(direction, fs, min_hold_s), fs, min_phase_s)

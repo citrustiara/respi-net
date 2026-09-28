@@ -60,6 +60,7 @@ from respi_net.breath_phases import (
     NOISE,
     label_runs,
 )
+from respi_net.chest_signal import light_filter
 from respi_net.nn_dataset import LabelledRun, export_dataset, runs_in
 from respi_net.phase_baseline import detect_phases
 from respi_net.phase_metrics import boundary_errors, score_phases
@@ -121,6 +122,34 @@ def turn_offsets(recording: SzymanskiRecording, window_s: float = 1.0) -> dict[s
         name = f"{CLASS_NAMES[before]} -> {'hold' if after in (HOLD_AFTER_INHALE, HOLD_AFTER_EXHALE) else CLASS_NAMES[after]}"
         offsets.setdefault(name, []).append(float(time_s[start] - time_s[near][turn]))
     return offsets
+
+
+def settles(recording: SzymanskiRecording, *, motion_fraction: float = 0.2, gap_s: float = 0.3) -> dict[str, list[float]]:
+    """How long the chest keeps moving back at the start of each hold that follows its breath.
+
+    A settle is motion against the breath just ended, faster than
+    ``motion_fraction`` of the typical breathing speed, starting within
+    ``gap_s`` of the hold's first sample.  Holds without one count as 0 s.
+    """
+
+    chest = orientation(recording) * recording.raw
+    velocity = np.gradient(light_filter(chest - np.median(chest), recording.fs, 2.0)) * recording.fs
+    threshold = motion_fraction * float(np.percentile(np.abs(velocity), 80))
+    found: dict[str, list[float]] = {}
+    runs = label_runs(recording.labels)
+    for (_, _, before), (start, stop, after) in zip(runs[:-1], runs[1:]):
+        if (before, after) not in ((INHALE, HOLD_AFTER_INHALE), (EXHALE, HOLD_AFTER_EXHALE)):
+            continue
+        back = -velocity[start:stop] if before == INHALE else velocity[start:stop]
+        first = next((index for index in range(min(len(back), int(round(gap_s * recording.fs)))) if back[index] > threshold), None)
+        length = 0
+        if first is not None:
+            length = first
+            while length < len(back) and back[length] > threshold:
+                length += 1
+            length -= first
+        found.setdefault(CLASS_NAMES[after], []).append(length / recording.fs)
+    return found
 
 
 def plot_example(run: LabelledRun, published: LabelledRun, name: str, path: Path) -> None:
@@ -224,6 +253,15 @@ def main() -> int:
     for version, entries in summary["label_timing_belt"].items():
         print(f"  {version:10}", {name: (round(v["median_s"], 2), f"{v['within_0_1_s']:.0%}") for name, v in entries.items()})
     corrected_belt = [r for r in found if r.sensor == "tensometer"]
+    settle_times: dict[str, list[float]] = {}
+    for recording in corrected_belt:
+        for name, values in settles(recording).items():
+            settle_times.setdefault(name, []).extend(values)
+    summary["settles_belt"] = {
+        name: {"holds": len(values), "with_settle": float(np.mean(np.array(values) > 0)), "median_s": float(np.median([v for v in values if v > 0]))}
+        for name, values in settle_times.items()
+    }
+    print("\nHolds that start with a settle back (corrected belt labels):", json.dumps(summary["settles_belt"]))
     published_belt = {(r.group, r.name): r.labels for r in published if r.sensor == "tensometer"}
     summary["correction_belt"] = {
         "samples_changed": float(np.mean([np.mean(r.labels != published_belt[(r.group, r.name)]) for r in corrected_belt])),
