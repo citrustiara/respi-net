@@ -1,0 +1,67 @@
+{
+  "name": "Sieć faz — nagranie bez przewodnika (12 min)",
+  "description": "12 minut bez narzuconego rytmu. Okno tylko przypomina, co robić dalej, i piszczy przy zmianie; fazy oddechu oznaczy telefon na ciele, więc oddychaj po swojemu i nie dotykaj telefonu.",
+  "blocks": [
+    {
+      "kind": "settle",
+      "duration_seconds": 15,
+      "detail": "Ułóż się i nie ruszaj; oddychaj jak zwykle."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 150,
+      "label": "Spokojnie",
+      "cue": "SPOKOJNY ODDECH",
+      "detail": "Oddychaj naturalnie, nie kontroluj oddechu."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 90,
+      "label": "Wolno",
+      "cue": "WOLNO I GŁĘBOKO",
+      "detail": "Około 6 oddechów na minutę, z naturalnymi przerwami."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 60,
+      "label": "Szybko",
+      "cue": "SZYBKO",
+      "detail": "Około 25-30 oddechów na minutę, raz głębiej, raz płycej."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 60,
+      "label": "Płytko",
+      "cue": "BARDZO PŁYTKO",
+      "detail": "Ledwo zauważalny oddech, jak we śnie."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 120,
+      "label": "Pauzy",
+      "cue": "PAUZY",
+      "detail": "3 pauzy po wdechu i 3 po wydechu, po 5-20 s, każda innej długości. Raz przerwij wydech w połowie, zatrzymaj i dokończ go."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 60,
+      "label": "Nieregularnie",
+      "cue": "NIEREGULARNIE",
+      "detail": "Westchnienia, ziewnięcie, głęboki wdech i kilka płytkich."
+    },
+    {
+      "kind": "interference",
+      "duration_seconds": 60,
+      "label": "Ruch",
+      "cue": "RUCH I KASZEL",
+      "detail": "Porusz ręką, obróć głowę, zakaszl dwa razy, powiedz jedno zdanie. Telefonu nie dotykaj."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 120,
+      "label": "Spokojnie",
+      "cue": "SPOKOJNY ODDECH",
+      "detail": "Oddychaj naturalnie do końca próby."
+    }
+  ]
+}
