@@ -20,7 +20,9 @@ Reads the unzipped dataset of Szymański et al. (Sci Data 2025, doi
   hold definition costs on our own data.
 
 Writes ``analysis.json`` next to the data, with ``--thesis-figure``
-``docs/thesis/figures/fazy_zbior_szymanski.png`` and with ``--export`` the belt
+``docs/thesis/figures/fazy_zbior_szymanski.png`` and ``fazy_szymanski_przesuniecie.png``
+(why the published labels are early), with ``--notes-figure PNG`` the latter in
+English, and with ``--export`` the belt
 recordings as an nn_dataset ``.npz`` for pre-training (corrected hand labels;
 the echo channel is zero, so train on ``--inputs chest,velocity`` or let the
 model learn to do without it).
@@ -67,6 +69,29 @@ from respi_net.phase_metrics import boundary_errors, score_phases
 from respi_net.szymanski_dataset import DEFAULT_ROOT, SzymanskiRecording, orientation, recordings, to_labelled_run
 
 FIGURE = ROOT / "docs" / "thesis" / "figures" / "fazy_zbior_szymanski.png"
+TIMING_FIGURE = ROOT / "docs" / "thesis" / "figures" / "fazy_szymanski_przesuniecie.png"
+TIMING_TEXT = {
+    "pl": {
+        "raw": "surowy sygnał pasa",
+        "copy": "wygładzona kopia widziana przy etykietowaniu",
+        "published": "opublikowane",
+        "corrected": "po korekcie",
+        "a": "a) zwykły oddech: kopia wyprzedza sygnał o 2 próbki (0,2 s), a z nią etykiety",
+        "b": "b) głęboki wdech i pauza: kopia ma wartość +1, zanim klatka się zatrzyma",
+        "time": "czas [s]",
+        "classes": {INHALE: "wdech", EXHALE: "wydech", HOLD_AFTER_INHALE: "pauza po wdechu", HOLD_AFTER_EXHALE: "pauza po wydechu"},
+    },
+    "en": {
+        "raw": "raw belt signal",
+        "copy": "smoothed copy the labellers saw",
+        "published": "published",
+        "corrected": "corrected",
+        "a": "a) normal breath: the copy runs 2 samples (0.2 s) ahead of the signal, and so do the labels",
+        "b": "b) deep inhale into a hold: the copy sits at +1 before the chest stops",
+        "time": "time [s]",
+        "classes": {INHALE: "inhale", EXHALE: "exhale", HOLD_AFTER_INHALE: "hold after inhale", HOLD_AFTER_EXHALE: "hold after exhale"},
+    },
+}
 COACH_RUNS = ROOT / "data" / "processed" / "breath_phases" / "runs"
 EXPORT = ROOT / "data" / "processed" / "breath_phases" / "dataset_szymanski_belt_v1.npz"
 MODES = {
@@ -152,6 +177,54 @@ def settles(recording: SzymanskiRecording, *, motion_fraction: float = 0.2, gap_
     return found
 
 
+def plot_label_timing(published: SzymanskiRecording, corrected: SzymanskiRecording, root: Path, path: Path, language: str = "pl") -> None:
+    """The raw belt against the smoothed copy the labels were drawn on, with both label versions.
+
+    No text sits inside the plots; what they show is said in the titles and legend.
+    """
+
+    text = TIMING_TEXT[language]
+    stored = pd.read_csv(root / "data" / published.group / "labelled" / f"tens_{published.name}.txt", header=None, names=["norm", "code", "sec"])
+    time_s = published.time_s
+    raw = orientation(published) * published.raw
+    copy = stored["norm"].to_numpy()[: len(time_s)]
+    fig = plt.figure(figsize=(11, 8.2))
+    outer = fig.add_gridspec(2, 1, hspace=0.3)
+    pairs = []
+    for cell in outer:
+        inner = cell.subgridspec(2, 1, height_ratios=[3, 0.9], hspace=0.08)
+        pairs.append((fig.add_subplot(inner[0]), fig.add_subplot(inner[1])))
+    for index, ((ax, bars), (lo, hi), title) in enumerate(zip(pairs, ((29.6, 32.4), (90.0, 93.6)), (text["a"], text["b"]))):
+        sel = (time_s >= lo) & (time_s <= hi)
+        fit = sel & (np.abs(copy) < 0.999)
+        slope, offset = np.polyfit(raw[fit], copy[fit], 1)  # the raw belt on the copy's scale, to overlay them
+        ax.plot(time_s[sel], slope * raw[sel] + offset, "o-", color="#111827", ms=3.5, lw=1.4)
+        ax.plot(time_s[sel], copy[sel], "o-", color="#f97316", ms=3.5, lw=1.4)
+        ax.set_xlim(lo, hi)
+        ax.set_ylim(-1.15, 1.15)
+        ax.grid(alpha=0.25)
+        ax.tick_params(labelbottom=False)
+        ax.set_title(title, loc="left", fontsize=10)
+        for row, labels in enumerate((published.labels, corrected.labels)):
+            top = 0.96 - row * 0.5
+            for start, stop, label in label_runs(labels):
+                begin, end = time_s[start], time_s[min(stop, len(time_s) - 1)]
+                if label != IGNORE and end > lo and begin < hi:
+                    bars.axvspan(max(begin, lo), min(end, hi), ymin=top - 0.42, ymax=top, color=CLASS_COLOURS[label], lw=0)
+        bars.set_xlim(lo, hi)
+        bars.set_ylim(0, 1)
+        bars.set_yticks([0.75, 0.25], [text["published"], text["corrected"]])
+        if index == len(pairs) - 1:
+            bars.set_xlabel(text["time"])
+    lines = [plt.Line2D([], [], color="#111827", marker="o", ms=3.5), plt.Line2D([], [], color="#f97316", marker="o", ms=3.5)]
+    patches = [plt.Rectangle((0, 0), 1, 1, color=CLASS_COLOURS[label]) for label in text["classes"]]
+    fig.legend(lines + patches, [text["raw"], text["copy"], *text["classes"].values()], loc="lower center", ncol=3,
+               frameon=False, fontsize=9, bbox_to_anchor=(0.5, -0.05))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+
+
 def plot_example(run: LabelledRun, published: LabelledRun, name: str, path: Path) -> None:
     predicted = detect_phases(run.features[0], run.fs)
     window = (run.time_s >= 20.0) & (run.time_s < 110.0)
@@ -188,6 +261,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--thesis-figure", action="store_true")
+    parser.add_argument("--notes-figure", type=Path, default=None, metavar="PNG", help="the label timing picture in English, for local notes")
     parser.add_argument("--export", type=Path, nargs="?", const=EXPORT, default=None, metavar="NPZ",
                         help=f"write the belt recordings as a dataset (default {EXPORT.relative_to(ROOT)})")
     args = parser.parse_args()
@@ -293,7 +367,13 @@ def main() -> int:
         chosen = next(r for r in found if r.sensor == "tensometer" and r.name == "test")
         original = next(r for r in published if r.group == chosen.group and r.name == chosen.name)
         plot_example(to_labelled_run(chosen), to_labelled_run(original), chosen.name, FIGURE)
-        print(f"\nFigure: {FIGURE}")
+        plot_label_timing(original, chosen, args.root, TIMING_FIGURE, "pl")
+        print(f"\nFigures: {FIGURE}, {TIMING_FIGURE}")
+    if args.notes_figure:
+        chosen = next(r for r in found if r.group == "tens/synchronous_with_inode_acc" and r.name == "test")
+        original = next(r for r in published if r.group == chosen.group and r.name == chosen.name)
+        plot_label_timing(original, chosen, args.root, args.notes_figure, "en")
+        print(f"Notes figure: {args.notes_figure}")
     return 0
 
 
