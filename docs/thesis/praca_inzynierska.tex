@@ -3037,9 +3037,7 @@ około \SI{10}{min} od dwóch pozostałych. Każda próbka ma etykietę ręczną
 klasach (tab.~\ref{tab:klasy-faz}); w~plikach zapisano kody pomniejszone
 o~jeden ($-1$~wydech, 0~pauza po wydechu, 1~wdech, 2~pauza po wdechu), co
 potwierdzają dołączone do zbioru narzędzie do etykietowania i~kolejność
-przejść. W~samym artykule sekcja metod przypisuje wydechowi kod~0,
-a~wdechowi~2, a~opis plików --- odwrotnie; przyjęto numerację z~sekcji metod,
-zgodną z~kodem narzędzia i~skryptu uczącego. Niemal wszystkie zmiany to wdech--wydech, wydech--wdech oraz wejście
+przejść. Niemal wszystkie zmiany to wdech--wydech, wydech--wdech oraz wejście
 w~pauzę z~oddechu, który ją poprzedza; przejść niemożliwych z~definicji jest
 15 na około 8,6~tys. Po pauzie oddech bywa dokończony (151~razy po wdechu,
 129~po wydechu), co potwierdza przyjęte dozwolone przejścia. Wiersze plików
@@ -3070,14 +3068,17 @@ początek pauzy.
 Przed użyciem etykiety pasa przesunięto więc o~wyprzedzenie kopii, a~pauzę
 po oddechu rozpoczęto dopiero tam, gdzie klatka przestaje poruszać się
 w~kierunku tego oddechu (przez \SI{0.2}{s} wolniej niż 20\% typowej
-prędkości). Szybkie osiadanie tuż po głębokim wdechu, które etykiety
-wliczają do pauzy, nie musi być wydechem: przy zamkniętej głośni objętość
-przemieszcza się między klatką a~brzuchem bez przepływu powietrza
-\cite{konno1967}, więc pas na klatce może opadać, choć płuca pozostają
-prawie pełne. Nie jest to też bezruch, dlatego fragment ten pozostawiono bez
-etykiety (rys.~\ref{fig:fazy-szymanski}). Po korekcie granice wdech--wydech
+prędkości). Szybkie osiadanie tuż po głębokim wdechu etykiety wliczają do
+pauzy i~tak pozostawiono: nie jest to wydech, bo przy zamkniętej głośni
+objętość przemieszcza się między klatką a~brzuchem bez przepływu powietrza
+\cite{konno1967}, więc pas na klatce opada, choć płuca pozostają prawie
+pełne. Osiadanie zaczyna 67\% pauz po wdechu w~tym zbiorze (mediana
+\SI{0.3}{s}) i~tylko 14\% pauz po wydechu. Tak samo traktują je etykiety nagrań sterowanych, w~których
+wdech kończy się, gdy klatka przestaje się unosić, oraz detektor
+deterministyczny (podrozdz.~\ref{sec:sieci-baseline},
+rys.~\ref{fig:fazy-szymanski}). Po korekcie granice wdech--wydech
 i~wydech--wdech leżą w~medianie dokładnie na zwrocie pasa, a~43--56\% z~nich
-mieści się w~$\pm$\SI{0.1}{s}, czyli w~jednej próbce. Zmieniło się 23\% próbek, a~2\% zostało bez etykiety. Etykiet
+mieści się w~$\pm$\SI{0.1}{s}, czyli w~jednej próbce. Zmieniło się 21\% próbek. Etykiet
 akcelerometru WitMotion nie korygowano: skrypt zbioru kopiuje etykiety
 z~pasa na akcelerometr według znaczników czasu, a~w~tej sesji ich
 przesunięcie względem sygnału akcelerometru waha się między plikami od 0,2
@@ -3085,7 +3086,7 @@ do \SI{0.8}{s}, więc nie da się go usunąć jedną regułą.
 
 Na poprawionych etykietach sprawdzono detektor deterministyczny
 (podrozdz.~\ref{sec:sieci-baseline}) bez żadnego dostrajania
-(tab.~\ref{tab:fazy-szymanski}). Zgodność z~pasem wynosi 76,7\% (69,9\% na
+(tab.~\ref{tab:fazy-szymanski}). Zgodność z~pasem wynosi 76,4\% (70,4\% na
 etykietach opublikowanych), wyraźnie mniej niż na nagraniach sterowanych.
 Główną przyczyną jest definicja pauzy. W~zbiorze \cite{szymanski2025} pauzą
 jest każde widoczne zatrzymanie: mediana trwania pauzy wynosi \SI{1.4}{s}
@@ -3095,10 +3096,7 @@ wydechu. W~nagraniach sterowanych pauzą jest tylko wstrzymanie zadane przez
 przewodnik, a~detektor wymaga \SI{2}{s} bezruchu. Skrócenie tego progu do
 \SI{1}{s} podnosi zgodność na pasie do 79,2\%, lecz obniża ją na własnych
 danych z~92,1 do 86,4\% --- oba zbiory definiują pauzę inaczej i~przed ich
-łączeniem trzeba wybrać jedną definicję. Etykiety ręczne nazywają ponadto
-pauzę według stanu płuc: wstrzymanie po wdechu, podczas którego pas powoli
-opada, pozostaje pauzą po wdechu, a~detektor nazywa je według ostatniego
-ruchu, czyli pauzą po wydechu.
+łączeniem trzeba wybrać jedną definicję.
 
 \begin{table}[H]
 \centering
@@ -3110,11 +3108,11 @@ sterowanych A121 (średnie po nagraniach).}
 \toprule
 Miara & pas & iNode & A121 \\
 \midrule
-Dokładność offline, pauza od \SI{2}{s} & 76,7\% & 73,1\% & 92,1\% \\
-Dokładność offline, pauza od \SI{1}{s} & 79,2\% & 74,5\% & 86,4\% \\
-Makro-F1 offline, pauza od \SI{2}{s} & 0,640 & 0,587 & 0,921 \\
-Dokładność w~czasie rzeczywistym & 58,3\% & 49,0\% & 84,1\% \\
-\quad po usunięciu opóźnienia & 79,8\% & 68,7\% & 92,3\% \\
+Dokładność offline, pauza od \SI{2}{s} & 76,4\% & 72,2\% & 92,1\% \\
+Dokładność offline, pauza od \SI{1}{s} & 79,2\% & 73,8\% & 86,4\% \\
+Makro-F1 offline, pauza od \SI{2}{s} & 0,633 & 0,565 & 0,921 \\
+Dokładność w~czasie rzeczywistym & 58,9\% & 48,0\% & 84,1\% \\
+\quad po usunięciu opóźnienia & 80,4\% & 67,5\% & 92,3\% \\
 Opóźnienie granic w~czasie rzeczywistym & \SI{0.40}{s} & \SI{0.32}{s} & \SI{0.37}{s} \\
 \bottomrule
 \end{tabular}
@@ -3124,8 +3122,8 @@ W~czasie rzeczywistym detektor ogłasza zmianę fazy średnio \SI{0.4}{s} po
 granicy z~etykiety, a~początek pauzy jeszcze później, bo pauzę może uznać
 dopiero po \SI{1}{s} bezruchu. Przy oddechu tak szybkim jak hiperwentylacja
 w~tym zbiorze (75--83~oddechów/min, faza krótsza niż \SI{0.5}{s}) kosztuje to
-wiele próbek: dokładność spada do 58,3\%. Po cofnięciu wyjścia o~najlepsze
-dla danego nagrania przesunięcie (około \SI{0.4}{s}) wraca do 79,8\%,
+wiele próbek: dokładność spada do 58,9\%. Po cofnięciu wyjścia o~najlepsze
+dla danego nagrania przesunięcie (około \SI{0.4}{s}) wraca do 80,4\%,
 a~więc strata wynika z~opóźnienia, a~nie z~błędnie rozpoznanych faz.
 Dlatego dla wariantów czasu rzeczywistego obok dokładności podaje się
 opóźnienie granic (podrozdz.~\ref{sec:sieci-uczenie}). Na własnych danych
@@ -3133,8 +3131,8 @@ granica wydech--wdech leży \SI{0.25}{s} po zwrocie wykrytym przez detektor:
 w~spoczynku na dnie oddechu położenie granicy jest umowne, co również
 rozstrzygnie wspólna definicja pauzy.
 
-Akcelerometr iNode na klatce daje detektorowi 73,1\% zgodności z~etykietami
-tego czujnika wobec 76,7\% dla pasa. Akcelerometr jest więc użytecznym, choć
+Akcelerometr iNode na klatce daje detektorowi 72,2\% zgodności z~etykietami
+tego czujnika wobec 76,4\% dla pasa. Akcelerometr jest więc użytecznym, choć
 nieco słabszym od pasa torem odniesienia faz, zgodnie z~wynikiem dla telefonu
 powyżej.
 
@@ -3144,10 +3142,10 @@ powyżej.
     \caption[Etykiety ręczne i detektor na zbiorze z pasem]{Nagranie pasa
     ze zbioru \cite{szymanski2025}. Tło: etykiety ręczne po korekcie czasu;
     paski: etykiety opublikowane, po korekcie i~detektor deterministyczny.
-    Po korekcie granice leżą na zwrotach pasa, pauza po wdechu zaczyna się
-    w~szczycie, a~szybkie osiadanie tuż po nim pozostaje bez etykiety
-    (biała przerwa). Krótkie pauzy po wydechu detektor wlicza do wydechu,
-    a~pauzy po wdechu z~opadającym pasem nazywa pauzami po wydechu.}
+    Po korekcie granice leżą na zwrotach pasa, a~pauza po wdechu zaczyna się
+    w~szczycie; szybkie osiadanie tuż po nim należy do pauzy, zarówno
+    w~etykietach, jak i~w~detektorze. Krótkie pauzy po wydechu detektor
+    wlicza do wydechu.}
     \label{fig:fazy-szymanski}
 \end{figure}
 
@@ -3183,7 +3181,14 @@ Detektor odczytuje kierunek ruchu klatki: narastanie to wdech, opadanie
 wydech, a~bezruch trwający co najmniej \SI{2}{s} (w~trybie czasu
 rzeczywistego \SI{1}{s}) to pauza --- po wdechu, jeśli ostatni oddech był
 wdechem, w~przeciwnym razie po wydechu. Krótszy bezruch jest punktem zwrotu
-dzielonym między sąsiednie oddechy. Bezruch zdefiniowano względnie, jako
+dzielonym między sąsiednie oddechy. Krótki ruch w~przeciwną stronę tuż przed
+pauzą (do \SI{0.8}{s}), po którym klatka zatrzymuje się w~odległości nie
+większej niż 40\% głębokości poprzedniego oddechu od miejsca, gdzie ten
+oddech się skończył, jest osiadaniem na początku pauzy
+(podrozdz.~\ref{sec:sieci-zbior-szymanski}): należy do pauzy, a~pauza
+nosi nazwę oddechu sprzed osiadania. Próg dobrano tak, by nie zmienił ani
+jednej próbki nagrań sterowanych, w~których pauza przerywa wydech w~połowie.
+Bezruch zdefiniowano względnie, jako
 prędkość mniejszą niż 40--50\% typowej prędkości oddychania w~ostatnich
 \SI{30}{s}, bo rzeczywista pauza nie jest nieruchoma
 (rys.~\ref{fig:fazy-filtracja}b). Tryb offline wygładza zerofazowo
