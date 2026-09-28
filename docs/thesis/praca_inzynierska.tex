@@ -472,7 +472,13 @@ U-Net \cite{perslev2019} z~dekodowaniem Viterbiego, które dopuszcza tylko
 fizjologicznie możliwe przejścia między fazami \cite{holosis_repo}. Przy
 niewielkiej liczbie nagrań radarowych skuteczne okazało się wstępne uczenie
 na sygnałach pasów z~badań polisomnograficznych i~dostrojenie na radarze
-\cite{lu2026}.
+\cite{lu2026}. Żaden z~tych modeli nie nadaje się jednak do dalszego uczenia
+w~tym zadaniu: sieci z~\cite{szymanski2025} są dostępne tylko jako pliki
+aplikacji do samego wnioskowania i~widzą \SI{0.5}{s} sygnału,
+repozytorium \cite{holosis_repo} nie udostępnia wag ani danych, a~autorzy
+\cite{lu2026} udostępniają na żądanie jedynie nagrania radarowe. Sieć tej
+pracy jest więc uczona od podstaw, z~wstępnym uczeniem na danych pasa
+i~danych syntetycznych.
 
 \section{Dostępne zbiory danych}
 Publiczne zbiory radarowe z~synchronicznym torem odniesienia obejmują m.in.
@@ -3367,13 +3373,18 @@ nagrań i~nagraniami syntetycznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}).
 Nie planuje się
 generatywnej sieci (GAN, dyfuzja): wymagałaby dużo więcej danych i~nie
 gwarantuje poprawnych etykiet, a~realizm zapewnia wstrzykiwanie rzeczywistego
-szumu. Podobne podejście --- wstępne uczenie na innym źródle i~dostrojenie
-na radarze --- poprawiło segmentację bezdechów radarem \SI{60}{GHz}
-z~F1 0,61 do 0,82 \cite{lu2026}.
+szumu. Podobne podejście --- wstępne uczenie na 1526 nocach sygnałów pasów
+z~badań polisomnograficznych i~dostrojenie na 35~nocach radaru \SI{60}{GHz}
+--- podniosło F1 wykrywania bezdechów z~0,61 dla modelu uczonego wyłącznie na
+radarze do 0,82; w~badaniu ablacyjnym tych samych autorów model uczony od
+zera przy innych ustawieniach osiągał 0,77, więc zysk zależy od sposobu
+uczenia \cite{lu2026}.
 
-Plan walidacji: najpierw zostanie nagrany trudny zbiór testowy (kilka osób,
-oddech płytki, szybki, wolny i~nieregularny, ruch, \SIrange{1}{3}{m}), który
-nie będzie używany do strojenia. Na nim porównane zostaną: detektor
+Plan walidacji: z~nagrań z~telefonem jako torem odniesienia po jednej sesji
+każdej pozycji ciała, nagranej innego dnia, zostanie odłożone do testu
+i~nie będzie używane do strojenia; później dojdzie trudny zbiór testowy od
+kilku osób (oddech płytki, szybki, wolny i~nieregularny, ruch,
+\SIrange{1}{3}{m}). Porównane zostaną: detektor
 deterministyczny, sieć uczona tylko na danych rzeczywistych, tylko na
 syntetycznych, wstępnie na syntetycznych i~dostrojona na rzeczywistych oraz
 na mieszance --- każdy wariant z~kilku ziaren losowych.
