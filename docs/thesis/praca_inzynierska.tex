@@ -3045,25 +3045,37 @@ z~etykietami to próbki surowego zapisu wybrane po czasie, lecz nie zawsze od
 pierwszej do ostatniej, więc próbki łączy się po czasie, a~nie po numerze
 wiersza.
 
-Etykiety ręczne są przesunięte w~czasie z~dwóch powodów, które widać
-w~kodzie dołączonym do zbioru. Narzędzie do etykietowania pokazuje nie
-surowy sygnał, lecz jego wygładzoną i~znormalizowaną kopię. Wygładzanie to
-średnia ruchoma liczona funkcją \texttt{np.convolve} w~trybie
-\texttt{valid} i~zapisana z~czasami nieprzyciętego sygnału, więc każda
-wartość jest średnią \emph{następnych} $w$~próbek, a~kopia wyprzedza sygnał
-o~$(w-1)/2$ próbki. Dla pasa $w$~wynosi 5 w~sesji z~iNode i~6 w~sesji
-z~WitMotion, co daje \SIrange{0.20}{0.25}{s}. Z~tymi szerokościami kod
-zbioru odtwarza z~surowych plików zapisaną kopię co do próbki w~44 z~46
-plików; artykuł opisuje tylko normalizację. Standard ERS/ATS analizy oddechu
-spoczynkowego ostrzega właśnie przed tym: wygładzanie średnią ruchomą przesuwa chwile
-zmiany fazy, więc nie wolno ich brać z~sygnału wygładzonego
-\cite{bates2000}. Etykiety dziedziczą wyprzedzenie: opublikowane granice wdech--wydech i~wydech--wdech leżą
-w~medianie \SI{0.2}{s} przed zwrotem sygnału pasa, a~tylko 11--13\%
-z~nich mieści się w~$\pm$\SI{0.1}{s}. Normalizacja jest ponadto kroczącym
-min--max z~ostatnich \SI{15}{s}, więc oddech głębszy niż wszystkie w~tym
-oknie ma w~kopii wartość dokładnie $+1$ albo $-1$, choć klatka jeszcze się
-porusza; koniec głębokiego wdechu wygląda tam płasko i~bywał oznaczany jako
-początek pauzy.
+Opublikowane etykiety trzeba było przesunąć w~czasie
+(rys.~\ref{fig:fazy-przesuniecie}). Narzędzie do etykietowania pokazuje nie
+surowy sygnał, lecz jego kopię wygładzoną średnią ruchomą z~$w$~próbek
+i~zapisaną z~czasem pierwszej próbki okna (\texttt{np.convolve} w~trybie
+\texttt{valid}). Każdy punkt kopii jest więc średnią \emph{następnych}
+$w$~próbek, a~kopia --- i~wyznaczone na niej etykiety --- wyprzedza
+rzeczywisty ruch o~$(w-1)/2$ próbki: dla pasa $w=5$ albo 6, czyli
+\SIrange{0.20}{0.25}{s}. Kod zbioru odtwarza z~surowych plików zapisaną kopię
+co do próbki w~44 z~46 plików; artykuł opisuje tylko normalizację. Standard
+ERS/ATS analizy oddechu zaleca wyznaczać chwile zmiany fazy na sygnale
+niewygładzonym, bo wygładzanie je przesuwa \cite{bates2000}. Opublikowane
+granice wdech--wydech i~wydech--wdech leżą w~medianie \SI{0.2}{s} przed
+zwrotem sygnału pasa, a~tylko 11--13\% z~nich mieści się
+w~$\pm$\SI{0.1}{s}. Kopia jest ponadto normalizowana kroczącym min--max
+z~ostatnich \SI{15}{s}, więc oddech głębszy niż wszystkie w~tym oknie ma
+w~niej wartość $+1$, zanim klatka się zatrzyma, i~pauzę po takim wdechu
+oznaczano za wcześnie (rys.~\ref{fig:fazy-przesuniecie}b).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_szymanski_przesuniecie.png}
+    \caption[Przesunięcie etykiet zbioru z pasem]{Dlaczego etykiety zbioru
+    \cite{szymanski2025} trzeba było przesunąć: surowy sygnał pasa (czarny),
+    wygładzona kopia, na której je wyznaczano (pomarańczowa), oraz etykiety
+    opublikowane i~po korekcie. a)~Kopia, a~z~nią granica wdech--wydech,
+    wyprzedza szczyt o~dwie próbki. b)~Przy wdechu głębszym niż wszystkie
+    w~ostatnich \SI{15}{s} kopia ma wartość $+1$, zanim klatka się zatrzyma,
+    więc opublikowana pauza zaczyna się przed szczytem; po korekcie zaczyna się
+    w~szczycie, a~osiadanie tuż po nim należy do pauzy.}
+    \label{fig:fazy-przesuniecie}
+\end{figure}
 
 Przed użyciem etykiety pasa przesunięto więc o~wyprzedzenie kopii, a~pauzę
 po oddechu rozpoczęto dopiero tam, gdzie klatka przestaje poruszać się
@@ -3160,8 +3172,9 @@ jednej osoby, inna definicja pauzy oraz licencja, która pozwala na użycie,
 ale nie na publikację przetworzonych danych.
 
 \subsection{Zbiór uczący}
+\label{sec:sieci-zbior-uczacy}
 Oznaczone nagrania zapisano w~jednostkach fizycznych, a~okna tnie się
-dopiero przy eksporcie. Sieć dostaje okna \SI{60}{s} co \SI{5}{s}; pierwsze
+dopiero przy eksporcie. Sieć dostaje okna \SI{60}{s} co \SIrange{5}{10}{s}; pierwsze
 \SI{20}{s} każdego okna są kontekstem i~nie wchodzą do funkcji straty, bo
 przyczynowy model ma pełny kontekst dopiero po takim czasie. Każdą próbkę
 normalizuje się tylko na podstawie poprzednich \SI{30}{s} --- przemieszczenie
@@ -3171,8 +3184,47 @@ możliwe na żywo. Głęboki oddech sterowany i~płytki oddech nocny wyglądają
 wtedy dla sieci podobnie; o~fazie decyduje kształt, nie głębokość. Podział
 jest rozłączny względem nagrań: 13, 3 i~3~nagrania (91, 21 i~21~okien) na
 zbiory uczący, walidacyjny i~testowy. W~danych sterowanych nie ma pauz po
-wdechu ani fragmentów szumu; nowe wzorce przewodnika obejmują pauzy obu
-rodzajów, różne tempa, oddech płytki i~głęboki oraz rytm nieregularny.
+wdechu ani fragmentów szumu.
+
+Tabela~\ref{tab:fazy-dane} zestawia oznaczone dane. Rzeczywistych jest
+\SI{114}{min}, w~tym tylko \SI{21.5}{min} z~radaru, dlatego nagrania części
+uczącej uzupełniono danymi sztucznymi. Każde ma sześć kopii odtworzonych
+0,7--1,4 raza szybciej (zmienia się tempo oddechu, a~etykiety rozciągają się
+razem z~sygnałem), z~rzeczywistym szumem radaru o~odchyleniu 3--30\%
+wielkości oddechu i~z~powolnym dryfem. Szum pochodzi z~pauz nagrań
+sterowanych (\SI{4.4}{min}): zostaje w~nich ruch serca, drobne ruchy ciała
+i~szum czujnika. Kopie trafiają zawsze do tej samej części podziału co
+oryginał, a~części walidacyjna i~testowa pozostają rzeczywiste. Dane
+syntetyczne to \SI{300}{min} (60~nagrań po \SI{5}{min}) z~generatora
+opisanego w~podrozdz.~\ref{sec:sieci-uczenie}. Powstały dwa zbiory, okna co
+\SI{10}{s}: do wstępnego uczenia --- pas z~kopiami i~dane syntetyczne
+(3661~okien uczących, 72~walidacyjne i~58~testowych, wszystkie walidacyjne
+i~testowe z~rzeczywistego pasa) --- oraz do dostrajania: nagrania A121
+z~kopiami (351, 12 i~12~okien). Dane sztuczne zwiększają różnorodność tempa
+i~szumu, ale nie liczbę osób, pozycji ciała ani nawyków oddechowych --- tych
+przybywa tylko z~nowymi nagraniami.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Oznaczone dane do uczenia sieci, w~minutach. P.~wd. i~P.~wyd. to
+pauza po wdechu i~po wydechu. Akcelerometru iNode nie włączono do zbiorów
+uczących.}
+\label{tab:fazy-dane}
+\begin{tabular}{@{}lrrrrrrr@{}}
+\toprule
+Źródło & Osoby & Razem & Wdech & Wydech & P.~wd. & P.~wyd. & Szum \\
+\midrule
+A121, nagrania sterowane & 1 & 21,5 & 7,0 & 10,1 & 0,0 & 4,4 & 0,0 \\
+Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 11,4 & 18,6 & 2,5 \\
+Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 5,2 & 12,0 & 3,2 \\
+\midrule
+Kopie nagrań A121 & -- & 90,5 & 29,6 & 42,3 & 0,0 & 18,7 & 0,0 \\
+Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 68,2 & 96,4 & 13,9 \\
+Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 18,0 & 23,0 & 2,3 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Detektor deterministyczny jako punkt odniesienia}
 \label{sec:sieci-baseline}
@@ -3267,8 +3319,10 @@ ciała oznaczone jako szum. Przebieg przemieszczenia przechodzi przez model
 radaru A121 (faza $4\pi d/\lambda$, echo rozłożone na kilka bramek, stałe
 odbicia i~szum zespolony) i~ten sam tor odtwarzania, więc przy niskim SNR
 powstają prawdziwe błędy rozplatania fazy. Rzeczywiste nagrania są dodatkowo
-augmentowane: zmniejszenie głębokości oddechu (do poziomu snu), zmiana tempa
-z~przeskalowaniem etykiet, dodanie nagranego szumu i~dryfu. Nie planuje się
+augmentowane (podrozdz.~\ref{sec:sieci-zbior-uczacy}): zmiana tempa
+z~przeskalowaniem etykiet, rzeczywisty szum radaru i~dryf. Samej głębokości
+nie zmienia się, bo wejście sieci i~tak jest skalowane wielkością oddechu;
+o~trudności decyduje stosunek szumu do oddechu. Nie planuje się
 generatywnej sieci (GAN, dyfuzja): wymagałaby dużo więcej danych i~nie
 gwarantuje poprawnych etykiet, a~realizm zapewnia wstrzykiwanie rzeczywistego
 szumu. Podobne podejście --- wstępne uczenie na innym źródle i~dostrojenie
@@ -3292,9 +3346,13 @@ sygnale samego radaru, brak pauz po wdechu i~fragmentów szumu we własnych
 danych oznaczonych (ma je zbiór \cite{szymanski2025}) oraz niezweryfikowany
 tor odniesienia. Kolejne kroki:
 \begin{enumerate}
-  \item równoczesne nagrania A121 i~telefonu z~nowymi wzorcami przewodnika
-  i~porównanie etykiet z~obu torów w~tym samym czasie; jeśli telefon okaże
-  się niewystarczający --- pas oddechowy;
+  \item równoczesne nagrania A121 i~telefonu jako toru odniesienia, bez
+  przewodnika: 12-minutowe sesje obejmujące oddech spokojny, wolny, szybki
+  i~bardzo płytki, pauzy obu rodzajów, oddech nieregularny i~ruch, w~pięciu
+  pozycjach ciała (łącznie około \SIrange{2.5}{3}{h}, z~sesjami testowymi
+  z~osobnych dni); telefon przymocowany do ciała poza wiązką radaru, bo silnie
+  odbija fale \SI{60}{GHz}; jeśli okaże się niewystarczający --- pas
+  oddechowy;
   \item nagrania kilku osób, w~tym trudny zbiór testowy;
   \item wybór jednej definicji pauzy dla danych własnych i~zbioru
   \cite{szymanski2025} (podrozdz.~\ref{sec:sieci-zbior-szymanski}), a~potem
