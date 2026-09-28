@@ -3188,21 +3188,13 @@ wdechu ani fragmentów szumu.
 
 Tabela~\ref{tab:fazy-dane} zestawia oznaczone dane. Rzeczywistych jest
 \SI{114}{min}, w~tym tylko \SI{21.5}{min} z~radaru, dlatego nagrania części
-uczącej uzupełniono danymi sztucznymi. Każde ma sześć kopii odtworzonych
-0,7--1,4 raza szybciej (zmienia się tempo oddechu, a~etykiety rozciągają się
-razem z~sygnałem), z~rzeczywistym szumem radaru o~odchyleniu 3--30\%
-wielkości oddechu i~z~powolnym dryfem. Szum pochodzi z~pauz nagrań
-sterowanych (\SI{4.4}{min}): zostaje w~nich ruch serca, drobne ruchy ciała
-i~szum czujnika. Kopie trafiają zawsze do tej samej części podziału co
-oryginał, a~części walidacyjna i~testowa pozostają rzeczywiste. Dane
-syntetyczne to \SI{300}{min} (60~nagrań po \SI{5}{min}) z~generatora
-opisanego w~podrozdz.~\ref{sec:sieci-uczenie}. Powstały dwa zbiory, okna co
-\SI{10}{s}: do wstępnego uczenia --- pas z~kopiami i~dane syntetyczne
-(3661~okien uczących, 72~walidacyjne i~58~testowych, wszystkie walidacyjne
-i~testowe z~rzeczywistego pasa) --- oraz do dostrajania: nagrania A121
-z~kopiami (351, 12 i~12~okien). Dane sztuczne zwiększają różnorodność tempa
-i~szumu, ale nie liczbę osób, pozycji ciała ani nawyków oddechowych --- tych
-przybywa tylko z~nowymi nagraniami.
+uczącej uzupełniono danymi sztucznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}).
+Powstały dwa zbiory, okna co \SI{10}{s}: do wstępnego uczenia --- pas
+z~kopiami i~dane syntetyczne (3661~okien uczących, 72~walidacyjne i~58~testowych,
+wszystkie walidacyjne i~testowe z~rzeczywistego pasa) --- oraz do dostrajania:
+nagrania A121 z~kopiami (351, 12 i~12~okien). Dane sztuczne zwiększają
+różnorodność tempa i~szumu, ale nie liczbę osób, pozycji ciała ani nawyków
+oddechowych --- tych przybywa tylko z~nowymi nagraniami.
 
 \begin{table}[H]
 \centering
@@ -3225,6 +3217,65 @@ Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 18,0 & 23,0 & 2,3 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\subsection{Dane sztuczne}
+\label{sec:sieci-dane-sztuczne}
+Dane sztuczne powstają na dwa sposoby (rys.~\ref{fig:fazy-dane-sztuczne}).
+
+\emph{Kopie nagrań rzeczywistych.} Każde nagranie części uczącej ma sześć
+kopii o~czasie trwania zmienionym 0,7; 0,8; 0,9; 1,1; 1,25 i~1,4 raza.
+Sygnał jest interpolowany liniowo, a~etykiety biorą wartość najbliższej
+próbki, więc granice faz przesuwają się razem z~ruchem, a~zmienia się tempo
+oddechu (12~oddechów/min z~przewodnika przechodzi w~8,6--17). Do kopii
+dodaje się rzeczywisty szum radaru --- losowy fragment sygnału A121 z~pauz
+nagrań sterowanych (\SI{4.4}{min}; zostaje w~nich ruch serca, drobne ruchy
+ciała i~szum czujnika), bez trendu liniowego --- o~odchyleniu standardowym
+3--30\% wielkości oddechu (rozrzutu percentyli 5--95), oraz powolny dryf:
+błądzenie losowe wygładzone w~oknie \SI{5}{s}, nie szybsze niż 0,3 wielkości
+oddechu na minutę. Głębokości nie skaluje się, bo wejście sieci i~tak jest
+dzielone przez wielkość oddechu; o~trudności decyduje stosunek szumu do
+oddechu. Kopie trafiają zawsze do tej samej części podziału co oryginał,
+a~części walidacyjna i~testowa pozostają rzeczywiste.
+
+\emph{Nagrania syntetyczne.} Generator układa kolejne oddechy z~etykietami
+znanymi z~konstrukcji. Zakresy dobrano według własnych nagrań: oddechy
+sterowane mają \SIrange{5}{12}{mm}, a~nocne medianę około \SI{0.8}{mm}.
+\begin{itemize}
+  \item Tempo jest losowane raz na nagranie z~zakresu 5--35~oddechów/min
+  i~powoli wędruje od oddechu do oddechu; długość pojedynczego cyklu waha się
+  o~8\%.
+  \item Wdech zajmuje 30--50\% cyklu i~ma kształt podniesionego kosinusa;
+  przepływ wydechu szybko rośnie i~zanika wykładniczo, jak przy biernym
+  powrocie klatki.
+  \item Głębokość wynosi \SIrange{0.2}{12}{mm} na nagranie i~zmienia się
+  o~10--30\% między oddechami; 2\% oddechów to westchnienia 1,5--3 raza
+  głębsze.
+  \item Pauza po wdechu następuje po 4\% oddechów, po wydechu po 6\%, i~trwa
+  \SIrange{1}{20}{s}; w~pauzie po wdechu klatka opada najwyżej o~10\%
+  oddechu.
+  \item Do ruchu oddechowego dochodzą: ruch serca (50--110 uderzeń/min,
+  \SIrange{0.05}{0.4}{mm}), drobne zmiany ułożenia ciała, szum
+  niskoczęstotliwościowy, dryf oraz ruchy ciała (średnio raz na \SI{5}{min},
+  \SIrange{1}{6}{s}, do \SI{20}{mm}) oznaczone jako szum.
+\end{itemize}
+Ruch klatki przechodzi przez model radaru A121: echo w~pięciu bramkach
+odległości z~fazą $-4\pi(d-x)/\lambda$, stałe odbicia otoczenia, powolne
+zaniki amplitudy i~szum zespolony o~SNR \SIrange{12}{40}{dB}. Z~tych danych
+ruch odczytuje się tak samo jak z~prawdziwego radaru --- rozplataniem fazy
+w~silnych bramkach i~średnią ważoną ich amplitudą --- więc przy niskim SNR
+pojawiają się te same błędy co w~nagraniach, skoki o~$\lambda/2$. Kanał echa
+to amplituda najsilniejszej bramki. Powstało 60~nagrań po \SI{5}{min}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_dane_sztuczne.png}
+    \caption[Dane sztuczne]{Dane sztuczne. a)~Fragment nagrania syntetycznego:
+    pauzy po wdechu i~po wydechu oraz ruch ciała oznaczony jako szum.
+    b)~Fragment rzeczywistego nagrania A121 i~c)~te same oddechy w~jego kopii,
+    1,25 raza dłuższej, z~dodanym szumem radaru i~dryfem. Białe przerwy to
+    otoczenia granic wyłączone z~uczenia.}
+    \label{fig:fazy-dane-sztuczne}
+\end{figure}
 
 \section{Detektor deterministyczny jako punkt odniesienia}
 \label{sec:sieci-baseline}
@@ -3311,18 +3362,9 @@ z~wykrytych oddechów, a~dla wariantów czasu rzeczywistego także opóźnienie
 granic: sama dokładność próbek karze opóźnienie tym mocniej, im szybszy
 oddech (podrozdz.~\ref{sec:sieci-zbior-szymanski}).
 
-Ponieważ danych oznaczonych jest mało, przygotowano generator oddechu
-syntetycznego z~etykietami znanymi z~konstrukcji: tempo \SIrange{5}{35}{oddech\per\minute}
-zmieniające się w~czasie, głębokość \SIrange{0.2}{12}{mm}, pauzy po
-wdechu i~po wydechu, westchnienia, ruch serca, dryf oraz fragmenty ruchu
-ciała oznaczone jako szum. Przebieg przemieszczenia przechodzi przez model
-radaru A121 (faza $4\pi d/\lambda$, echo rozłożone na kilka bramek, stałe
-odbicia i~szum zespolony) i~ten sam tor odtwarzania, więc przy niskim SNR
-powstają prawdziwe błędy rozplatania fazy. Rzeczywiste nagrania są dodatkowo
-augmentowane (podrozdz.~\ref{sec:sieci-zbior-uczacy}): zmiana tempa
-z~przeskalowaniem etykiet, rzeczywisty szum radaru i~dryf. Samej głębokości
-nie zmienia się, bo wejście sieci i~tak jest skalowane wielkością oddechu;
-o~trudności decyduje stosunek szumu do oddechu. Nie planuje się
+Ponieważ danych oznaczonych jest mało, zbiór uczący uzupełniono kopiami
+nagrań i~nagraniami syntetycznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}).
+Nie planuje się
 generatywnej sieci (GAN, dyfuzja): wymagałaby dużo więcej danych i~nie
 gwarantuje poprawnych etykiet, a~realizm zapewnia wstrzykiwanie rzeczywistego
 szumu. Podobne podejście --- wstępne uczenie na innym źródle i~dostrojenie
