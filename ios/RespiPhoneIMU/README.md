@@ -16,7 +16,24 @@ You need a Mac with Xcode for the final build/sign/install step. Apple does not 
 8. Press Run in Xcode.
 9. If iOS asks for Developer Mode, enable it in Settings, restart the phone if prompted, then run again.
 
-The simulator cannot provide real Bluetooth peripheral advertising or useful motion data, so use a physical iPhone.
+The simulator cannot provide real Bluetooth peripheral advertising or useful motion data, so use a physical iPhone. (In the simulator the app draws a made-up breath so its screens can be checked.)
+
+## Using it for recordings
+
+The app is meant to be strapped to the body, screen outwards, while the desktop recorder runs:
+
+- **Before a trial** the main screen shows a checklist (Bluetooth, visible to the Mac, Mac connected, battery
+  at least 30%, Low Power Mode off) and a **placement check**: a live line of the chest's tilt over the last
+  30 s and its size in mg. With the strap tight, it rises and falls smoothly with each breath.
+- **While streaming** a dark full-screen view shows the elapsed time, whether the Mac is connected, the live
+  line and the measured rate, readable from a few metres. The screen dims (optional). Nothing on it reacts to
+  a quick touch: stopping from the phone takes a 2-second hold, so a strap or shirt cannot stop a trial. The
+  recorder normally starts and stops the stream itself.
+- **If the Mac drops out** the phone vibrates and shows a red banner; it keeps saving.
+- **Every trial is also saved on the phone** as `respi_imu_<date>_<time>.csv` in the same columns as the
+  desktop files (`Time_ms,ax,ay,az,gx,gy,gz`, `Time_ms` in Unix ms from the phone's clock). They are listed
+  under "Saved on this phone" with share (AirDrop) and delete buttons, and appear in the Files app under
+  On My iPhone › Respi IMU. A trial the recorder rejects because Bluetooth lost samples is still complete here.
 
 ## Desktop capture
 
