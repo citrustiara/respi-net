@@ -42,10 +42,12 @@ Choose patterns (ids or paths) and resume an interrupted session::
 from __future__ import annotations
 
 import argparse
+import atexit
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import json
 import math
+import os
 from pathlib import Path
 import re
 import sys
@@ -53,6 +55,7 @@ import threading
 import time
 from typing import Any, Sequence
 
+LOCK_NAME = ".recorder.lock"
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 TOOLS = ROOT / "tools"
@@ -627,6 +630,33 @@ def load_or_create_manifest(path: Path, fresh: dict[str, Any]) -> dict[str, Any]
             return existing
     save_manifest(path, fresh)
     return fresh
+
+
+def claim_session(session_dir: Path) -> Path:
+    """Mark ``session_dir`` as in use by this recorder; :class:`ValueError` if another one is running there.
+
+    Two recorders on one session share the radar port and the phone and overwrite each other's
+    trials (recording a trial again replaces its files), so the second one is refused.  A lock
+    left by a crashed recorder is taken over.
+    """
+
+    session_dir.mkdir(parents=True, exist_ok=True)
+    lock = session_dir / LOCK_NAME
+    if lock.exists():
+        try:
+            other = int(lock.read_text(encoding="utf-8").strip())
+            os.kill(other, 0)
+        except (ValueError, OSError):
+            pass  # unreadable lock or no such process: stale
+        else:
+            if other != os.getpid():
+                raise ValueError(
+                    f"Sesja {session_dir} jest już używana przez inny rejestrator (PID {other}). "
+                    "Zamknij go albo użyj innej --session-name."
+                )
+    lock.write_text(str(os.getpid()), encoding="utf-8")
+    atexit.register(lambda: lock.unlink(missing_ok=True))
+    return lock
 
 
 # -- capture ------------------------------------------------------------------------
@@ -1334,6 +1364,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.dry_run:
         print("\n".join(plan_lines(trials, settings, start_trial=args.start_trial)))
         return 0
+
+    try:
+        claim_session(settings.session_dir)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     try:

@@ -3150,6 +3150,15 @@ użyciem telefonu do oznaczania całego zbioru trzeba powtórzyć to na oddechu
 naturalnym bez komend, z~pauzą po wdechu i~w~pozostałych pozycjach (leżenie na
 boku i~na brzuchu może zgnieść telefon).
 
+\paragraph{Napotkane problemy.} Dwa rejestratory uruchomione na tej samej
+nazwie sesji dzieliły port radaru i~telefon (w~logu: rozłączenie BLE i~przekroczenie
+czasu odczytu A121 przy starcie), a~ponowne nagranie próby zastępuje jej pliki,
+więc pierwsze nagranie, z~mocnym oddechem, zostało nadpisane; rejestrator
+odmawia teraz startu w~katalogu sesji zajętym przez inny rejestrator. Metadane
+sesji (odległość \SI{100}{cm}, pozycja leżąca, telefon na brzuchu) były
+domyślne lub błędne; poprawki zapisano w~notatce sesji, pliki surowe pozostały
+bez zmian.
+
 \subsection{Zbiór zewnętrzny z~pasem oddechowym}
 \label{sec:sieci-zbior-szymanski}
 Zbiór \cite{szymanski2025} jest publiczny na licencji CC~BY-NC-ND (wolno go

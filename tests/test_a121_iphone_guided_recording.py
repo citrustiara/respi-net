@@ -631,3 +631,26 @@ def test_window_after_the_last_trial_shows_the_end(tmp_path: Path, qapp: QApplic
         assert not window.start_button.isEnabled()
     finally:
         window.close()
+
+
+
+def test_a_second_recorder_on_the_same_session_is_refused(tmp_path: Path) -> None:
+    lock = tool.claim_session(tmp_path)
+    try:
+        assert lock.read_text(encoding="utf-8") == str(os.getpid())
+        # the same process may claim it again; a different live process may not
+        tool.claim_session(tmp_path)
+        lock.write_text(str(os.getppid()), encoding="utf-8")
+        with pytest.raises(ValueError, match="używana przez inny rejestrator"):
+            tool.claim_session(tmp_path)
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+def test_a_stale_lock_is_taken_over(tmp_path: Path) -> None:
+    (tmp_path / tool.LOCK_NAME).write_text("999999999", encoding="utf-8")
+    lock = tool.claim_session(tmp_path)
+    try:
+        assert lock.read_text(encoding="utf-8") == str(os.getpid())
+    finally:
+        lock.unlink(missing_ok=True)
