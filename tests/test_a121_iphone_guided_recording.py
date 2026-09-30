@@ -654,3 +654,57 @@ def test_a_stale_lock_is_taken_over(tmp_path: Path) -> None:
         assert lock.read_text(encoding="utf-8") == str(os.getpid())
     finally:
         lock.unlink(missing_ok=True)
+
+
+def _autostart_window(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, a121: type) -> "tool.GuidedRecordingWindow":
+    monkeypatch.setattr(tool, "A121Capture", a121)
+    monkeypatch.setattr(tool, "ArrivalLoggingIPhoneCapture", FakeIPhoneCapture)
+    monkeypatch.setattr(tool, "AUTOSTART_DELAY_MS", 50)
+    monkeypatch.setattr(tool, "AUTOSTART_RETRY_MS", 50)
+    settings = tool.SessionSettings(session_dir=tmp_path, a121_port="TEST", prep_seconds=0.2, post_roll_s=0.1)
+    window = tool.GuidedRecordingWindow(trials=[_quick_trial()], settings=settings, autostart_attempts=3)
+    window.quit_requests = []  # type: ignore[attr-defined]
+    monkeypatch.setattr(window, "_quit_app", lambda: window.quit_requests.append(True))  # type: ignore[attr-defined]
+    return window
+
+
+def _wait_for_kept_trial(window: "tool.GuidedRecordingWindow", qapp: QApplication, tmp_path: Path) -> list[dict[str, Any]]:
+    deadline = time.monotonic() + 20.0
+    while time.monotonic() < deadline:
+        qapp.processEvents()
+        time.sleep(0.01)
+        manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+        if manifest["measurements"] and window.active_thread is None:
+            return manifest["measurements"]
+    return []
+
+
+def test_autostart_records_and_keeps_the_trial_by_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, qapp: QApplication
+) -> None:
+    window = _autostart_window(tmp_path, monkeypatch, FakeA121Capture)
+    try:
+        kept = _wait_for_kept_trial(window, qapp, tmp_path)
+        assert len(kept) == 1 and kept[0]["status"] == "accepted"
+        assert window.current_trial() is None
+    finally:
+        window.close()
+
+
+def test_autostart_retries_a_failed_connection(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, qapp: QApplication) -> None:
+    attempts: list[int] = []
+
+    class FlakyA121(FakeA121Capture):
+        def connect(self, port_name: str | None = None) -> bool:
+            attempts.append(1)
+            if len(attempts) <= tool.A121_CONNECT_ATTEMPTS:  # the whole first start fails
+                raise RuntimeError("recv timeout")
+            return super().connect(port_name)
+
+    window = _autostart_window(tmp_path, monkeypatch, FlakyA121)
+    try:
+        kept = _wait_for_kept_trial(window, qapp, tmp_path)
+        assert len(kept) == 1, window.status.text()
+        assert len(attempts) > tool.A121_CONNECT_ATTEMPTS
+    finally:
+        window.close()

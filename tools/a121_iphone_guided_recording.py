@@ -56,6 +56,9 @@ import time
 from typing import Any, Sequence
 
 LOCK_NAME = ".recorder.lock"
+AUTOSTART_DELAY_MS = 3000
+AUTOSTART_RETRY_MS = 8000
+AUTOSTART_NEXT_TRIAL_MS = 15000
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 TOOLS = ROOT / "tools"
@@ -65,7 +68,7 @@ for _import_dir in (SRC, TOOLS):
 
 import numpy as np
 import pandas as pd
-from PySide6.QtCore import QObject, QThread, Qt, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -1017,8 +1020,12 @@ class MeasurementWorker(QObject):
 
 
 class GuidedRecordingWindow(QWidget):
-    def __init__(self, *, trials: Sequence[Trial], settings: SessionSettings, start_trial: int = 1) -> None:
+    def __init__(
+        self, *, trials: Sequence[Trial], settings: SessionSettings, start_trial: int = 1, autostart_attempts: int = 0
+    ) -> None:
         super().__init__()
+        self.autostart_attempts = autostart_attempts
+        self.autostart_left = autostart_attempts
         self.trials = list(trials)
         self.settings = settings
         self.session_dir = settings.session_dir
@@ -1036,6 +1043,24 @@ class GuidedRecordingWindow(QWidget):
         self.show_trial()
         self.abort_shortcut = QShortcut(QKeySequence("Esc"), self)
         self.abort_shortcut.activated.connect(self.abort_current)
+        if autostart_attempts > 0:
+            QTimer.singleShot(AUTOSTART_DELAY_MS, self._autostart)
+
+    @Slot()
+    def _autostart(self) -> None:
+        """Start the current trial by itself (``--autostart``): for recordings where the mouse is out of reach."""
+
+        if self.autostart_attempts <= 0 or self.active_thread is not None or self.current_trial() is None:
+            return
+        if self.autostart_left <= 0:
+            self.status.setText("Automatyczny start: wyczerpano próby połączenia.")
+            return
+        self.autostart_left -= 1
+        self.start_measurement()
+
+    @Slot()
+    def _quit_app(self) -> None:
+        QApplication.quit()
 
     def _save_manifest(self) -> None:
         save_manifest(self.manifest_path, self.manifest)
@@ -1204,6 +1229,9 @@ class GuidedRecordingWindow(QWidget):
         self.summary.setPlainText(format_summary(self.pending_summary))
         self.status.setText("Próba zapisana tymczasowo. Zachowaj ją albo odrzuć i powtórz.")
         self.coach.show_message("KONIEC", "Oddychaj swobodnie.", finished=True)
+        if self.autostart_attempts > 0:
+            # The worker only finishes when the stream checks passed, so the trial is kept as is.
+            QTimer.singleShot(500, self.accept_pending)
 
     @Slot(str)
     def on_failed(self, message: str) -> None:
@@ -1214,6 +1242,8 @@ class GuidedRecordingWindow(QWidget):
         self.summary.setPlainText(
             "Bieżące pliki usunięto. Popraw połączenie albo ułożenie czujników i uruchom próbę ponownie."
         )
+        if self.autostart_attempts > 0:
+            QTimer.singleShot(AUTOSTART_RETRY_MS, self._autostart)
 
     @Slot()
     def on_aborted(self) -> None:
@@ -1264,6 +1294,12 @@ class GuidedRecordingWindow(QWidget):
         self._save_manifest()
         self.current_index += 1
         self.show_trial("Próba została zachowana w manifeście.")
+        if self.autostart_attempts > 0:
+            self.autostart_left = self.autostart_attempts
+            if self.current_trial() is None:
+                QTimer.singleShot(3000, self._quit_app)
+            else:
+                QTimer.singleShot(AUTOSTART_NEXT_TRIAL_MS, self._autostart)
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 - Qt API
         if self.active_worker is not None:
@@ -1319,6 +1355,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_OUTPUT_DIR,
         help="Katalog, w którym powstaje katalog sesji (domyślnie data/raw/nn/a121_iphone).",
     )
+    parser.add_argument(
+        "--autostart",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Start each trial by itself, retry a failed start up to N times and keep a trial that passed the "
+        "stream checks, then close the window after the last one (for when the mouse is out of reach).",
+    )
     parser.add_argument("--start-trial", type=int, default=1, help="Numer próby, od której zacząć (1 = pierwsza).")
     parser.add_argument(
         "--dry-run",
@@ -1372,7 +1416,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     app = QApplication.instance() or QApplication(sys.argv[:1])
     try:
-        window = GuidedRecordingWindow(trials=trials, settings=settings, start_trial=args.start_trial)
+        window = GuidedRecordingWindow(
+            trials=trials, settings=settings, start_trial=args.start_trial, autostart_attempts=max(0, args.autostart)
+        )
     except ValueError as exc:
         parser.error(str(exc))
     window.show()
