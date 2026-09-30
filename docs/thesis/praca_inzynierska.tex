@@ -2945,6 +2945,7 @@ RMS --- dane sterowane są więc zadaniem łatwym, a~trudność leży w~oddechu
 naturalnym.
 
 \subsection{Korekta etykiet oddech po oddechu}
+\label{sec:sieci-korekta}
 Komenda przewodnika jest zamiarem, a~nie pomiarem. Po jednym wspólnym
 przesunięciu czasowym granice faz nadal odbiegały od rzeczywistych zwrotów
 ruchu średnio o~\SI{0.21}{s} (IQR \SI{0.28}{s}); etykiety z~samych komend
@@ -3014,9 +3015,9 @@ bliższy oddechowi, lecz jego opóźnienie względem komend różniło się mię
 sesjami od 0 do \SI{1.5}{s}.
 
 Wniosek: w~tych nagraniach IMU dobrze oddaje rytm i~pauzy, lecz nie jest
-dostatecznie dokładnym wzorcem granic faz. Rozstrzygnie to równoczesny zapis
-A121 z~telefonem, dla którego przygotowano osobny skrypt nagrań; etykiety
-z~telefonu i~z~radaru będzie można wtedy porównać w~tym samym czasie.
+dostatecznie dokładnym wzorcem granic faz. Rozstrzygnął to równoczesny zapis
+A121 z~telefonem, w~którym telefon leży przy dolnych żebrach, a~nie na
+klatce (kolejny podrozdział).
 Skrypt zapisuje też statystyki opóźnień paczek BLE, bo obecna aplikacja
 wiąże zegar telefonu z~zegarem hosta tylko przy pierwszej paczce.
 
@@ -3028,6 +3029,126 @@ wiąże zegar telefonu z~zegarem hosta tylko przy pierwszej paczce.
     względem własnych komend przewodnika.}
     \label{fig:fazy-imu}
 \end{figure}
+
+\subsection{Pilotaż: telefon przy żebrach i~radar jednocześnie}
+\label{sec:sieci-pilot-telefon}
+\paragraph{Cel.} Sprawdzić, czy telefon przypięty do ciała może oznaczać fazy
+oddechu w~nagraniach radaru, czyli (1)~ile telefon wyprzedza lub spóźnia się
+względem radaru i~o~ile trzeba go przesunąć, żeby oba sygnały nałożyć na
+siebie w~czasie, oraz (2)~czy deterministyczny detektor faz, uruchomiony na
+samym telefonie, daje etykiety zgodne z~tym, co widać w~radarze. Nagranie
+z~komendami pokazuje też, czy radar przy telefonie daje czytelny oddech. Jest to pilotaż jednej osoby i~jednego, lekkiego (płytkiego) oddechu;
+oddech naturalny bez komend i~pauzy po wdechu wymagają osobnych nagrań.
+
+\paragraph{Układ.} Osoba siedziała w~fotelu odchylonym o~około \SI{60}{\degree}.
+Telefon z~aplikacją RespiPhoneIMU był przypięty z~boku, na wysokości dolnych
+żeber, poza osią wiązki radaru; radar z~płaską soczewką mierzył klatkę
+z~odległości około \SI{0.4}{m} (na oko pół metra; maksimum echa
+\SI{0.39}{m}, zakres pracy \SIrange{0.3}{1.5}{m}). Nagranie trwa
+\SI{90}{s} (wzorzec \texttt{paced\_12\_hold}: \SI{10}{s} oddechu swobodnego,
+7~cykli wdech \SI{2}{s} / wydech \SI{3}{s}, pauza po wydechu \SI{15}{s},
+6~cykli) i~powstało jednym programem na jednym zegarze komputera. Strumień
+telefonu był kompletny (\SI{100}{Hz}, bez utraconych próbek), radar dał 99,9\%
+ramek. Amplituda oddechu w~radarze wyniosła \SI{5.8}{mm} (percentyle 5--95),
+a~w~telefonie \SI{22}{mg}.
+
+\paragraph{Metoda.} Sygnał telefonu to rzut przyspieszenia na oś główną
+oddechu, odwrócony tak, by rósł na wdechu (znak z~korelacji z~radarem).
+Opóźnienie wyznaczono trzema sposobami niezależnymi od siebie: korelacją
+wzajemną prędkości i~położenia oraz, osobno dla każdego oddechu z~komend,
+chwilą najszybszego ruchu i~chwilą zwrotu w~obu sygnałach; wynik to mediana
+różnic telefon~$-$~radar. Następnie telefon przesunięto o~to opóźnienie,
+oznaczono go tym samym detektorem co radar (podrozdz.~\ref{sec:sieci-baseline})
+i~porównano oba detektory z~etykietami radaru wyznaczonymi względem komend
+metodą z~podrozdz.~\ref{sec:sieci-korekta}. Te etykiety nie są niezależne od
+radaru (granice leżą na jego zwrotach), więc zgodność telefonu z~nimi świadczy
+o~spójności dwóch czujników, a~nie o~zgodności z~fizjologią.
+
+\begin{table}[H]
+\centering
+\caption{Telefon przy żebrach i~radar, jedno nagranie \SI{90}{s} z~lekkim
+oddechem. Etykiety odniesienia: radar i~komendy. Kolumny dolnej tabeli: ten
+sam detektor na radarze, na telefonie przesuniętym o~opóźnienie oraz etykiety
+z~komend wyrównane do zwrotów telefonu.}
+\label{tab:fazy-telefon}
+\small
+\begin{tabular}{lr}
+\toprule
+Opóźnienie telefonu względem radaru (telefon $-$ radar) & wartość \\
+\midrule
+korelacja wzajemna prędkości ($r = 0{,}78$) & \SI{-0.16}{s} \\
+korelacja wzajemna położenia ($r = 0{,}73$) & \SI{-0.17}{s} \\
+mediana 52~zdarzeń (najszybszy ruch, zwroty) & \SI{-0.10}{s} \\
+\quad rozstęp międzykwartylowy zdarzeń & \SI{0.41}{s} \\
+\quad pierwsza / druga połowa nagrania & \SI{0.00}{s} / \SI{-0.30}{s} \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.8em}
+\begin{tabular}{lrrr}
+\toprule
+Miara & detektor, radar & detektor, telefon & komendy, telefon \\
+\midrule
+Dokładność & 84,5\% & 90,1\% & 97,8\% \\
+Makro-F1 & 0,837 & 0,896 & 0,979 \\
+Granice znalezione (\SI{1}{s}) & 78\% & 85\% & 93\% \\
+Mediana błędu granicy & \SI{0.23}{s} & \SI{0.15}{s} & \SI{0.23}{s} \\
+Fałszywe granice na minutę & 5,3 & 2,7 & 0,7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_telefon_radar.png}
+    \caption[Telefon i~radar w~jednym nagraniu]{Lekki oddech z~komendami,
+    telefon przy dolnych żebrach. Wykresy górne: sygnały przed wyrównaniem
+    i~po nim (linie przerywane to początki komend). Środek: opóźnienie
+    w~pojedynczych oddechach i~korelacja wzajemna. Dół: fazy z~komend, z~radaru
+    i~komend (odniesienie) oraz z~detektora na radarze i~na telefonie
+    przesuniętym o~opóźnienie. W~pauzie po wydechu telefon pozostaje płaski,
+    a~radar dryfuje.}
+    \label{fig:fazy-telefon}
+\end{figure}
+
+\paragraph{Opóźnienie.} Telefon wyprzedza radar o~około \SI{0.1}{s} (zdarzenia)
+do \SI{0.17}{s} (korelacja); trzy sposoby dają zbliżony wynik, a~nałożone sygnały
+(rys.~\ref{fig:fazy-telefon}, dwa górne wykresy) zgadzają się w~rytmie
+i~w~pauzie. Szczyt korelacji jest jednak szeroki (około $\pm$\SI{0.5}{s}),
+a~opóźnienia pojedynczych oddechów rozrzucone (rozstęp \SI{0.41}{s}), w~drugiej
+połowie nagrania większe (\SI{-0.30}{s}) niż w~pierwszej (\SI{0.00}{s}); zwroty
+dna oddechu wyprzedzają zwroty szczytu bardziej (\SI{-0.25}{s} wobec
+\SI{-0.10}{s}). Przebieg telefonu nie jest kopią przebiegu radaru: ma ostre
+szczyty i~płaskie dno, więc moment zwrotu zależy od zdarzenia. Rejestrator
+szacuje, że znaczniki czasu telefonu spóźniają się o~około \SI{0.14}{s}
+z~powodu opóźnienia BLE, więc fizyczne wyprzedzenie żeber względem przedniej
+ściany klatki mogłoby sięgać \SI{0.25}{s} --- tego jednego nagrania nie da się
+tu rozdzielić. W~praktyce wystarcza jedna liczba: do etykiet z~telefonu trzeba
+dodać około \SI{0.1}{s}, a~pozostała niepewność (około $\pm$\SI{0.2}{s}) jest
+porównywalna z~błędem granicy samego detektora (\SI{0.15}{s}).
+Stałą poprawkę trzeba wyznaczać dla każdej sesji z~oddychania, a~nie zakładać.
+
+\paragraph{Czy telefon może oznaczać dane radaru?} W~tym nagraniu tak.
+Detektor na telefonie zgadza się z~etykietami radaru i~komend w~90,1\% (88,8\%
+bez przesunięcia), a~ten sam detektor na samym radarze w~84,5\%; telefon
+znajduje więcej granic (85\% wobec 78\%), z~mniejszym błędem i~mniej
+fałszywych. Przyczyna widoczna na rys.~\ref{fig:fazy-telefon}: w~płytkim
+oddechu radar ma między oddechami płaskie odcinki na dnie, które detektor bierze
+za krótkie pauzy (trzy fałszywe pauzy po wydechu w~pierwszych \SI{35}{s}),
+a~telefon ich nie ma; w~prawdziwej pauzie po wydechu telefon jest płaski,
+a~radar dryfuje o~około \SI{1.5}{mm}. Etykiety z~komend i~telefonu (bez detektora)
+zgadzają się z~etykietami z~komend i~radaru w~97,8\%. Radar z~telefonem przy
+żebrach daje czytelny oddech (echo \SI{58}{dB}, korelacja szablonu komend 0,67,
+96\% granic ze zwrotem), lecz nie ma jeszcze nagrania tego samego oddechu
+bez telefonu, więc wpływu jego obecności nie wyodrębniono.
+
+Ograniczenia: jedna osoba, jedno nagranie, jedna pozycja; oddech z~komendami,
+a~nie naturalny (w~pierwszych \SI{10}{s} oddechu swobodnego oba detektory zgadzają
+się w~88\%, lecz to zaledwie kilka oddechów);
+brak pauzy po wdechu; etykiety odniesienia pochodzą z~radaru i~komend. Przed
+użyciem telefonu do oznaczania całego zbioru trzeba powtórzyć to na oddechu
+naturalnym bez komend, z~pauzą po wdechu i~w~pozostałych pozycjach (leżenie na
+boku i~na brzuchu może zgnieść telefon).
 
 \subsection{Zbiór zewnętrzny z~pasem oddechowym}
 \label{sec:sieci-zbior-szymanski}
@@ -3193,7 +3314,10 @@ zbiory uczący, walidacyjny i~testowy. W~danych sterowanych nie ma pauz po
 wdechu ani fragmentów szumu.
 
 Tabela~\ref{tab:fazy-dane} zestawia oznaczone dane. Rzeczywistych jest
-\SI{114}{min}, w~tym tylko \SI{21.5}{min} z~radaru, dlatego nagrania części
+\SI{114}{min}, w~tym tylko \SI{21.5}{min} z~radaru (nagrania IMU bez radaru
+dodają \SI{6.6}{min}: to tylko sześć nagrań po \SI{90}{s} z~kompletnym
+strumieniem, oznaczonych tą samą metodą względem komend, a~wcześniejsze 20~plików
+IMU, łącznie około \SI{15}{min}, nie ma komend i~nie jest oznaczone), dlatego nagrania części
 uczącej uzupełniono danymi sztucznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}).
 Powstały dwa zbiory, okna co \SI{10}{s}: do wstępnego uczenia --- pas
 z~kopiami i~dane syntetyczne (3661~okien uczących, 72~walidacyjne i~58~testowych,
@@ -3206,9 +3330,11 @@ oddechowych --- tych przybywa tylko z~nowymi nagraniami.
 \centering
 \small
 \caption{Oznaczone dane do uczenia sieci, w~minutach. P.~wd. i~P.~wyd. to
-pauza po wdechu i~po wydechu. Akcelerometru iNode nie włączono do zbiorów
-uczących.}
+pauza po wdechu i~po wydechu. Akcelerometru iNode ani nagrań IMU bez
+radaru nie włączono do zbiorów uczących. Tabela będzie uzupełniana o~nowe
+nagrania z~radarem i~telefonem.}
 \label{tab:fazy-dane}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lrrrrrrr@{}}
 \toprule
 Źródło & Osoby & Razem & Wdech & Wydech & P.~wd. & P.~wyd. & Szum \\
@@ -3216,6 +3342,8 @@ uczących.}
 A121, nagrania sterowane & 1 & 21,5 & 7,0 & 10,1 & 0,0 & 4,4 & 0,0 \\
 Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 11,4 & 18,6 & 2,5 \\
 Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 5,2 & 12,0 & 3,2 \\
+LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,0 & 0,9 & 0,0 \\
+iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,0 & 0,4 & 0,0 \\
 \midrule
 Kopie nagrań A121 & -- & 90,5 & 29,6 & 42,3 & 0,0 & 18,7 & 0,0 \\
 Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 68,2 & 96,4 & 13,9 \\
