@@ -3200,7 +3200,14 @@ widzi wyraźnie również tam, gdzie radar pod kątem prawie go nie widzi, więc
 oznaczać dane radaru; etykiety w~takich fragmentach nie niosą jednak informacji
 dla sieci o~wejściu z~radaru i~trzeba je maskować według siły sygnału radaru.
 Nie ma jeszcze niezależnej oceny poprawności samych etykiet telefonu (brak
-pauzy po wdechu w~pilotażu, brak drugiego odniesienia).
+pauzy po wdechu w~pilotażu, brak drugiego odniesienia). Kolejne nagranie, \SI{3}{min} bez przewodnika
+z~radarem skierowanym na klatkę (amplituda \SI{11.6}{mm} zamiast \SI{1.2}{mm},
+echo \SI{62}{dB}), potwierdziło stałość opóźnienia: w~półminutowych odcinkach
+wynosiło od \SI{-0.15}{s} do \SI{0.09}{s} (rozrzut \SI{0.08}{s}), a~bez korekty
+zegara radaru dochodziło do \SI{-0.29}{s}. Nie zawierało ono zadanych pauz, więc
+nie sprawdza klas pauz; dwa cichy odcinki (po około \SI{12}{s}) wykryły
+niezależnie oba detektory, a~klasę pozostałych pauz (po wdechu czy po wydechu)
+oba przypisały różnie.
 
 \paragraph{Napotkane problemy.} Dwa rejestratory uruchomione na tej samej
 nazwie sesji dzieliły port radaru i~telefon (w~logu: rozłączenie BLE i~przekroczenie

@@ -280,15 +280,17 @@ def has_cued_breaths(cues: pd.DataFrame) -> bool:
     return bool(cues["kind"].isin(["inhale", "exhale"]).any())
 
 
-def chunk_delays(time_s: np.ndarray, radar: np.ndarray, phone: np.ndarray, start_s: float, fs: float) -> list[dict[str, float]]:
+def chunk_delays(
+    time_s: np.ndarray, radar: np.ndarray, phone: np.ndarray, start_s: float, fs: float, chunk_s: float = CHUNK_S
+) -> list[dict[str, float]]:
     """Delay (phone minus radar) and correlation of the velocities in consecutive chunks."""
 
     velocity_r, velocity_p = np.gradient(radar) * fs, np.gradient(phone) * fs
     rows = []
-    for lo in np.arange(start_s, time_s[-1] - CHUNK_S + 1e-9, CHUNK_S):
-        inside = (time_s >= lo) & (time_s < lo + CHUNK_S)
+    for lo in np.arange(start_s, time_s[-1] - chunk_s + 1e-9, chunk_s):
+        inside = (time_s >= lo) & (time_s < lo + chunk_s)
         lag, corr, _, _ = best_lag(velocity_r[inside], velocity_p[inside], fs)
-        rows.append({"start_s": float(lo), "delay_s": lag, "correlation": abs(corr)})
+        rows.append({"start_s": float(lo), "delay_s": lag, "correlation": abs(corr), "chunk_s": float(chunk_s)})
     return rows
 
 
@@ -318,8 +320,9 @@ def analyse_free(run_prefix: Path) -> dict[str, object]:
     _, corr_sign, _, _ = best_lag(np.gradient(radar)[body] * GRID_HZ, np.gradient(phone)[body] * GRID_HZ, GRID_HZ)
     sign = 1.0 if corr_sign >= 0 else -1.0
     phone = sign * phone
-    after = chunk_delays(grid, radar, phone, start, GRID_HZ)
-    before = chunk_delays(grid, radar_before, phone, start, GRID_HZ)
+    chunk_s = CHUNK_S if duration >= 400 else CHUNK_S / 2  # short runs: half-minute chunks
+    after = chunk_delays(grid, radar, phone, start, GRID_HZ, chunk_s)
+    before = chunk_delays(grid, radar_before, phone, start, GRID_HZ, chunk_s)
     good = [row for row in after if row["correlation"] >= GOOD_CORRELATION]
     good_before = [row for row in before if row["correlation"] >= GOOD_CORRELATION]
     delays = np.array([row["delay_s"] for row in good])
@@ -434,8 +437,8 @@ def plot_free(result: dict[str, object], path: Path) -> None:
     for rows, colour, label in ((data["before"], "#9ca3af", "znaczniki radaru bez korekty"), (data["after"], "#2563eb", "po korekcie zegara")):
         good = [row for row in rows if row["correlation"] >= GOOD_CORRELATION]
         weak = [row for row in rows if row["correlation"] < GOOD_CORRELATION]
-        delays.scatter([r["start_s"] + CHUNK_S / 2 for r in good], [r["delay_s"] for r in good], color=colour, s=34, label=label)
-        delays.scatter([r["start_s"] + CHUNK_S / 2 for r in weak], [r["delay_s"] for r in weak], facecolors="none", edgecolors=colour, s=34)
+        delays.scatter([r["start_s"] + r["chunk_s"] / 2 for r in good], [r["delay_s"] for r in good], color=colour, s=34, label=label)
+        delays.scatter([r["start_s"] + r["chunk_s"] / 2 for r in weak], [r["delay_s"] for r in weak], facecolors="none", edgecolors=colour, s=34)
     delays.axhline(0.0, color="#111827", lw=0.6)
     delays.set_ylabel("telefon − radar [s]")
     delays.set_title(

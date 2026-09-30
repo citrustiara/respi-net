@@ -1,0 +1,18 @@
+{
+  "name": "Sieć faz — nagranie bez przewodnika (3 min)",
+  "description": "3 minuty bez przewodnika: po ułożeniu się robisz w skrócie to, co w nagraniu 12-minutowym (spokojnie, wolno, szybko, płytko, pauzy po wdechu i wydechu, nieregularnie, ruch i kaszel). Okno nic nie podpowiada; fazy oddechu oznaczy telefon na ciele.",
+  "blocks": [
+    {
+      "kind": "settle",
+      "duration_seconds": 10,
+      "detail": "Ułóż się i nie ruszaj; oddychaj jak zwykle."
+    },
+    {
+      "kind": "normal",
+      "duration_seconds": 170,
+      "label": "Bez przewodnika",
+      "cue": "BEZ PRZEWODNIKA",
+      "detail": "Rób po swojemu w skrócie to, co w nagraniu 12-minutowym. Nie dotykaj telefonu."
+    }
+  ]
+}
