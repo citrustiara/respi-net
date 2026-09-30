@@ -55,3 +55,26 @@ def test_event_differences_report_phone_minus_radar() -> None:
     differences = tool.event_differences(t, radar, phone, cues, FS)
     pooled = np.concatenate([values[:, 1] for values in differences.values()])
     assert abs(np.median(pooled) + 0.25) < 0.1
+
+
+def test_chunk_delays_follow_a_drifting_signal() -> None:
+    t = np.arange(0, 300, 1 / FS)
+    reference = _breaths(t)
+    drifting = np.interp(t, t * 1.002, reference)  # the second signal's clock runs 0.2 percent slow
+    rows = tool.chunk_delays(t, reference, drifting, 0.0, FS)
+    delays = [row["delay_s"] for row in rows if row["correlation"] > 0.9]
+    assert len(delays) >= 4
+    assert delays[-1] - delays[0] > 0.3  # the second signal falls further behind along the recording
+
+
+def test_long_holds_lists_only_long_holds() -> None:
+    t = np.arange(0, 30, 0.1)
+    labels = np.full(len(t), 2, dtype=np.int8)
+    labels[50:60] = 1  # 1 s hold
+    labels[100:180] = 3  # 8 s hold
+    assert [(round(b), round(e), c) for b, e, c in tool.long_holds(labels, t)] == [(10, 18, 3)]
+
+
+def test_cued_breaths_are_recognised() -> None:
+    assert tool.has_cued_breaths(pd.DataFrame({"kind": ["normal", "inhale"]}))
+    assert not tool.has_cued_breaths(pd.DataFrame({"kind": ["settle", "normal", "interference"]}))

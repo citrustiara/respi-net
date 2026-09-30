@@ -161,7 +161,10 @@ TIME_ALIGNMENT_NOTE = (
     "Time_ms; the minimum BLE latency remains). Cue start_wall_ms/end_wall_ms are measurement_start_wall_ms plus "
     "the pattern times. Sensor files hold the rows that arrived from the measurement start until the sensors were "
     "stopped post_roll_s after the pattern ended (the A121 file may open with a few frames still queued from just "
-    "before the start); crop them with the cue wall times."
+    "before the start); crop them with the cue wall times. The A121 stamps run about 0.17 percent fast (50/51 ms "
+    "steps for frames that are 50 ms apart: 1.3 s too long over 12 minutes); use "
+    "respi_net.chest_signal.regular_frame_times_ms, which a121_chest_signal applies, before comparing the radar "
+    "with any other sensor."
 )
 
 POSTURE_LABELS_PL = {

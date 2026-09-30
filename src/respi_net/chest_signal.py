@@ -102,6 +102,26 @@ def rate_band_filter(x: np.ndarray, fs: float, band: tuple[float, float] = RATE_
     return sosfiltfilt(sos, np.asarray(x, dtype=float))
 
 
+def regular_frame_times_ms(timestamps_ms: np.ndarray, tolerance_ms: float = 1.5) -> np.ndarray:
+    """Frame times with the driver's rounding drift removed.
+
+    The A121 driver stamps frames in whole milliseconds and its tick clock runs about 0.17 percent fast: frames
+    that are 50.00 ms apart get steps of 50 ms with an extra millisecond every ~12 frames (50.085 ms on
+    average).  Over a 12-minute recording the stamps then end 1.3 s after the host clock and the phone, and
+    the radar slides against any other sensor.  Steps within ``tolerance_ms`` of the median step are set to
+    it; larger gaps (dropped frames) stay as they are.
+    """
+
+    times = np.asarray(timestamps_ms, dtype=float)
+    steps = np.diff(times)
+    usable = steps[np.isfinite(steps) & (steps > 0)]
+    if len(usable) < 10:
+        return times
+    median = float(np.median(usable))
+    regular = np.where(np.abs(steps - median) <= tolerance_ms, median, steps)
+    return times[0] + np.concatenate([[0.0], np.cumsum(regular)])
+
+
 def _load_matrix(series: pd.Series, width: int | None = None) -> np.ndarray:
     rows = [parse_json_array(value) for value in series]
     width = width or min(len(row) for row in rows)
@@ -140,6 +160,7 @@ def a121_chest_signal(
     low_pass_hz: float = DEFAULT_LOW_PASS_HZ,
     detrend_linear: bool = True,
     causal: bool = False,
+    regular_time: bool = True,
 ) -> ChestSignal:
     """Chest displacement in mm from an A121 Sparse IQ recording, rising on inhale.
 
@@ -154,6 +175,8 @@ def a121_chest_signal(
     if missing:
         raise ValueError(f"A121 recording is missing {', '.join(sorted(missing))}")
     timestamps_ms = pd.to_numeric(df["Timestamp_ms"], errors="coerce").to_numpy(dtype=float)
+    if regular_time and np.all(np.isfinite(timestamps_ms)):
+        timestamps_ms = regular_frame_times_ms(timestamps_ms)
     origin = float(timestamps_ms[0]) if origin_ms is None else float(origin_ms)
     time_s = (timestamps_ms - origin) / 1000.0
     fs = sample_rate(time_s)

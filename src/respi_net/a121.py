@@ -20,7 +20,7 @@ import serial.tools.list_ports
 from .paths import RAW_A121_DIR
 
 A121_COLUMNS = [
-    "Timestamp_ms",
+    "Timestamp_ms",  # driver stamps run ~0.17 % fast: chest_signal.regular_frame_times_ms corrects them
     "Frame",
     "PeakDistance_m",
     "PeakAmplitude",

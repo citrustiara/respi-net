@@ -17,6 +17,12 @@ stream of one trial with the same clock.  For every run this script
    (:func:`respi_net.label_alignment.align_cues`), which is the reference used
    for all coach runs.
 
+Recordings without cued inhales and exhales (``nn_self_12min``) are analysed in a second mode, ``analyse_free``:
+the delay is measured minute by minute (it has to stay put for the phone to be a usable reference), the two
+detectors are compared per block of the pattern, and the long holds of the holds block are counted.  The radar's
+time stamps are first regularised (:func:`respi_net.chest_signal.regular_frame_times_ms`): the driver's stamps
+run 0.17 percent fast, which is 1.3 s over 12 minutes and looks like a delay that grows by 0.11 s every minute.
+
 Writes one JSON per run to ``data/processed/breath_phases/a121_iphone/`` and, with
 ``--thesis-figure``, ``docs/thesis/figures/fazy_telefon_radar.png``.
 
@@ -53,6 +59,7 @@ from respi_net.phase_metrics import boundary_errors, score_phases
 SESSIONS = ROOT / "data" / "raw" / "nn" / "a121_iphone"
 OUT = ROOT / "data" / "processed" / "breath_phases" / "a121_iphone"
 FIGURE = ROOT / "docs" / "thesis" / "figures" / "fazy_telefon_radar.png"
+FIGURE_FREE = ROOT / "docs" / "thesis" / "figures" / "fazy_telefon_12min.png"
 GRID_HZ = 20.0
 MAX_LAG_S = 1.5
 EVENT_LOW_PASS_HZ = 1.5
@@ -254,6 +261,210 @@ def analyse(run_prefix: Path) -> dict[str, object]:
     return result
 
 
+SHORT_BLOCKS = {
+    "USPOKÓJ POZYCJĘ": "ułożenie",
+    "SPOKOJNY ODDECH": "spokojnie",
+    "WOLNO I GŁĘBOKO": "wolno",
+    "SZYBKO": "szybko",
+    "BARDZO PŁYTKO": "płytko",
+    "PAUZY": "pauzy",
+    "NIEREGULARNIE": "nieregularnie",
+    "RUCH I KASZEL": "ruch",
+}
+CHUNK_S = 60.0
+GOOD_CORRELATION = 0.5
+LONG_HOLD_S = 4.0
+
+
+def has_cued_breaths(cues: pd.DataFrame) -> bool:
+    return bool(cues["kind"].isin(["inhale", "exhale"]).any())
+
+
+def chunk_delays(time_s: np.ndarray, radar: np.ndarray, phone: np.ndarray, start_s: float, fs: float) -> list[dict[str, float]]:
+    """Delay (phone minus radar) and correlation of the velocities in consecutive chunks."""
+
+    velocity_r, velocity_p = np.gradient(radar) * fs, np.gradient(phone) * fs
+    rows = []
+    for lo in np.arange(start_s, time_s[-1] - CHUNK_S + 1e-9, CHUNK_S):
+        inside = (time_s >= lo) & (time_s < lo + CHUNK_S)
+        lag, corr, _, _ = best_lag(velocity_r[inside], velocity_p[inside], fs)
+        rows.append({"start_s": float(lo), "delay_s": lag, "correlation": abs(corr)})
+    return rows
+
+
+def long_holds(labels: np.ndarray, time_s: np.ndarray, minimum_s: float = LONG_HOLD_S) -> list[tuple[float, float, int]]:
+    out = []
+    for start, stop, label in label_runs(labels):
+        if label in (1, 3):
+            begin, end = float(time_s[start]), float(time_s[min(stop, len(time_s)) - 1])
+            if end - begin >= minimum_s:
+                out.append((begin, end, int(label)))
+    return out
+
+
+def analyse_free(run_prefix: Path) -> dict[str, object]:
+    cues = pd.read_csv(f"{run_prefix}_cues.csv")
+    origin = float(cues["start_wall_ms"].iloc[0])
+    duration = float(cues["end_s"].iloc[-1])
+    phone_signal = imu_chest_signal(f"{run_prefix}_iphone.csv", origin_ms=origin, name="iphone")
+    radar_fixed = a121_chest_signal(f"{run_prefix}_a121.csv", origin_ms=origin)
+    radar_raw = a121_chest_signal(f"{run_prefix}_a121.csv", origin_ms=origin, regular_time=False)
+    grid = np.arange(0.0, duration, 1.0 / GRID_HZ)
+    phone = np.interp(grid, phone_signal.time_s, phone_signal.chest)
+    radar = np.interp(grid, radar_fixed.time_s, radar_fixed.chest)
+    radar_before = np.interp(grid, radar_raw.time_s, radar_raw.chest)
+    start = float(cues["end_s"].iloc[0])  # after the settling block
+    body = grid >= start
+    _, corr_sign, _, _ = best_lag(np.gradient(radar)[body] * GRID_HZ, np.gradient(phone)[body] * GRID_HZ, GRID_HZ)
+    sign = 1.0 if corr_sign >= 0 else -1.0
+    phone = sign * phone
+    after = chunk_delays(grid, radar, phone, start, GRID_HZ)
+    before = chunk_delays(grid, radar_before, phone, start, GRID_HZ)
+    good = [row for row in after if row["correlation"] >= GOOD_CORRELATION]
+    good_before = [row for row in before if row["correlation"] >= GOOD_CORRELATION]
+    delays = np.array([row["delay_s"] for row in good])
+    delay = float(np.median(delays)) if len(delays) else float("nan")
+    drift_before = float(np.polyfit([r["start_s"] for r in good_before], [r["delay_s"] for r in good_before], 1)[0] * 60.0) if len(good_before) >= 3 else float("nan")
+    drift_after = float(np.polyfit([r["start_s"] for r in good], [r["delay_s"] for r in good], 1)[0] * 60.0) if len(good) >= 3 else float("nan")
+    phone_aligned = shifted(grid, phone, delay)
+    radar_labels = detect_phases(radar, GRID_HZ)
+    phone_labels = detect_phases(phone_aligned, GRID_HZ)
+    blocks = []
+    for row in cues.itertuples():
+        inside = (grid >= max(row.start_s, start)) & (grid < row.end_s)
+        if not inside.any():
+            continue
+        a, b = radar_labels[inside], phone_labels[inside]
+        both = (a >= 0) & (b >= 0)
+        blocks.append(
+            {
+                "block": SHORT_BLOCKS.get(row.cue, row.cue),
+                "start_s": float(row.start_s),
+                "end_s": float(row.end_s),
+                "radar_mm_p5_p95": float(np.subtract(*np.percentile(radar[inside], [95, 5]))),
+                "phone_mg_p5_p95": float(np.subtract(*np.percentile(phone[inside], [95, 5]))),
+                "detector_agreement": float((a[both] == b[both]).mean()) if both.any() else float("nan"),
+            }
+        )
+    pause_block = next((b for b in blocks if b["block"] == "pauzy"), None)
+    holds_phone = long_holds(phone_labels, grid)
+    holds_radar = long_holds(radar_labels, grid)
+
+    def inside_block(holds: list[tuple[float, float, int]]) -> tuple[int, int]:
+        if pause_block is None:
+            return 0, len(holds)
+        inner = sum(1 for begin, end, _ in holds if begin >= pause_block["start_s"] - 1 and end <= pause_block["end_s"] + 1)
+        return inner, len(holds) - inner
+
+    result: dict[str, object] = {
+        "run": run_prefix.name,
+        "session": run_prefix.parent.name,
+        "duration_s": duration,
+        "phone_coverage": len(phone_signal.time_s) / (duration * phone_signal.fs),
+        "ble_stamp_lateness_s": stamp_lateness_s(run_prefix),
+        "radar_gate_m": [radar_fixed.meta["gate_start_m"], radar_fixed.meta["gate_end_m"]],
+        "radar_echo_db": float(np.nanmean(radar_fixed.echo_db)),
+        "radar_stamp_span_s": float(radar_raw.time_s[-1] - radar_raw.time_s[0]),
+        "radar_regular_span_s": float(radar_fixed.time_s[-1] - radar_fixed.time_s[0]),
+        "phone_sign_flipped": bool(sign < 0),
+        "delay": {
+            "chosen_s": delay,
+            "good_minutes": len(good),
+            "minutes": len(after),
+            "spread_s": float(np.std(delays)) if len(delays) else float("nan"),
+            "drift_s_per_min_before": drift_before,
+            "drift_s_per_min_after": drift_after,
+            "chunks_after": after,
+            "chunks_before": before,
+        },
+        "blocks": blocks,
+        "agreement_overall": float(
+            np.mean(radar_labels[body & (radar_labels >= 0) & (phone_labels >= 0)] == phone_labels[body & (radar_labels >= 0) & (phone_labels >= 0)])
+        ),
+        "long_holds": {
+            "phone": {"total": len(holds_phone), "in_pause_block": inside_block(holds_phone)[0], "elsewhere": inside_block(holds_phone)[1]},
+            "radar": {"total": len(holds_radar), "in_pause_block": inside_block(holds_radar)[0], "elsewhere": inside_block(holds_radar)[1]},
+        },
+        "_plot_free": {
+            "grid": grid,
+            "radar": radar,
+            "phone": phone_aligned,
+            "after": after,
+            "before": before,
+            "delay": delay,
+            "blocks": cues[["start_s", "end_s", "cue"]].to_dict("records"),
+            "labels": {"radar": radar_labels, "phone": phone_labels},
+            "holds": {"phone": holds_phone, "radar": holds_radar},
+        },
+    }
+    return result
+
+
+def plot_free(result: dict[str, object], path: Path) -> None:
+    data = result["_plot_free"]  # type: ignore[assignment]
+    grid = data["grid"]
+    fig = plt.figure(figsize=(13, 10.2), constrained_layout=True)
+    grid_spec = fig.add_gridspec(4, 1, height_ratios=[0.55, 3.4, 2.6, 1.7])
+    names = fig.add_subplot(grid_spec[0])
+    signals = fig.add_subplot(grid_spec[1], sharex=names)
+    delays = fig.add_subplot(grid_spec[2], sharex=names)
+    bars = fig.add_subplot(grid_spec[3], sharex=names)
+
+    palette = ["#e5e7eb", "#f3f4f6"]
+    for index, block in enumerate(data["blocks"]):
+        names.axvspan(block["start_s"], block["end_s"], color=palette[index % 2], lw=0)
+        names.text(0.5 * (block["start_s"] + block["end_s"]), 0.5, SHORT_BLOCKS.get(block["cue"], block["cue"]), ha="center", va="center", fontsize=8)
+        for ax in (signals, delays, bars):
+            ax.axvline(block["start_s"], color="#9ca3af", lw=0.5, ls=(0, (3, 3)))
+    names.set_yticks([])
+    names.set_xlim(grid[0], grid[-1])
+    names.tick_params(labelbottom=False)
+    names.set_title("Bloki wzorca nn_self_12min", loc="left", fontsize=10)
+
+    radar, phone = data["radar"], data["phone"]
+    signals.plot(grid, _z(radar, radar), color="#111827", lw=0.9)
+    signals.plot(grid, _z(phone, phone), color="#ea580c", lw=0.9, alpha=0.9)
+    signals.set_ylabel("ruch (znorm.)")
+    signals.set_title(
+        f"Radar i telefon po korekcie zegara radaru (telefon przesunięty o {abs(data['delay']):.2f} s)", loc="left", fontsize=10
+    )
+    signals.grid(alpha=0.25)
+    signals.tick_params(labelbottom=False)
+
+    for rows, colour, label in ((data["before"], "#9ca3af", "znaczniki radaru bez korekty"), (data["after"], "#2563eb", "po korekcie zegara")):
+        good = [row for row in rows if row["correlation"] >= GOOD_CORRELATION]
+        weak = [row for row in rows if row["correlation"] < GOOD_CORRELATION]
+        delays.scatter([r["start_s"] + CHUNK_S / 2 for r in good], [r["delay_s"] for r in good], color=colour, s=34, label=label)
+        delays.scatter([r["start_s"] + CHUNK_S / 2 for r in weak], [r["delay_s"] for r in weak], facecolors="none", edgecolors=colour, s=34)
+    delays.axhline(0.0, color="#111827", lw=0.6)
+    delays.set_ylabel("telefon − radar [s]")
+    delays.set_title(
+        "Opóźnienie w kolejnych minutach (pełne punkty: korelacja ≥ 0,5; puste: sygnał radaru zbyt słaby)", loc="left", fontsize=10
+    )
+    delays.legend(loc="lower left", fontsize=8, framealpha=0.9)
+    delays.grid(alpha=0.25)
+    delays.tick_params(labelbottom=False)
+
+    _bars(bars, grid, [("radar:\ndetektor", data["labels"]["radar"]), ("telefon:\ndetektor", data["labels"]["phone"])])
+    bars.set_xlabel("czas od startu nagrania [s]")
+    bars.set_title("Fazy oddechu z detektora deterministycznego", loc="left", fontsize=10)
+    fig.legend(
+        handles=[
+            Line2D([], [], color="#111827", lw=1.6, label="radar"),
+            Line2D([], [], color="#ea580c", lw=1.6, label="telefon"),
+            *[Patch(color=CLASS_COLOURS[i], label=CLASS_NAMES_PL[i]) for i in range(4)],
+        ],
+        loc="outside lower center",
+        ncols=6,
+        fontsize=9,
+        frameon=False,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+
 def _bars(ax: plt.Axes, grid: np.ndarray, rows: list[tuple[str, np.ndarray]]) -> None:
     height = 1.0 / len(rows)
     for position, (_, labels) in enumerate(rows):
@@ -379,19 +590,22 @@ def main() -> int:
         if not (Path(f"{prefix}_a121.csv").exists() and Path(f"{prefix}_iphone.csv").exists()):
             print(f"{prefix.name}: sensor files missing, skipped")
             continue
-        result = analyse(prefix)
+        free = not has_cued_breaths(pd.read_csv(f"{prefix}_cues.csv"))
+        result = analyse_free(prefix) if free else analyse(prefix)
         if float(result["phone_coverage"]) < MIN_COVERAGE:  # type: ignore[arg-type]
             print(f"{prefix.name}: phone stream incomplete, skipped")
             continue
         out = OUT / f"{args.session}_{prefix.name}.json"
         out.write_text(json.dumps(_clean(result), indent=2, ensure_ascii=False))
         print(json.dumps(_clean(result), indent=2, ensure_ascii=False))
+        draw = plot_free if free else plot
         figure = args.figure or out.with_suffix(".png")
-        plot(result, figure)
+        draw(result, figure)
         print(f"Figure: {figure}")
         if args.thesis_figure and not drawn:
-            plot(result, FIGURE)
-            print(f"Thesis figure: {FIGURE}")
+            target = FIGURE_FREE if free else FIGURE
+            draw(result, target)
+            print(f"Thesis figure: {target}")
             drawn = True
     return 0
 
