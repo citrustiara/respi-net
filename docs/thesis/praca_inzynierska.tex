@@ -3268,8 +3268,11 @@ telefon wypłaszcza się później), więc \SI{2.5}{s} wokół każdego początk
 
 Oznaczający widzi wyłącznie przebieg z~telefonu, bez radaru i~bez wyjścia
 detektora (znak osi przebiegu wyznacza jedna liczba, korelacja z~radarem), i~klika
-początki kolejnych faz w~narzędziu \texttt{annotate\_phone\_phases.py}. Ten sam
-fragment oznacza się po raz drugi po co najmniej dobie, bez patrzenia na pierwsze
+początki kolejnych faz w~narzędziu \texttt{annotate\_phone\_phases.py}. Kliknięcie ląduje około \SI{0.2}{s} po widocznym zwrocie, a~detektor stawia granicę
+wdech--wydech na początku krótkiego spoczynku na dnie, więc przy porównaniu obie strony
+przesuwa się do najbliższego zwrotu przebiegu (szczytu lub dna, w~granicach \SI{0.8}{s});
+moment granicy jest wtedy wspólną konwencją, a~porównanie dotyczy kolejności i~rodzaju
+faz. Ten sam fragment oznacza się po raz drugi po co najmniej dobie, bez patrzenia na pierwsze
 oznaczenie: różnica między dwoma przejściami jest niepewnością samego odniesienia
 (zgodność próbek poza \SI{0.2}{s} od granic, odsetek znalezionych granic, ich
 przesunięcie). Detektor na telefonie (pauza od \SI{2}{s}, \SI{3}{s} i~\SI{4}{s})

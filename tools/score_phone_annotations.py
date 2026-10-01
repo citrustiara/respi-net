@@ -29,27 +29,35 @@ import numpy as np
 
 from respi_net.breath_phases import IGNORE, merge_holds
 from respi_net.phase_baseline import detect_phases
-from respi_net.phone_annotation import compare_labels, load_segments, oriented_phone, segments_to_labels
+from respi_net.phone_annotation import compare_labels, load_segments, oriented_phone, segments_to_labels, snap_labels, snap_segments
 
 SESSIONS = ROOT / "data" / "raw" / "nn" / "a121_iphone"
 GRID_HZ = 20.0
 
 
-def reliability(first: Path, second: Path) -> dict[str, object]:
+def reliability(first: Path, second: Path, session: str | None = None, run: str | None = None) -> dict[str, object]:
     a, b = load_segments(first), load_segments(second)
     end = max(segment.end_s for segment in [*a, *b])
     grid = np.arange(0.0, end + 1.0, 1.0 / GRID_HZ)
-    labels_a, labels_b = segments_to_labels(a, grid), segments_to_labels(b, grid)
-    return {"first_vs_second": compare_labels(labels_a, labels_b, grid), "second_vs_first": compare_labels(labels_b, labels_a, grid)}
+    out: dict[str, object] = {"first_vs_second": compare_labels(segments_to_labels(a, grid), segments_to_labels(b, grid), grid)}
+    if session and run:  # both passes snapped to the turning points of the trace they were drawn on
+        full_grid, trace, _ = oriented_phone(SESSIONS / session / run, GRID_HZ)
+        out["first_vs_second_snapped"] = compare_labels(
+            segments_to_labels(snap_segments(a, full_grid, trace), full_grid), segments_to_labels(snap_segments(b, full_grid, trace), full_grid), full_grid
+        )
+    return out
 
 
 def validate(session: str, run: str, annotation: Path, min_holds: list[float]) -> dict[str, object]:
     grid, phone, sign = oriented_phone(SESSIONS / session / run, GRID_HZ)
-    reference = segments_to_labels(load_segments(annotation), grid)
+    segments = load_segments(annotation)
+    reference = segments_to_labels(segments, grid)
+    snapped_reference = segments_to_labels(snap_segments(segments, grid, phone), grid)
     out: dict[str, object] = {"phone_sign": sign, "annotated_s": float(np.sum(reference != IGNORE) / GRID_HZ)}
     for minimum in min_holds:
         detected = merge_holds(detect_phases(phone, GRID_HZ, min_hold_s=minimum))
         out[f"min_hold_{minimum:g}s"] = compare_labels(reference, detected, grid)
+        out[f"min_hold_{minimum:g}s_snapped"] = compare_labels(snapped_reference, snap_labels(detected, grid, phone), grid)
     return out
 
 
@@ -59,13 +67,15 @@ def main() -> int:
     rel = sub.add_parser("reliability", help="compare two labelling passes of one stretch")
     rel.add_argument("first", type=Path)
     rel.add_argument("second", type=Path)
+    rel.add_argument("--session", help="also score both passes snapped to the trace's turning points (needs --run)")
+    rel.add_argument("--run")
     val = sub.add_parser("validate", help="the phone detector against one annotation")
     val.add_argument("--session", required=True)
     val.add_argument("--run", required=True)
     val.add_argument("annotation", type=Path)
     val.add_argument("--min-hold", type=float, nargs="+", default=[2.0, 3.0, 4.0], help="minimum hold lengths to try [s]")
     args = parser.parse_args()
-    result = reliability(args.first, args.second) if args.command == "reliability" else validate(args.session, args.run, args.annotation, args.min_hold)
+    result = reliability(args.first, args.second, args.session, args.run) if args.command == "reliability" else validate(args.session, args.run, args.annotation, args.min_hold)
     print(json.dumps(result, indent=2))
     return 0
 

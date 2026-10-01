@@ -15,6 +15,8 @@ from respi_net.phone_annotation import (
     next_label,
     save_segments,
     segments_to_labels,
+    snap_labels,
+    snap_segments,
 )
 
 TOOLS_DIR = Path(__file__).resolve().parents[1] / "tools"
@@ -104,3 +106,23 @@ def test_the_start_of_a_hold_gets_a_wider_guard() -> None:
     assert masked[80] == EXHALE and masked[120] == HOLD
     leaving = guard_mask(np.where(grid < 10.0, HOLD, INHALE).astype(np.int8), grid, 0.2, 1.5)
     assert leaving[85] == HOLD  # leaving a hold only needs the narrow guard
+
+
+def test_boundaries_snap_to_the_turning_points_of_the_trace() -> None:
+    grid = np.arange(0.0, 30.0, 0.05)
+    trace = -np.cos(2 * np.pi * grid / 6.0)  # troughs at 0, 6, 12 ...; crests at 3, 9, 15 ...
+    late = [Segment(6.2, 9.3, INHALE), Segment(9.3, 12.2, EXHALE), Segment(12.2, 15.3, INHALE)]  # clicks 0.2-0.3 s after the turns
+    snapped = snap_segments(late, grid, trace)
+    assert abs(snapped[0].end_s - 9.0) < 0.15 and snapped[0].end_s == snapped[1].start_s
+    assert abs(snapped[1].end_s - 12.0) < 0.15
+    assert snapped[0].start_s == 6.2 and snapped[2].end_s == 15.3  # outer edges are untouched
+
+
+def test_snapping_leaves_holds_alone_and_works_on_label_arrays() -> None:
+    grid = np.arange(0.0, 30.0, 0.05)
+    trace = -np.cos(2 * np.pi * grid / 6.0)
+    segments = [Segment(6.2, 9.3, INHALE), Segment(9.3, 14.0, HOLD)]
+    assert snap_segments(segments, grid, trace) == segments
+    labels = segments_to_labels([Segment(6.2, 9.3, INHALE), Segment(9.3, 12.2, EXHALE)], grid)
+    snapped = snap_labels(labels, grid, trace)
+    assert abs(grid[np.flatnonzero(snapped == EXHALE)[0]] - 9.0) < 0.15

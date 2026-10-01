@@ -21,7 +21,8 @@ from typing import Sequence
 import numpy as np
 
 from .breath_phases import EXHALE, HOLD, IGNORE, INHALE, NOISE
-from .chest_signal import a121_chest_signal, imu_chest_signal
+from .breath_phases import label_runs
+from .chest_signal import a121_chest_signal, imu_chest_signal, light_filter
 from .phase_metrics import BoundaryScores, PhaseScores, boundary_errors, score_phases
 
 MIN_HOLD_S = 4.0
@@ -168,3 +169,44 @@ def oriented_phone(run_prefix: Path, grid_hz: float = 20.0) -> tuple[np.ndarray,
                     best = corr
         sign = 1.0 if best >= 0 else -1.0
     return grid, sign * trace, sign
+
+
+def snap_segments(
+    segments: Sequence[Segment], grid: np.ndarray, trace: np.ndarray, *, reach_s: float = 0.8, low_pass_hz: float = 1.0
+) -> list[Segment]:
+    """Move every inhale/exhale boundary to the nearest turning point of ``trace``.
+
+    A click lands a little after the visible turn (about 0.2 s) and a detector may put the boundary at the start of
+    the short rest at the bottom; the turning point -- the crest for inhale->exhale, the trough for exhale->inhale --
+    is the one convention both can share.  Boundaries that touch a hold or noise stay where they are.
+    """
+
+    if len(segments) < 2:
+        return list(segments)
+    smooth = light_filter(np.asarray(trace, dtype=float), 1.0 / float(np.median(np.diff(grid))), low_pass_hz)
+    starts = [segment.start_s for segment in segments]
+    ends = [segment.end_s for segment in segments]
+    for index in range(len(segments) - 1):
+        before, after = segments[index].label, segments[index + 1].label
+        if abs(ends[index] - starts[index + 1]) > 1e-6 or (before, after) not in ((INHALE, EXHALE), (EXHALE, INHALE)):
+            continue
+        window = (grid >= ends[index] - reach_s) & (grid <= ends[index] + reach_s)
+        if window.sum() < 3:
+            continue
+        times = grid[window]
+        moment = float(times[np.argmax(smooth[window]) if before == INHALE else np.argmin(smooth[window])])
+        if starts[index] + 0.3 < moment < ends[index + 1] - 0.3:  # never squeeze a neighbour away
+            ends[index] = moment
+            starts[index + 1] = moment
+    return [Segment(a, b, segment.label) for a, b, segment in zip(starts, ends, segments)]
+
+
+def snap_labels(labels: np.ndarray, grid: np.ndarray, trace: np.ndarray, **kwargs: float) -> np.ndarray:
+    """:func:`snap_segments` for a per-sample label array (the detector's output)."""
+
+    segments = [
+        Segment(float(grid[start]), float(grid[stop]) if stop < len(grid) else float(grid[-1] + (grid[1] - grid[0])), int(label))
+        for start, stop, label in label_runs(labels)
+        if label != IGNORE
+    ]
+    return segments_to_labels(snap_segments(segments, grid, trace, **kwargs), grid)
