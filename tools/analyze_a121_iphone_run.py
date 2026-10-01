@@ -306,7 +306,7 @@ def chunk_delays(
 def long_holds(labels: np.ndarray, time_s: np.ndarray, minimum_s: float = LONG_HOLD_S) -> list[tuple[float, float, int]]:
     out = []
     for start, stop, label in label_runs(labels):
-        if label == 1:
+        if label in (1, 3):
             begin, end = float(time_s[start]), float(time_s[min(stop, len(time_s)) - 1])
             if end - begin >= minimum_s:
                 out.append((begin, end, int(label)))
