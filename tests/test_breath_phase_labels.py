@@ -221,3 +221,12 @@ def test_a_breath_finished_after_the_hold_is_labelled_as_that_breath() -> None:
     assert result.labels[np.argmin(np.abs(time_s - (hold_end + 0.3)))] == EXHALE
     assert result.labels[np.argmin(np.abs(time_s - (turn + 0.5)))] == INHALE
     assert result.labels[np.argmin(np.abs(time_s - 52.0))] == HOLD_AFTER_EXHALE
+
+
+def test_merge_holds_turns_both_holds_into_one_class() -> None:
+    from respi_net.breath_phases import EXHALE, HOLD, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, NOISE, merge_holds
+
+    labels = np.array([EXHALE, HOLD_AFTER_EXHALE, INHALE, HOLD_AFTER_INHALE, NOISE, IGNORE], dtype=np.int8)
+    merged = merge_holds(labels)
+    assert merged.tolist() == [EXHALE, HOLD, INHALE, HOLD, NOISE, IGNORE]
+    assert labels[3] == HOLD_AFTER_INHALE  # the input is not changed

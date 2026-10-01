@@ -34,6 +34,20 @@ CLASS_NAMES = ("exhale", "hold_after_exhale", "inhale", "hold_after_inhale", "no
 CLASS_NAMES_PL = ("wydech", "pauza po wydechu", "wdech", "pauza po wdechu", "szum")
 CLASS_COLOURS = ("#22c55e", "#f59e0b", "#3b82f6", "#dc2626", "#9ca3af")
 
+# The merged scheme: one "hold" whatever lung volume it happens at.  A phone on the ribs, which returns to its
+# baseline after each breath, cannot tell the two holds apart; the rest of the pipeline can keep five classes.
+HOLD = HOLD_AFTER_EXHALE
+MERGED_CLASS_NAMES_PL = ("wydech", "pauza", "wdech")
+
+
+def merge_holds(labels: np.ndarray) -> np.ndarray:
+    """``labels`` with hold-after-inhale turned into the single hold class (:data:`HOLD`); the rest is unchanged."""
+
+    out = np.array(labels, copy=True)
+    out[out == HOLD_AFTER_INHALE] = HOLD
+    return out
+
+
 NOISE_EXPORT_CODE = 999
 IGNORE_EXPORT_CODE = -1
 

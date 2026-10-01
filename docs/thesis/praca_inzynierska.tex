@@ -2847,6 +2847,12 @@ Kod & Klasa & Znaczenie \\
 \end{tabular}
 \end{table}
 
+Dwie klasy pauzy można połączyć w~jedną, gdy czujnik nie odtwarza objętości
+płuc, tak jak telefon przy żebrach (podrozdz.~\ref{sec:sieci-pilot-telefon}):
+etykiety zostają zapisane w~pięciu klasach, a~połączenie jest odwzorowaniem
+stosowanym przy ocenie i~uczeniu (\texttt{merge\_holds}: wydech, pauza, wdech,
+szum). Radar widzi objętość płuc, więc rodzaj pauzy można dopisać z~poziomu klatki.
+
 Pauza nosi nazwę oddechu, który przerywa, więc można ją rozpocząć tylko z~tego
 oddechu --- przejście wydech $\to$ pauza po wdechu jest z~definicji
 niemożliwe. Zakończyć ją można jednak w~obie strony: oddech da się wstrzymać
@@ -3032,25 +3038,27 @@ wiąże zegar telefonu z~zegarem hosta tylko przy pierwszej paczce.
 
 \subsection{Pilotaż: telefon przy żebrach i~radar jednocześnie}
 \label{sec:sieci-pilot-telefon}
-\paragraph{Cel.} Sprawdzić, czy telefon przypięty do ciała może oznaczać fazy
-oddechu w~nagraniach radaru, czyli (1)~ile telefon wyprzedza lub spóźnia się
-względem radaru i~o~ile trzeba go przesunąć, żeby oba sygnały nałożyć na
-siebie w~czasie, oraz (2)~czy deterministyczny detektor faz, uruchomiony na
-samym telefonie, daje etykiety zgodne z~tym, co widać w~radarze. Nagranie
-z~komendami pokazuje też, czy radar przy telefonie daje czytelny oddech. Jest to pilotaż jednej osoby i~jednego, lekkiego (płytkiego) oddechu;
-oddech naturalny bez komend i~pauzy po wdechu wymagają osobnych nagrań.
+\paragraph{Cel.} Głównym pytaniem jest, czy telefon przypięty do ciała może
+oznaczać fazy oddechu w~ogóle, a~nie czy zgadza się z~radarem. Radar nie może
+być wzorcem, bo ma go zastąpić sieć, a~telefon nie jest nim jeszcze.
+Porównanie z~radarem służy więc do dwóch rzeczy: (1)~wyrównania obu sygnałów
+w~czasie (ile telefon wyprzedza lub spóźnia się względem radaru) oraz
+(2)~kontroli, gdy osoba oddycha bez komend. Wzorcem jest tylko nagranie
+kontrolowane, z~bliska, z~komendami: etykiety z~komend dopasowane do zwrotów
+sygnału będącego sumą obu czujników. Takie połączenie nie jest rygorystyczne,
+ale żaden z~czujników nie ocenia wtedy sam siebie. Pilotaż dotyczy jednej osoby;
+oddech naturalny bez komend i~pozostałe pozycje wymagają osobnych nagrań.
 
 \paragraph{Układ.} Osoba siedziała w~fotelu odchylonym o~około \SI{60}{\degree}.
 Telefon z~aplikacją RespiPhoneIMU był przypięty z~boku, na wysokości dolnych
 żeber, poza osią wiązki radaru; radar z~płaską soczewką mierzył klatkę
-z~odległości około \SI{0.4}{m} (na oko pół metra; maksimum echa
-\SI{0.39}{m}, zakres pracy \SIrange{0.3}{1.5}{m}). Nagranie trwa
-\SI{90}{s} (wzorzec \texttt{paced\_12\_hold}: \SI{10}{s} oddechu swobodnego,
-7~cykli wdech \SI{2}{s} / wydech \SI{3}{s}, pauza po wydechu \SI{15}{s},
-6~cykli) i~powstało jednym programem na jednym zegarze komputera. Strumień
-telefonu był kompletny (\SI{100}{Hz}, bez utraconych próbek), radar dał 99,9\%
-ramek. Amplituda oddechu w~radarze wyniosła \SI{5.8}{mm} (percentyle 5--95),
-a~w~telefonie \SI{22}{mg}.
+z~odległości około \SI{0.4}{m} (maksimum echa \SI{0.39}{m}, zakres pracy
+\SIrange{0.3}{1.5}{m}). Nagranie trwa \SI{90}{s} (wzorzec
+\texttt{paced\_12\_hold}: \SI{10}{s} oddechu swobodnego, 7~cykli wdech \SI{2}{s}
+/ wydech \SI{3}{s}, pauza po wydechu \SI{15}{s}, 6~cykli), lekki oddech,
+i~powstało jednym programem na jednym zegarze komputera. Strumień telefonu był
+kompletny (\SI{100}{Hz}, bez utraconych próbek), radar dał 99,9\% ramek.
+Amplituda oddechu wyniosła \SI{5.8}{mm} w~radarze i~\SI{22}{mg} w~telefonie.
 
 \paragraph{Metoda.} Sygnał telefonu to rzut przyspieszenia na oś główną
 oddechu, odwrócony tak, by rósł na wdechu (znak z~korelacji z~radarem).
@@ -3058,18 +3066,20 @@ Opóźnienie wyznaczono trzema sposobami niezależnymi od siebie: korelacją
 wzajemną prędkości i~położenia oraz, osobno dla każdego oddechu z~komend,
 chwilą najszybszego ruchu i~chwilą zwrotu w~obu sygnałach; wynik to mediana
 różnic telefon~$-$~radar. Następnie telefon przesunięto o~to opóźnienie,
-oznaczono go tym samym detektorem co radar (podrozdz.~\ref{sec:sieci-baseline})
-i~porównano oba detektory z~etykietami radaru wyznaczonymi względem komend
-metodą z~podrozdz.~\ref{sec:sieci-korekta}. Te etykiety nie są niezależne od
-radaru (granice leżą na jego zwrotach), więc zgodność telefonu z~nimi świadczy
-o~spójności dwóch czujników, a~nie o~zgodności z~fizjologią.
+zsumowano oba znormalizowane sygnały i~dopasowano do niego komendy metodą
+z~podrozdz.~\ref{sec:sieci-korekta} (to jest odniesienie). Oba czujniki oznaczono
+tym samym detektorem co radar (podrozdz.~\ref{sec:sieci-baseline}).
+Pauzy po wdechu i~po wydechu połączono w~jedną klasę ,,pauza'': telefon wraca po
+każdym oddechu do poziomu wyjściowego, więc nie odtwarza objętości płuc i~nie
+odróżnia tych pauz (rys.~\ref{fig:fazy-telefon-pauzy}), a~do oznaczania granic
+rodzaj pauzy nie jest potrzebny.
 
 \begin{table}[H]
 \centering
 \caption{Telefon przy żebrach i~radar, jedno nagranie \SI{90}{s} z~lekkim
-oddechem. Etykiety odniesienia: radar i~komendy. Kolumny dolnej tabeli: ten
-sam detektor na radarze, na telefonie przesuniętym o~opóźnienie oraz etykiety
-z~komend wyrównane do zwrotów telefonu.}
+oddechem. Odniesienie: komendy dopasowane do sumy obu czujników; trzy klasy
+(wydech, pauza, wdech). Dolna tabela: ten sam detektor na radarze i~na telefonie
+przesuniętym o~opóźnienie oraz etykiety z~komend dopasowane do jednego czujnika.}
 \label{tab:fazy-telefon}
 \small
 \begin{tabular}{lr}
@@ -3085,15 +3095,15 @@ mediana 52~zdarzeń (najszybszy ruch, zwroty) & \SI{-0.03}{s} \\
 \end{tabular}
 
 \vspace{0.8em}
-\begin{tabular}{lrrr}
+\begin{tabular}{lrrrr}
 \toprule
-Miara & detektor, radar & detektor, telefon & komendy, telefon \\
+Miara & \shortstack{detektor\\radar} & \shortstack{detektor\\telefon} & \shortstack{komendy\\radar} & \shortstack{komendy\\telefon} \\
 \midrule
-Dokładność & 84,6\% & 89,7\% & 98,1\% \\
-Makro-F1 & 0,838 & 0,893 & 0,981 \\
-Granice znalezione (\SI{1}{s}) & 78\% & 85\% & 93\% \\
-Mediana błędu granicy & \SI{0.25}{s} & \SI{0.15}{s} & \SI{0.18}{s} \\
-Fałszywe granice na minutę & 5,3 & 2,7 & 0,7 \\
+Dokładność & 85,4\% & 90,5\% & 98,9\% & 99,1\% \\
+Makro-F1 & 0,846 & 0,899 & 0,990 & 0,991 \\
+Granice znalezione (\SI{1}{s}) & 81\% & 89\% & 96\% & 100\% \\
+Mediana błędu granicy & \SI{0.18}{s} & \SI{0.20}{s} & \SI{0.08}{s} & \SI{0.05}{s} \\
+Fałszywe granice na minutę & 5,3 & 2,7 & 1,3 & 0,0 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -3104,10 +3114,10 @@ Fałszywe granice na minutę & 5,3 & 2,7 & 0,7 \\
     \caption[Telefon i~radar w~jednym nagraniu]{Lekki oddech z~komendami,
     telefon przy dolnych żebrach. Wykresy górne: sygnały przed wyrównaniem
     i~po nim (linie przerywane to początki komend). Środek: opóźnienie
-    w~pojedynczych oddechach i~korelacja wzajemna. Dół: fazy z~komend, z~radaru
-    i~komend (odniesienie) oraz z~detektora na radarze i~na telefonie
-    przesuniętym o~opóźnienie. W~pauzie po wydechu telefon pozostaje płaski,
-    a~radar dryfuje.}
+    w~pojedynczych oddechach i~korelacja wzajemna. Dół: fazy z~komend, z~odniesienia
+    (komendy i~oba czujniki) oraz z~detektora na radarze i~na telefonie
+    przesuniętym o~opóźnienie. W~pauzie telefon pozostaje płaski, a~radar
+    dryfuje.}
     \label{fig:fazy-telefon}
 \end{figure}
 
@@ -3125,7 +3135,7 @@ szacuje, że znaczniki czasu telefonu spóźniają się o~około \SI{0.14}{s}
 z~powodu opóźnienia BLE; zmierzone tu przesunięcie już je zawiera. W~praktyce
 po korekcie zegara radaru nie potrzeba stałej poprawki, a~pozostała niepewność
 (około $\pm$\SI{0.2}{s}) jest porównywalna z~błędem granicy samego detektora
-(\SI{0.15}{s}). Przesunięcie trzeba jednak sprawdzać w~każdej sesji, a~nie zakładać.
+(\SI{0.2}{s}). Przesunięcie trzeba jednak sprawdzać w~każdej sesji.
 
 \paragraph{Zegar radaru.} Sterownik A121 opatruje ramki znacznikami w~pełnych
 milisekundach, a~jego zegar taktujący idzie o~około \SI{0.17}{\percent} za szybko:
@@ -3134,7 +3144,8 @@ ramki co \SI{50}{ms} dostają kroki \SI{50}{ms} z~dodatkową milisekundą co oko
 obejmują \SI{737.3}{s}, choć zapis trwał \SI{736.0}{s} (tyle samo pokazują
 telefon i~zegar komputera), więc radar ``ucieka'' telefonowi o~około \SI{0.10}{s}
 na minutę, czyli o~\SI{1.2}{s} w~ciągu nagrania. W~krótkim nagraniu wygląda to
-jak niewielkie opóźnienie (w~pilotażu \SI{90}{s}: \SI{0.15}{s}), w~długim jak dryf. Kroki bliskie mediany (w~granicach \SI{1.5}{ms}) zastępuje się więc
+jak niewielkie opóźnienie (w~pilotażu \SI{90}{s}: \SI{0.15}{s}), w~długim jak dryf.
+Kroki bliskie mediany (w~granicach \SI{1.5}{ms}) zastępuje się więc
 medianą (\texttt{regular\_frame\_times\_ms}, stosowana w~\texttt{a121\_chest\_signal}),
 a~większe luki zostają. Po tej poprawce nachylenie opóźnienia w~kolejnych
 minutach spada z~\SI{-0.099}{s/min} do \SI{0.003}{s/min}. Dotyczy to też wcześniejszych
@@ -3143,25 +3154,18 @@ ich wyniki zmieniły się nieznacznie (zgodność detektora z~92,1 na 92,2\%, me
 opóźnienia względem komend z~\SI{0.475}{s} na \SI{0.40}{s}), a~tabele w~tym rozdziale
 przeliczono.
 
-\paragraph{Czy telefon może oznaczać dane radaru?} W~tym nagraniu tak (ruch i~pauza
-po wydechu; rodzaj pauzy sprawdzono niżej).
-Detektor na telefonie zgadza się z~etykietami radaru i~komend w~89,7\% (89,3\%
-bez przesunięcia), a~ten sam detektor na samym radarze w~84,6\%; telefon
-znajduje więcej granic (85\% wobec 78\%), z~mniejszym błędem i~mniej
-fałszywych. Przyczyna widoczna na rys.~\ref{fig:fazy-telefon}: w~płytkim
-oddechu radar ma między oddechami płaskie odcinki na dnie, które detektor bierze
-za krótkie pauzy (trzy fałszywe pauzy po wydechu w~pierwszych \SI{35}{s}),
-a~telefon ich nie ma; w~prawdziwej pauzie po wydechu telefon jest płaski,
-a~radar dryfuje o~około \SI{1.5}{mm}. Etykiety z~komend i~telefonu (bez detektora)
-zgadzają się z~etykietami z~komend i~radaru w~98,1\%. Radar z~telefonem przy
-żebrach daje czytelny oddech (echo \SI{58}{dB}, korelacja szablonu komend 0,67,
-89\% granic ze zwrotem), lecz nie ma jeszcze nagrania tego samego oddechu
-bez telefonu, więc wpływu jego obecności nie wyodrębniono.
-
-Ograniczenia pilotażu: jedna osoba, jedno nagranie, jedna pozycja; oddech
-z~komendami, brak pauzy po wdechu, etykiety odniesienia z~radaru i~komend.
-Oddech naturalny bez komend, pauzy po wdechu i~inne pozycje (leżenie na boku
-i~na brzuchu może zgnieść telefon) sprawdza nagranie poniżej i~kolejne sesje.
+\paragraph{Wynik pilotażu.} Detektor na telefonie zgadza się z~odniesieniem
+w~90,5\% (90,0\% bez przesunięcia), a~ten sam detektor na radarze w~85,4\%;
+telefon znajduje więcej granic (89\% wobec 81\%) i~ma o~połowę mniej fałszywych
+(2,7 wobec 5,3 na minutę), przy podobnym błędzie granicy (\SI{0.2}{s}). Przyczyna
+widoczna na rys.~\ref{fig:fazy-telefon}: w~płytkim oddechu radar ma między
+oddechami płaskie odcinki na dnie, które detektor bierze za krótkie pauzy (trzy
+fałszywe pauzy w~pierwszych \SI{35}{s}), a~telefon ich nie ma; w~prawdziwej pauzie
+telefon jest płaski, a~radar dryfuje o~około \SI{1.5}{mm}. Radar z~telefonem
+przy żebrach daje czytelny oddech (echo \SI{58}{dB}, korelacja szablonu komend
+0,67, 89\% granic ze zwrotem), lecz nie ma jeszcze nagrania tego samego oddechu
+bez telefonu, więc wpływu jego obecności nie wyodrębniono. Ograniczenia: jedna
+osoba, jedno nagranie, jedna pozycja, oddech z~komendami, pauza tylko po wydechu.
 
 \paragraph{Nagranie 12-minutowe.} Wzorzec \texttt{nn\_self\_12min} (\SI{12}{min}
 \SI{15}{s}, bez komend oddechowych: oddech spokojny, wolny, szybki, płytki, pauzy
@@ -3176,12 +3180,11 @@ korekcie zegara wynosi \SI{0.00}{s} z~rozrzutem \SI{0.10}{s} (przed korektą:
 od \SI{-0.04}{s} do \SI{-0.95}{s}, rys.~\ref{fig:fazy-telefon-12min}, trzeci
 wykres), czyli spełnia przyjęte kryterium stałości (rozrzut poniżej \SI{0.15}{s}).
 Zgodność detektorów na telefonie i~na radarze wynosi 96\% w~spokojnym oddechu,
-88\% w~wolnym, 64\% w~płytkim, 69\% w~pauzach, 50\% w~nieregularnym,
-21\% w~szybkim i~33\% w~ruchu (razem 69\%); jest niska tam, gdzie radar prawie nie
+88\% w~wolnym, 64\% w~płytkim, 81\% w~pauzach, 55\% w~nieregularnym,
+21\% w~szybkim i~51\% w~ruchu (razem 73\%); jest niska tam, gdzie radar prawie nie
 widzi oddechu --- w~szybkim oddechu telefon pokazuje wyraźne oscylacje co około
-\SI{2}{s}, a~radar linię prostą. W~bloku pauz detektor na telefonie znalazł
-5~z~6~zadanych pauz dłuższych niż \SI{4}{s} (radar 6), a~poza blokiem
-3~takie odcinki (radar 7).
+\SI{2}{s}, a~radar linię prostą. Pauz dłuższych niż \SI{4}{s} telefon znalazł 8,
+radar 13, wspólnych jest 6.
 
 \begin{figure}[H]
     \centering
@@ -3199,18 +3202,16 @@ przewodnika, z~radarem skierowanym na klatkę (amplituda \SI{11.6}{mm} zamiast
 \SI{1.2}{mm}, echo \SI{62}{dB}), potwierdziło stałość opóźnienia: w~półminutowych
 odcinkach wynosiło od \SI{-0.15}{s} do \SI{0.09}{s} (rozrzut \SI{0.08}{s}),
 a~bez korekty zegara radaru dochodziło do \SI{-0.29}{s}. Detektory na telefonie
-i~na radarze zgadzają się w~72\%. Osoba wykonała prawdziwe pauzy, ale nie
+i~na radarze zgadzają się w~81\%, a~z~5 pauz dłuższych niż \SI{4}{s} znalezionych
+przez każdy z~nich 4 są wspólne. Osoba wykonała prawdziwe pauzy, ale nie
 zapisano ich rodzaju; rodzaj widać w~radarze po poziomie klatki
 (rys.~\ref{fig:fazy-telefon-pauzy}): wysoki plateau w~okolicy \SI{49}{s}--\SI{58}{s}
 i~\SI{95}{s}--\SI{103}{s} (pauza po wdechu) i~niski w~\SI{111}{s}--\SI{125}{s}
 (po wydechu). Telefon po szybkim skoku przy wdechu wraca w~ciągu około
 \SI{2}{s} do poziomu wyjściowego, więc oba rodzaje pauz wyglądają w~nim tak
-samo i~detektor na telefonie nazywa wszystkie pauzami po wydechu. Według poziomu
-radaru (wskazówka, nie pewnik, bo radar dryfuje) myli się co najmniej w~2 z~5
-pauz (\SI{50}{s}--\SI{61}{s} i~\SI{100}{s}--\SI{104}{s}), a~jedna
-(\SI{81}{s}--\SI{93}{s}) jest niejednoznaczna; detektor na radarze zgadza się
-z~poziomem w~3~z~5. Początek i~koniec samego bezruchu telefon i~radar wykrywają
-zgodnie (np. \SI{81}{s}--\SI{93}{s} i~\SI{111}{s}--\SI{125}{s}).
+samo; przed połączeniem klas detektor na telefonie nazywał wszystkie pauzy
+pauzami po wydechu i~według poziomu radaru mylił się w~co najmniej 2 z~5 (radar
+w~3 z~5). Początek i~koniec samego bezruchu telefon i~radar wykrywają zgodnie.
 
 \begin{figure}[H]
     \centering
@@ -3218,23 +3219,24 @@ zgodnie (np. \SI{81}{s}--\SI{93}{s} i~\SI{111}{s}--\SI{125}{s}).
     \caption[Pauzy w~radarze i~w~telefonie]{Fragment nagrania 3-minutowego
     (radar na klatkę, telefon przy żebrach). W~pauzach po wdechu klatka
     zostaje wysoko, a~sygnał telefonu wraca do poziomu wyjściowego, takiego
-    samego jak w~pauzie po wydechu (\SI{111}{s}--\SI{125}{s}); detektor na
-    telefonie nazywa je pauzami po wydechu.}
+    samego jak w~pauzie po wydechu (\SI{111}{s}--\SI{125}{s}); dlatego pauzy po
+    wdechu i~po wydechu połączono w~jedną klasę.}
     \label{fig:fazy-telefon-pauzy}
 \end{figure}
 
-\paragraph{Wniosek z~nagrań.} Po korekcie zegara radaru telefon przy żebrach jest
-stabilnym odniesieniem czasowym (opóźnienie około zera, niepewność
-$\pm$\SI{0.1}{s}--\SI{0.2}{s}, bez dryfu), widzi oddech naturalny również tam,
-gdzie radar pod kątem prawie go nie widzi, i~dobrze wyznacza zmiany ruchu oraz
-początek i~koniec bezruchu. Nie rozróżnia natomiast rodzaju pauzy, bo nie
-odtwarza objętości płuc. Telefon nadaje się więc do czasu granic i~do
-odróżniania ruchu od bezruchu, a~rodzaj pauzy trzeba brać z~poziomu klatki
-w~radarze albo z~komend; rozstrzygnie to nagranie z~komendami zawierające obie
-pauzy. Etykiety w~fragmentach, w~których radar prawie nie widzi oddechu, nie niosą
-informacji dla sieci o~wejściu z~radaru i~trzeba je maskować według siły sygnału
-radaru. Dotychczasowe wyniki to dowód zgodności czasowej, a~nie dowód
-poprawności wszystkich klas.
+\paragraph{Wniosek z~nagrań.} Po korekcie zegara radaru telefon przy żebrach
+jest stabilnym odniesieniem czasowym dla radaru (opóźnienie około zera,
+niepewność $\pm$\SI{0.1}{s}--\SI{0.2}{s}, bez dryfu), widzi oddech naturalny
+również tam, gdzie radar pod kątem prawie go nie widzi, i~w~nagraniu
+kontrolowanym oznacza wdech, wydech i~pauzę lepiej niż ten sam detektor na
+radarze (90,5\% wobec 85,4\% względem odniesienia z~komend i~obu czujników).
+Nie odtwarza objętości płuc, więc nie rozróżnia rodzaju pauzy; stąd jedna klasa
+,,pauza'' (rodzaj pauzy można dodać z~poziomu klatki w~radarze). To dowód
+zgodności czasowej i~jakości oznaczania na jednym nagraniu kontrolowanym, a~nie
+na różnych osobach, pozycjach i~oddechu naturalnym, gdzie nie ma jeszcze
+niezależnego wzorca. Etykiety w~fragmentach, w~których radar prawie nie widzi
+oddechu, nie niosą informacji dla sieci o~wejściu z~radaru i~trzeba je maskować
+według siły sygnału radaru.
 
 \paragraph{Napotkane problemy.} Dwa rejestratory uruchomione na tej samej
 nazwie sesji dzieliły port radaru i~telefon (w~logu: rozłączenie BLE i~przekroczenie

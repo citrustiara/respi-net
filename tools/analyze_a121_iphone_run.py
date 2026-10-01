@@ -12,10 +12,12 @@ stream of one trial with the same clock.  For every run this script
    motion of every cued inhale and exhale, the moment of every turn), and
    checks that the delay is the same in the first and in the second half,
 4. shifts the phone by that delay and labels it with the same deterministic
-   detector as the radar, and scores both detectors against the radar's
-   labels made per breath from the coach cues
-   (:func:`respi_net.label_alignment.align_cues`), which is the reference used
-   for all coach runs.
+   detector as the radar, and scores both detectors against a *fused* reference: the coach cues snapped
+   per breath (:func:`respi_net.label_alignment.align_cues`) on the sum of the two normalised signals, so
+   neither sensor is its own judge.  The reference is meant for the controlled, close-range coach runs only.
+
+The two holds are merged into one class (:func:`respi_net.breath_phases.merge_holds`): a phone on the ribs
+returns to its baseline after every breath and cannot tell a hold after inhale from one after exhale.
 
 Recordings without cued inhales and exhales (``nn_self_12min``) are analysed in a second mode, ``analyse_free``:
 the delay is measured minute by minute (it has to stay put for the phone to be a usable reference), the two
@@ -50,7 +52,7 @@ from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 
-from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES_PL, IGNORE, label_runs
+from respi_net.breath_phases import CLASS_COLOURS, IGNORE, MERGED_CLASS_NAMES_PL, label_runs, merge_holds
 from respi_net.chest_signal import a121_chest_signal, imu_chest_signal, light_filter
 from respi_net.label_alignment import align_cues, cue_phases, estimate_lag
 from respi_net.phase_baseline import detect_phases
@@ -195,17 +197,22 @@ def analyse(run_prefix: Path) -> dict[str, object]:
 
     # 2. labels
     radar_lag, radar_match, _ = estimate_lag(grid, np.gradient(radar) * GRID_HZ, phases, np.arange(-1.5, 1.5001, 0.025))
-    reference = align_cues(grid, radar, records, fs=GRID_HZ, lag_s=radar_lag)
+    radar_cues = align_cues(grid, radar, records, fs=GRID_HZ, lag_s=radar_lag)
     phone_lag, phone_match, _ = estimate_lag(grid, np.gradient(phone) * GRID_HZ, phases, np.arange(-1.5, 1.5001, 0.025))
     phone_cues = align_cues(grid, phone, records, fs=GRID_HZ, lag_s=phone_lag)
     phone_aligned = shifted(grid, phone, delay)
-    radar_detected = detect_phases(radar, GRID_HZ)
-    phone_detected = detect_phases(phone, GRID_HZ)
-    phone_shifted_detected = detect_phases(phone_aligned, GRID_HZ)
+    fused = _z(radar, radar) + _z(phone_aligned, phone_aligned)
+    fused_lag, fused_match, _ = estimate_lag(grid, np.gradient(fused) * GRID_HZ, phases, np.arange(-1.5, 1.5001, 0.025))
+    reference = align_cues(grid, fused, records, fs=GRID_HZ, lag_s=fused_lag)
+    reference_labels = merge_holds(reference.labels)
+    radar_detected = merge_holds(detect_phases(radar, GRID_HZ))
+    phone_detected = merge_holds(detect_phases(phone, GRID_HZ))
+    phone_shifted_detected = merge_holds(detect_phases(phone_aligned, GRID_HZ))
     cue_labels = np.full(len(grid), IGNORE, dtype=np.int8)
     for phase in phases:
         if phase.label != IGNORE:
-            cue_labels[(grid >= phase.start_s + radar_lag) & (grid < phase.end_s + radar_lag)] = phase.label
+            cue_labels[(grid >= phase.start_s + fused_lag) & (grid < phase.end_s + fused_lag)] = phase.label
+    cue_labels = merge_holds(cue_labels)
 
     result: dict[str, object] = {
         "ble_stamp_lateness_s": stamp_lateness_s(run_prefix),
@@ -230,16 +237,18 @@ def analyse(run_prefix: Path) -> dict[str, object]:
             "second_half": describe(second),
         },
         "cue_match": {
-            "radar": {**reference.summary(), "lag_s": radar_lag, "template_corr": radar_match},
+            "radar": {**radar_cues.summary(), "lag_s": radar_lag, "template_corr": radar_match},
             "phone": {**phone_cues.summary(), "lag_s": phone_lag, "template_corr": phone_match},
+            "fused": {**reference.summary(), "lag_s": fused_lag, "template_corr": fused_match},
         },
-        "against_radar_reference": {
-            "radar_detector": scores(reference.labels, radar_detected, grid),
-            "phone_detector_unshifted": scores(reference.labels, phone_detected, grid),
-            "phone_detector_shifted": scores(reference.labels, phone_shifted_detected, grid),
-            "phone_cue_labels_unshifted": scores(reference.labels, phone_cues.labels, grid),
+        "against_fused_reference": {
+            "radar_detector": scores(reference_labels, radar_detected, grid),
+            "phone_detector_unshifted": scores(reference_labels, phone_detected, grid),
+            "phone_detector_shifted": scores(reference_labels, phone_shifted_detected, grid),
+            "radar_cue_labels": scores(reference_labels, merge_holds(radar_cues.labels), grid),
+            "phone_cue_labels": scores(reference_labels, merge_holds(phone_cues.labels), grid),
         },
-        "phone_detector_vs_radar_detector": scores(np.where(radar_detected == IGNORE, IGNORE, radar_detected), phone_shifted_detected, grid),
+        "phone_detector_vs_radar_detector": scores(radar_detected, phone_shifted_detected, grid),
         "_plot": {
             "grid": grid,
             "radar": radar,
@@ -252,7 +261,7 @@ def analyse(run_prefix: Path) -> dict[str, object]:
             "cue_lines": np.asarray(cues["start_s"], dtype=float),
             "labels": {
                 "cue": cue_labels,
-                "reference": reference.labels,
+                "reference": reference_labels,
                 "radar": radar_detected,
                 "phone": phone_shifted_detected,
             },
@@ -297,7 +306,7 @@ def chunk_delays(
 def long_holds(labels: np.ndarray, time_s: np.ndarray, minimum_s: float = LONG_HOLD_S) -> list[tuple[float, float, int]]:
     out = []
     for start, stop, label in label_runs(labels):
-        if label in (1, 3):
+        if label == 1:
             begin, end = float(time_s[start]), float(time_s[min(stop, len(time_s)) - 1])
             if end - begin >= minimum_s:
                 out.append((begin, end, int(label)))
@@ -330,8 +339,8 @@ def analyse_free(run_prefix: Path) -> dict[str, object]:
     drift_before = float(np.polyfit([r["start_s"] for r in good_before], [r["delay_s"] for r in good_before], 1)[0] * 60.0) if len(good_before) >= 3 else float("nan")
     drift_after = float(np.polyfit([r["start_s"] for r in good], [r["delay_s"] for r in good], 1)[0] * 60.0) if len(good) >= 3 else float("nan")
     phone_aligned = shifted(grid, phone, delay)
-    radar_labels = detect_phases(radar, GRID_HZ)
-    phone_labels = detect_phases(phone_aligned, GRID_HZ)
+    radar_labels = merge_holds(detect_phases(radar, GRID_HZ))
+    phone_labels = merge_holds(detect_phases(phone_aligned, GRID_HZ))
     blocks = []
     for row in cues.itertuples():
         inside = (grid >= max(row.start_s, start)) & (grid < row.end_s)
@@ -349,15 +358,13 @@ def analyse_free(run_prefix: Path) -> dict[str, object]:
                 "detector_agreement": float((a[both] == b[both]).mean()) if both.any() else float("nan"),
             }
         )
-    pause_block = next((b for b in blocks if b["block"] == "pauzy"), None)
     holds_phone = long_holds(phone_labels, grid)
     holds_radar = long_holds(radar_labels, grid)
-
-    def inside_block(holds: list[tuple[float, float, int]]) -> tuple[int, int]:
-        if pause_block is None:
-            return 0, len(holds)
-        inner = sum(1 for begin, end, _ in holds if begin >= pause_block["start_s"] - 1 and end <= pause_block["end_s"] + 1)
-        return inner, len(holds) - inner
+    matched = sum(
+        1
+        for begin, end, _ in holds_phone
+        if any(min(end, e2) - max(begin, b2) >= 0.5 * min(end - begin, e2 - b2) for b2, e2, _ in holds_radar)
+    )
 
     result: dict[str, object] = {
         "run": run_prefix.name,
@@ -384,10 +391,7 @@ def analyse_free(run_prefix: Path) -> dict[str, object]:
         "agreement_overall": float(
             np.mean(radar_labels[body & (radar_labels >= 0) & (phone_labels >= 0)] == phone_labels[body & (radar_labels >= 0) & (phone_labels >= 0)])
         ),
-        "long_holds": {
-            "phone": {"total": len(holds_phone), "in_pause_block": inside_block(holds_phone)[0], "elsewhere": inside_block(holds_phone)[1]},
-            "radar": {"total": len(holds_radar), "in_pause_block": inside_block(holds_radar)[0], "elsewhere": inside_block(holds_radar)[1]},
-        },
+        "long_holds": {"phone": len(holds_phone), "radar": len(holds_radar), "found_by_both": matched},
         "_plot_free": {
             "grid": grid,
             "radar": radar,
@@ -455,10 +459,10 @@ def plot_free(result: dict[str, object], path: Path) -> None:
         handles=[
             Line2D([], [], color="#111827", lw=1.6, label="radar"),
             Line2D([], [], color="#ea580c", lw=1.6, label="telefon"),
-            *[Patch(color=CLASS_COLOURS[i], label=CLASS_NAMES_PL[i]) for i in range(4)],
+            *merged_legend(),
         ],
         loc="outside lower center",
-        ncols=6,
+        ncols=5,
         fontsize=9,
         frameon=False,
     )
@@ -493,9 +497,9 @@ def plot_free_window(result: dict[str, object], path: Path, start_s: float, end_
     bars.set_xlabel("czas od startu nagrania [s]")
     bars.set_title("Fazy oddechu z detektora deterministycznego", loc="left", fontsize=10)
     fig.legend(
-        handles=[Patch(color=CLASS_COLOURS[i], label=CLASS_NAMES_PL[i]) for i in range(4)],
+        handles=merged_legend(),
         loc="outside lower center",
-        ncols=4,
+        ncols=3,
         fontsize=9,
         frameon=False,
     )
@@ -516,6 +520,10 @@ def _bars(ax: plt.Axes, grid: np.ndarray, rows: list[tuple[str, np.ndarray]]) ->
     ax.set_yticks([1.0 - (i + 0.5) * height for i in range(len(rows))], [name for name, _ in rows])
     ax.set_ylim(0, 1)
     ax.set_xlim(grid[0], grid[-1])
+
+
+def merged_legend() -> list[Patch]:
+    return [Patch(color=CLASS_COLOURS[index], label=name) for index, name in zip((0, 1, 2), MERGED_CLASS_NAMES_PL)]
 
 
 def _shift_title(delay: float) -> str:
@@ -579,7 +587,7 @@ def plot(result: dict[str, object], path: Path) -> None:
 
     rows = [
         ("komendy\n(+ opóźnienie)", data["labels"]["cue"]),
-        ("radar + komendy\n(odniesienie)", data["labels"]["reference"]),
+        ("odniesienie\n(komendy + oba\nczujniki)", data["labels"]["reference"]),
         ("radar:\ndetektor", data["labels"]["radar"]),
         ("telefon:\ndetektor", data["labels"]["phone"]),
     ]
@@ -590,10 +598,10 @@ def plot(result: dict[str, object], path: Path) -> None:
         handles=[
             Line2D([], [], color="#111827", lw=1.6, label="radar (przemieszczenie klatki)"),
             Line2D([], [], color="#ea580c", lw=1.6, label="telefon (przyspieszenie, oś główna)"),
-            *[Patch(color=CLASS_COLOURS[i], label=CLASS_NAMES_PL[i]) for i in range(4)],
+            *merged_legend(),
         ],
         loc="outside lower center",
-        ncols=6,
+        ncols=5,
         fontsize=9,
         frameon=False,
     )
