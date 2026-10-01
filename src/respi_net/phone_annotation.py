@@ -26,6 +26,7 @@ from .phase_metrics import BoundaryScores, PhaseScores, boundary_errors, score_p
 
 MIN_HOLD_S = 4.0
 GUARD_S = 0.2
+HOLD_GUARD_S = 2.5  # where a hold begins is fuzzy by 2-4 s on the phone (the slow slide after a deep breath): not scored
 
 CLASS_NAMES = {EXHALE: "exhale", HOLD: "hold", INHALE: "inhale", NOISE: "noise"}
 CLASS_BY_NAME = {name: code for code, name in CLASS_NAMES.items()}
@@ -91,27 +92,38 @@ def load_segments(path: Path) -> list[Segment]:
         return [Segment(float(row["start_s"]), float(row["end_s"]), CLASS_BY_NAME[row["class"]]) for row in csv.DictReader(handle)]
 
 
-def guard_mask(labels: np.ndarray, grid: np.ndarray, guard_s: float = GUARD_S) -> np.ndarray:
-    """``labels`` with the samples within ``guard_s`` of a class change set to :data:`IGNORE` (timing is scored apart)."""
+def guard_mask(labels: np.ndarray, grid: np.ndarray, guard_s: float = GUARD_S, hold_guard_s: float = HOLD_GUARD_S) -> np.ndarray:
+    """``labels`` with the samples around a class change set to :data:`IGNORE` (timing is scored apart).
+
+    ``guard_s`` on each side of a change; ``hold_guard_s`` where the change enters a hold, because the start of a
+    hold is fuzzy by a second or two (a slow settle follows a deep breath).
+    """
 
     out = np.array(labels, copy=True)
     change = np.flatnonzero(np.diff(labels.astype(int)) != 0) + 1
     step = float(np.median(np.diff(grid))) if len(grid) > 1 else 1.0
-    reach = int(round(guard_s / step))
     for index in change:
+        entering_hold = labels[index] == HOLD and labels[index - 1] != IGNORE
+        reach = int(round((max(guard_s, hold_guard_s) if entering_hold else guard_s) / step))
         out[max(0, index - reach) : index + reach] = IGNORE
     return out
 
 
 def compare_labels(
-    reference: np.ndarray, other: np.ndarray, grid: np.ndarray, *, guard_s: float = GUARD_S, tolerance_s: float = 1.0
+    reference: np.ndarray,
+    other: np.ndarray,
+    grid: np.ndarray,
+    *,
+    guard_s: float = GUARD_S,
+    hold_guard_s: float = HOLD_GUARD_S,
+    tolerance_s: float = 1.0,
 ) -> dict[str, float]:
     """Sample agreement away from the boundaries, and boundary timing, of ``other`` against ``reference``."""
 
     both = (reference != IGNORE) & (other != IGNORE)
     ref = np.where(both, reference, IGNORE)
     oth = np.where(both, other, IGNORE)
-    phases: PhaseScores = score_phases(guard_mask(ref, grid, guard_s), oth)
+    phases: PhaseScores = score_phases(guard_mask(ref, grid, guard_s, hold_guard_s), oth)
     bounds: BoundaryScores = boundary_errors(ref, oth, grid, tolerance_s=tolerance_s)
     return {
         "accuracy": float(phases.accuracy),

@@ -94,3 +94,13 @@ def test_undo_keys_and_right_click_remove_marks() -> None:
     assert [mark[0] for mark in session.marks] == [5.0]
     session.key("u")
     assert session.marks == []
+
+
+def test_the_start_of_a_hold_gets_a_wider_guard() -> None:
+    grid = np.arange(0.0, 20.0, 0.1)
+    labels = np.where(grid < 10.0, EXHALE, HOLD).astype(np.int8)
+    masked = guard_mask(labels, grid, 0.2, 1.5)
+    assert masked[90] == IGNORE and masked[110] == IGNORE  # within 1.5 s of the start of the hold
+    assert masked[80] == EXHALE and masked[120] == HOLD
+    leaving = guard_mask(np.where(grid < 10.0, HOLD, INHALE).astype(np.int8), grid, 0.2, 1.5)
+    assert leaving[85] == HOLD  # leaving a hold only needs the narrow guard
