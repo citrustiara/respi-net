@@ -3255,10 +3255,12 @@ nagrania przez detektor zweryfikowany na tych oznaczeniach. Radar jest innym
 czujnikiem niż telefon, więc ocena sieci na tym odniesieniu nie jest kołowa;
 odniesienie opisuje ruch żeber, a~nie przepływ powietrza. Oznacza się cztery
 klasy: wydech, pauzę, wdech i~szum (ruch, kaszel, mowa), przy czym obie pauzy
-połączono w~jedną. Pauzą jest bezruch trwający co najmniej \SI{1.5}{s} --- wartość
-pośrednia między \SI{0.6}{s} w~zbiorze \cite{szymanski2025} a~\SI{2}{s} w~detektorze;
-mediana pauzy w~tym zbiorze wynosi \SI{1.4}{s} po wydechu i~\SI{1.8}{s} po wdechu, a~krótszy
-spoczynek na końcu spokojnego wydechu należy do oddechu. Granice stawia się na
+połączono w~jedną. Pauzą jest bezruch trwający co najmniej \SI{4}{s}. W~trzech nagraniach z~telefonem
+naturalne spoczynki między oddechami trwają \SIrange{0.8}{3.1}{s}, a~zamierzone
+pauzy \SIrange{4.4}{15}{s}, więc próg leży w~tej przerwie; krótszy spoczynek należy do
+oddechu. W~zbiorze \cite{szymanski2025} pauzą jest każde widoczne zatrzymanie od
+około \SI{0.6}{s} (mediana \SI{1.4}{s} po wydechu i~\SI{1.8}{s} po wdechu), więc jego
+krótkie pauzy trzeba przed połączeniem zbiorów doliczyć do sąsiednich oddechów. Granice stawia się na
 zwrocie sygnału (wdech--wydech w~szczycie, wydech--wdech w~dnie), a~początek
 pauzy tam, gdzie sygnał przestaje się ruszać, wraz z~krótkim osiadaniem na jej początku.
 
@@ -3268,7 +3270,7 @@ początki kolejnych faz w~narzędziu \texttt{annotate\_phone\_phases.py}. Ten sa
 fragment oznacza się po raz drugi po co najmniej dobie, bez patrzenia na pierwsze
 oznaczenie: różnica między dwoma przejściami jest niepewnością samego odniesienia
 (zgodność próbek poza \SI{0.2}{s} od granic, odsetek znalezionych granic, ich
-przesunięcie). Detektor na telefonie (pauza od \SI{1}{s}, \SI{1.5}{s} i~\SI{2}{s})
+przesunięcie). Detektor na telefonie (pauza od \SI{2}{s}, \SI{3}{s} i~\SI{4}{s})
 jest dostatecznie dobry, gdy odbiega od oznaczeń tak samo, jak oba przejścia od
 siebie; do oznaczania długich sesji używa się go dopiero wtedy. Narzędzia
 (\texttt{score\_phone\_annotations.py}) i~protokół są gotowe; wyniki

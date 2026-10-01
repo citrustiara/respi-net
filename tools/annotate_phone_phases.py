@@ -7,9 +7,10 @@ phase is the one you pressed a key for just before the click, otherwise the next
 
     e wydech (exhale)     i wdech (inhale)     h pauza (hold)     n szum (noise: movement, cough)
     .  then click         end of the annotated stretch (otherwise the window end)
-    Backspace             undo the last click      s   save (also on closing the window)
+    Backspace, u, Ctrl/Cmd+Z   undo the last click      right click   remove the mark nearest to the click
+    s   save (also on closing the window)
 
-A hold is a stillness of at least 1.5 s; a shorter rest belongs to the breath around it.  The first click is the
+A hold is a stillness of at least 4 s (natural rests between breaths last 1-3 s and belong to the breath).  The first click is the
 start of the first segment.  Use the toolbar to zoom; clicks do not count while a toolbar tool is active.
 
     uv run python tools/annotate_phone_phases.py --session self_lying_3min_01 --run run_01_nn_self_3min --start 40 --length 60
@@ -34,10 +35,11 @@ import matplotlib
 import numpy as np
 
 from respi_net.breath_phases import CLASS_COLOURS, EXHALE, HOLD, INHALE, NOISE
-from respi_net.phone_annotation import KEY_TO_CLASS, MIN_HOLD_S, Segment, marks_to_segments, next_label, save_segments
+from respi_net.phone_annotation import KEY_TO_CLASS, Segment, marks_to_segments, next_label, save_segments
 
 SESSIONS = ROOT / "data" / "raw" / "nn" / "a121_iphone"
 ANNOTATIONS = ROOT / "annotations"
+UNDO_KEYS = {"backspace", "u", "ctrl+z", "cmd+z", "super+z", "meta+z"}
 NAMES_PL = {EXHALE: "wydech", HOLD: "pauza", INHALE: "wdech", NOISE: "szum"}
 
 
@@ -58,7 +60,7 @@ class AnnotationSession:
             self.setting_end = False
         elif key == ".":
             self.setting_end = True
-        elif key == "backspace":
+        elif key in UNDO_KEYS:
             self.undo()
 
     def click(self, time_s: float) -> None:
@@ -69,6 +71,15 @@ class AnnotationSession:
             return
         self.marks.append((time_s, self.next_class()))
         self.pending = None
+
+    def remove_near(self, time_s: float, reach_s: float = 1.5) -> None:
+        """Remove the mark closest to ``time_s`` (a wrong click anywhere in the stretch), if one is within ``reach_s``."""
+
+        if not self.marks:
+            return
+        index = min(range(len(self.marks)), key=lambda i: abs(self.marks[i][0] - time_s))
+        if abs(self.marks[index][0] - time_s) <= reach_s:
+            self.marks.pop(index)
 
     def undo(self) -> None:
         if self.end_s is not None:
@@ -85,7 +96,7 @@ class AnnotationSession:
     def status(self) -> str:
         if self.setting_end:
             return "Kliknij koniec oznaczonego fragmentu"
-        return f"Następny odcinek: {NAMES_PL[self.next_class()]}   (e wydech, i wdech, h pauza, n szum, . koniec, Backspace cofnij, s zapisz)"
+        return f"Następny odcinek: {NAMES_PL[self.next_class()]}   (e wydech, i wdech, h pauza, n szum, . koniec, Cmd/Ctrl+Z lub Backspace cofnij, prawy klik usuwa znacznik, s zapisz)"
 
 
 def draw(ax, grid: np.ndarray, trace: np.ndarray, session: AnnotationSession) -> None:
@@ -136,9 +147,14 @@ def run_viewer(args: argparse.Namespace) -> int:
 
     def on_click(event) -> None:
         toolbar = getattr(fig.canvas, "toolbar", None)
-        if event.inaxes is not ax or event.button != 1 or event.xdata is None or (toolbar is not None and getattr(toolbar, "mode", "")):
+        if event.inaxes is not ax or event.xdata is None or (toolbar is not None and getattr(toolbar, "mode", "")):
             return
-        session.click(float(event.xdata))
+        if event.button == 3:
+            session.remove_near(float(event.xdata))
+        elif event.button == 1:
+            session.click(float(event.xdata))
+        else:
+            return
         draw(ax, grid, trace, session)
         fig.canvas.draw_idle()
 

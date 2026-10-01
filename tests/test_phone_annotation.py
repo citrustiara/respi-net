@@ -79,3 +79,18 @@ def test_session_clicks_use_keys_then_the_usual_order() -> None:
     assert session.segments()[-1].end_s == 60.0
     session.key("backspace")
     assert [segment.label for segment in session.segments()] == [INHALE, EXHALE, HOLD]
+
+
+def test_undo_keys_and_right_click_remove_marks() -> None:
+    session = AnnotationSession(0.0, 60.0)
+    for time_s in (5.0, 10.0, 15.0, 20.0):
+        session.click(time_s)
+    session.key("ctrl+z")
+    session.key("cmd+z")
+    assert [mark[0] for mark in session.marks] == [5.0, 10.0]
+    session.remove_near(9.0)  # a wrong click anywhere: the nearest mark goes
+    assert [mark[0] for mark in session.marks] == [5.0]
+    session.remove_near(40.0)  # nothing within reach
+    assert [mark[0] for mark in session.marks] == [5.0]
+    session.key("u")
+    assert session.marks == []

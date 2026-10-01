@@ -63,7 +63,7 @@ def main() -> int:
     val.add_argument("--session", required=True)
     val.add_argument("--run", required=True)
     val.add_argument("annotation", type=Path)
-    val.add_argument("--min-hold", type=float, nargs="+", default=[1.0, 1.5, 2.0], help="minimum hold lengths to try [s]")
+    val.add_argument("--min-hold", type=float, nargs="+", default=[2.0, 3.0, 4.0], help="minimum hold lengths to try [s]")
     args = parser.parse_args()
     result = reliability(args.first, args.second) if args.command == "reliability" else validate(args.session, args.run, args.annotation, args.min_hold)
     print(json.dumps(result, indent=2))

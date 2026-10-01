@@ -7,7 +7,8 @@ pass over the same minute (how far two passes of one person differ is the refere
 validation of the deterministic detector against the reference.
 
 Classes use the merged scheme of :mod:`respi_net.breath_phases`: 0 exhale, 1 hold, 2 inhale, 4 noise, -1 no label.
-A hold is a stillness of at least :data:`MIN_HOLD_S`; shorter pauses belong to the breath around them.
+A hold is a stillness of at least :data:`MIN_HOLD_S`; shorter pauses belong to the breath around them.  In the phone
+traces recorded so far the natural rests between breaths last 0.8-3.1 s and deliberate holds 4.4-15 s, so the rule sits in that gap.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from .breath_phases import EXHALE, HOLD, IGNORE, INHALE, NOISE
 from .chest_signal import a121_chest_signal, imu_chest_signal
 from .phase_metrics import BoundaryScores, PhaseScores, boundary_errors, score_phases
 
-MIN_HOLD_S = 1.5
+MIN_HOLD_S = 4.0
 GUARD_S = 0.2
 
 CLASS_NAMES = {EXHALE: "exhale", HOLD: "hold", INHALE: "inhale", NOISE: "noise"}
