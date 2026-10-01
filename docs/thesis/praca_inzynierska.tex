@@ -3143,7 +3143,8 @@ ich wyniki zmieniły się nieznacznie (zgodność detektora z~92,1 na 92,2\%, me
 opóźnienia względem komend z~\SI{0.475}{s} na \SI{0.40}{s}), a~tabele w~tym rozdziale
 przeliczono.
 
-\paragraph{Czy telefon może oznaczać dane radaru?} W~tym nagraniu tak.
+\paragraph{Czy telefon może oznaczać dane radaru?} W~tym nagraniu tak (ruch i~pauza
+po wydechu; rodzaj pauzy sprawdzono niżej).
 Detektor na telefonie zgadza się z~etykietami radaru i~komend w~89,7\% (89,3\%
 bez przesunięcia), a~ten sam detektor na samym radarze w~84,6\%; telefon
 znajduje więcej granic (85\% wobec 78\%), z~mniejszym błędem i~mniej
@@ -3193,21 +3194,47 @@ widzi oddechu --- w~szybkim oddechu telefon pokazuje wyraźne oscylacje co okoł
     \label{fig:fazy-telefon-12min}
 \end{figure}
 
-\paragraph{Wniosek z~nagrań.} Telefon przy żebrach jest stabilnym odniesieniem
-czasowym dla radaru po korekcie zegara radaru: opóźnienie wynosi około zera
-z~niepewnością $\pm$\SI{0.1}{s}--\SI{0.2}{s} i~nie dryfuje. Oddech naturalny telefon
-widzi wyraźnie również tam, gdzie radar pod kątem prawie go nie widzi, więc może
-oznaczać dane radaru; etykiety w~takich fragmentach nie niosą jednak informacji
-dla sieci o~wejściu z~radaru i~trzeba je maskować według siły sygnału radaru.
-Nie ma jeszcze niezależnej oceny poprawności samych etykiet telefonu (brak
-pauzy po wdechu w~pilotażu, brak drugiego odniesienia). Kolejne nagranie, \SI{3}{min} bez przewodnika
-z~radarem skierowanym na klatkę (amplituda \SI{11.6}{mm} zamiast \SI{1.2}{mm},
-echo \SI{62}{dB}), potwierdziło stałość opóźnienia: w~półminutowych odcinkach
-wynosiło od \SI{-0.15}{s} do \SI{0.09}{s} (rozrzut \SI{0.08}{s}), a~bez korekty
-zegara radaru dochodziło do \SI{-0.29}{s}. Nie zawierało ono zadanych pauz, więc
-nie sprawdza klas pauz; dwa cichy odcinki (po około \SI{12}{s}) wykryły
-niezależnie oba detektory, a~klasę pozostałych pauz (po wdechu czy po wydechu)
-oba przypisały różnie.
+\paragraph{Nagranie 3-minutowe z~prawdziwymi pauzami.} Nagranie \SI{3}{min} bez
+przewodnika, z~radarem skierowanym na klatkę (amplituda \SI{11.6}{mm} zamiast
+\SI{1.2}{mm}, echo \SI{62}{dB}), potwierdziło stałość opóźnienia: w~półminutowych
+odcinkach wynosiło od \SI{-0.15}{s} do \SI{0.09}{s} (rozrzut \SI{0.08}{s}),
+a~bez korekty zegara radaru dochodziło do \SI{-0.29}{s}. Detektory na telefonie
+i~na radarze zgadzają się w~72\%. Osoba wykonała prawdziwe pauzy, ale nie
+zapisano ich rodzaju; rodzaj widać w~radarze po poziomie klatki
+(rys.~\ref{fig:fazy-telefon-pauzy}): wysoki plateau w~okolicy \SI{49}{s}--\SI{58}{s}
+i~\SI{95}{s}--\SI{103}{s} (pauza po wdechu) i~niski w~\SI{111}{s}--\SI{125}{s}
+(po wydechu). Telefon po szybkim skoku przy wdechu wraca w~ciągu około
+\SI{2}{s} do poziomu wyjściowego, więc oba rodzaje pauz wyglądają w~nim tak
+samo i~detektor na telefonie nazywa wszystkie pauzami po wydechu. Według poziomu
+radaru (wskazówka, nie pewnik, bo radar dryfuje) myli się co najmniej w~2 z~5
+pauz (\SI{50}{s}--\SI{61}{s} i~\SI{100}{s}--\SI{104}{s}), a~jedna
+(\SI{81}{s}--\SI{93}{s}) jest niejednoznaczna; detektor na radarze zgadza się
+z~poziomem w~3~z~5. Początek i~koniec samego bezruchu telefon i~radar wykrywają
+zgodnie (np. \SI{81}{s}--\SI{93}{s} i~\SI{111}{s}--\SI{125}{s}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_telefon_pauzy.png}
+    \caption[Pauzy w~radarze i~w~telefonie]{Fragment nagrania 3-minutowego
+    (radar na klatkę, telefon przy żebrach). W~pauzach po wdechu klatka
+    zostaje wysoko, a~sygnał telefonu wraca do poziomu wyjściowego, takiego
+    samego jak w~pauzie po wydechu (\SI{111}{s}--\SI{125}{s}); detektor na
+    telefonie nazywa je pauzami po wydechu.}
+    \label{fig:fazy-telefon-pauzy}
+\end{figure}
+
+\paragraph{Wniosek z~nagrań.} Po korekcie zegara radaru telefon przy żebrach jest
+stabilnym odniesieniem czasowym (opóźnienie około zera, niepewność
+$\pm$\SI{0.1}{s}--\SI{0.2}{s}, bez dryfu), widzi oddech naturalny również tam,
+gdzie radar pod kątem prawie go nie widzi, i~dobrze wyznacza zmiany ruchu oraz
+początek i~koniec bezruchu. Nie rozróżnia natomiast rodzaju pauzy, bo nie
+odtwarza objętości płuc. Telefon nadaje się więc do czasu granic i~do
+odróżniania ruchu od bezruchu, a~rodzaj pauzy trzeba brać z~poziomu klatki
+w~radarze albo z~komend; rozstrzygnie to nagranie z~komendami zawierające obie
+pauzy. Etykiety w~fragmentach, w~których radar prawie nie widzi oddechu, nie niosą
+informacji dla sieci o~wejściu z~radaru i~trzeba je maskować według siły sygnału
+radaru. Dotychczasowe wyniki to dowód zgodności czasowej, a~nie dowód
+poprawności wszystkich klas.
 
 \paragraph{Napotkane problemy.} Dwa rejestratory uruchomione na tej samej
 nazwie sesji dzieliły port radaru i~telefon (w~logu: rozłączenie BLE i~przekroczenie

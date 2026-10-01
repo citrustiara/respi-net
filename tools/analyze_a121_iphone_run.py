@@ -468,6 +468,42 @@ def plot_free(result: dict[str, object], path: Path) -> None:
 
 
 
+def plot_free_window(result: dict[str, object], path: Path, start_s: float, end_s: float) -> None:
+    """Radar, phone and both detectors' phases in one window: where the two sensors disagree on a hold."""
+
+    data = result["_plot_free"]  # type: ignore[assignment]
+    grid = data["grid"]
+    inside = (grid >= start_s) & (grid <= end_s)
+    fig = plt.figure(figsize=(13, 7.6), constrained_layout=True)
+    grid_spec = fig.add_gridspec(3, 1, height_ratios=[3.0, 3.0, 1.5])
+    top = fig.add_subplot(grid_spec[0])
+    middle = fig.add_subplot(grid_spec[1], sharex=top)
+    bars = fig.add_subplot(grid_spec[2], sharex=top)
+    top.plot(grid[inside], data["radar"][inside], color="#111827", lw=1.3)
+    top.set_ylabel("radar [mm]")
+    top.set_title("Radar: przemieszczenie klatki piersiowej (w pauzie po wdechu zostaje wysoko)", loc="left", fontsize=10)
+    middle.plot(grid[inside], data["phone"][inside], color="#ea580c", lw=1.3)
+    middle.set_ylabel("telefon [mg]")
+    middle.set_title("Telefon przy żebrach: po każdym wdechu wraca do poziomu wyjściowego", loc="left", fontsize=10)
+    for ax in (top, middle):
+        ax.grid(alpha=0.25)
+        ax.tick_params(labelbottom=False)
+    _bars(bars, grid, [("radar:\ndetektor", data["labels"]["radar"]), ("telefon:\ndetektor", data["labels"]["phone"])])
+    bars.set_xlim(start_s, end_s)
+    bars.set_xlabel("czas od startu nagrania [s]")
+    bars.set_title("Fazy oddechu z detektora deterministycznego", loc="left", fontsize=10)
+    fig.legend(
+        handles=[Patch(color=CLASS_COLOURS[i], label=CLASS_NAMES_PL[i]) for i in range(4)],
+        loc="outside lower center",
+        ncols=4,
+        fontsize=9,
+        frameon=False,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
 def _bars(ax: plt.Axes, grid: np.ndarray, rows: list[tuple[str, np.ndarray]]) -> None:
     height = 1.0 / len(rows)
     for position, (_, labels) in enumerate(rows):
@@ -580,6 +616,8 @@ def main() -> int:
     parser.add_argument("--run", default=None, help="run stem, for example run_01_paced_12_hold (default: every run)")
     parser.add_argument("--thesis-figure", action="store_true", help="draw the figure of the first checked run to the thesis folder")
     parser.add_argument("--figure", type=Path, default=None, help="where to draw the figure (default: next to the JSON)")
+    parser.add_argument("--window-figure", type=Path, default=None, help="free runs: also draw one window of the run to this path")
+    parser.add_argument("--window", type=float, nargs=2, metavar=("START", "END"), default=(20.0, 160.0), help="seconds for --window-figure")
     args = parser.parse_args()
     session_dir = SESSIONS / args.session
     prefixes = sorted({Path(str(p).removesuffix("_cues.csv")) for p in session_dir.glob("run_*_cues.csv")})
@@ -605,6 +643,9 @@ def main() -> int:
         figure = args.figure or out.with_suffix(".png")
         draw(result, figure)
         print(f"Figure: {figure}")
+        if free and args.window_figure is not None:
+            plot_free_window(result, args.window_figure, *args.window)
+            print(f"Window figure: {args.window_figure}")
         if args.thesis_figure and not drawn:
             target = FIGURE_FREE if free else FIGURE
             draw(result, target)
