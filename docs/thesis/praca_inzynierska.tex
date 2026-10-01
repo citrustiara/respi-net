@@ -3247,6 +3247,33 @@ sesji (odległość \SI{100}{cm}, pozycja leżąca, telefon na brzuchu) były
 domyślne lub błędne; poprawki zapisano w~notatce sesji, pliki surowe pozostały
 bez zmian.
 
+\subsection{Ręczne oznaczanie jako odniesienie}
+\label{sec:sieci-oznaczanie-reczne}
+Odniesieniem dla sieci o~wejściu z~radaru jest ruch dolnych żeber zmierzony
+telefonem, oznaczony ręcznie na krótkich fragmentach i~rozszerzony na długie
+nagrania przez detektor zweryfikowany na tych oznaczeniach. Radar jest innym
+czujnikiem niż telefon, więc ocena sieci na tym odniesieniu nie jest kołowa;
+odniesienie opisuje ruch żeber, a~nie przepływ powietrza. Oznacza się cztery
+klasy: wydech, pauzę, wdech i~szum (ruch, kaszel, mowa), przy czym obie pauzy
+połączono w~jedną. Pauzą jest bezruch trwający co najmniej \SI{1.5}{s} --- wartość
+pośrednia między \SI{0.6}{s} w~zbiorze \cite{szymanski2025} a~\SI{2}{s} w~detektorze;
+mediana pauzy w~tym zbiorze wynosi \SI{1.4}{s} po wydechu i~\SI{1.8}{s} po wdechu, a~krótszy
+spoczynek na końcu spokojnego wydechu należy do oddechu. Granice stawia się na
+zwrocie sygnału (wdech--wydech w~szczycie, wydech--wdech w~dnie), a~początek
+pauzy tam, gdzie sygnał przestaje się ruszać, wraz z~krótkim osiadaniem na jej początku.
+
+Oznaczający widzi wyłącznie przebieg z~telefonu, bez radaru i~bez wyjścia
+detektora (znak osi przebiegu wyznacza jedna liczba, korelacja z~radarem), i~klika
+początki kolejnych faz w~narzędziu \texttt{annotate\_phone\_phases.py}. Ten sam
+fragment oznacza się po raz drugi po co najmniej dobie, bez patrzenia na pierwsze
+oznaczenie: różnica między dwoma przejściami jest niepewnością samego odniesienia
+(zgodność próbek poza \SI{0.2}{s} od granic, odsetek znalezionych granic, ich
+przesunięcie). Detektor na telefonie (pauza od \SI{1}{s}, \SI{1.5}{s} i~\SI{2}{s})
+jest dostatecznie dobry, gdy odbiega od oznaczeń tak samo, jak oba przejścia od
+siebie; do oznaczania długich sesji używa się go dopiero wtedy. Narzędzia
+(\texttt{score\_phone\_annotations.py}) i~protokół są gotowe; wyniki
+oznaczania zostaną opisane po wykonaniu nagrań kontrolnych.
+
 \subsection{Zbiór zewnętrzny z~pasem oddechowym}
 \label{sec:sieci-zbior-szymanski}
 Zbiór \cite{szymanski2025} jest publiczny na licencji CC~BY-NC-ND (wolno go
