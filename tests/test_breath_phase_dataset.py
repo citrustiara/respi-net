@@ -132,7 +132,7 @@ def test_a_slow_shallow_breath_after_fast_deep_ones_is_motion_only_with_the_slow
     trace[slow] = 12.0 * (t[slow] - 36.0) / 4.0
     trace[(t >= 40.0) & (t < 60.0)] = 12.0
     middle = slice(int(36.5 * fs), int(39.5 * fs))
-    plain = detect_phases(trace, fs, min_hold_s=4.0)
+    plain = detect_phases(trace, fs, min_hold_s=4.0, slow_motion_fraction=None)
     aware = detect_phases(trace, fs, min_hold_s=4.0, slow_motion_fraction=0.25)
     assert (plain[middle] == INHALE).mean() == 0.0  # the speed threshold set by the fast breaths calls it still
     assert (aware[middle] == INHALE).mean() > 0.9

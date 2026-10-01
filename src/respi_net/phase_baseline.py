@@ -24,6 +24,8 @@ it too.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from .breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, label_runs
@@ -195,7 +197,13 @@ def _causal(
 # little and the heartbeat ripples on top.  The minimum hold is kept at 2 s
 # offline rather than the grid's 3 s so the setting is not fitted to this
 # protocol's long holds.
-OFFLINE_SETTINGS = {"low_pass_hz": 0.5, "still_fraction": 0.5, "min_hold_s": 2.0}
+# Slow-motion check (offline only); None = off.  On by default since 2026-10-02: it helped the coach runs (+1.5 points), was neutral on the belt
+# data judged by the 4 s hold rule and on the radar against the phone labels.
+DEFAULT_SLOW_MOTION_FRACTION: float | None = 0.25
+_DEFAULT: Any = object()
+
+# A hold is a stillness of at least 4 s (natural rests between breaths last 0.8-3.1 s); it was 2 s before 2026-10-02.
+OFFLINE_SETTINGS = {"low_pass_hz": 0.5, "still_fraction": 0.5, "min_hold_s": 4.0}
 REALTIME_SETTINGS = {"low_pass_hz": 1.0, "still_fraction": 0.4, "min_hold_s": 1.0}
 
 
@@ -211,12 +219,12 @@ def detect_phases(
     scale_window_s: float = 30.0,
     max_settle_s: float = 0.8,
     max_settle_fraction: float = 0.4,
-    slow_motion_fraction: float | None = None,
+    slow_motion_fraction: float | None = _DEFAULT,
     slow_motion_window_s: float = 1.5,
 ) -> np.ndarray:
     """Phase labels (0-3, IGNORE before the first motion) for a chest signal rising on inhale.
 
-    ``slow_motion_fraction`` (offline only, off by default) also counts a slow movement as motion when it changes
+    ``slow_motion_fraction`` (offline only; default :data:`DEFAULT_SLOW_MOTION_FRACTION`) also counts a slow movement as motion when it changes
     the trace by that fraction of the local breath depth within ``slow_motion_window_s``; the phone labeller uses
     0.25 (see :func:`_slow_motion`).
 
@@ -225,6 +233,8 @@ def detect_phases(
     """
 
     defaults = REALTIME_SETTINGS if causal else OFFLINE_SETTINGS
+    if slow_motion_fraction is _DEFAULT:
+        slow_motion_fraction = DEFAULT_SLOW_MOTION_FRACTION
     low_pass_hz = defaults["low_pass_hz"] if low_pass_hz is None else low_pass_hz
     still_fraction = defaults["still_fraction"] if still_fraction is None else still_fraction
     min_hold_s = defaults["min_hold_s"] if min_hold_s is None else min_hold_s

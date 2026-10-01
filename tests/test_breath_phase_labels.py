@@ -230,3 +230,14 @@ def test_merge_holds_turns_both_holds_into_one_class() -> None:
     merged = merge_holds(labels)
     assert merged.tolist() == [EXHALE, HOLD, INHALE, HOLD, NOISE, IGNORE]
     assert labels[3] == HOLD_AFTER_INHALE  # the input is not changed
+
+
+def test_short_holds_are_folded_into_the_neighbouring_breaths() -> None:
+    from respi_net.breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, INHALE, fold_short_holds
+
+    fs = 10.0
+    labels = np.array([INHALE] * 20 + [HOLD_AFTER_INHALE] * 10 + [EXHALE] * 20 + [HOLD_AFTER_EXHALE] * 60 + [INHALE] * 20, dtype=np.int8)
+    folded = fold_short_holds(labels, fs, 4.0)
+    assert (folded[20:25] == INHALE).all() and (folded[25:30] == EXHALE).all()  # the 1 s hold is split
+    assert (folded[50:110] == HOLD_AFTER_EXHALE).all()  # the 6 s hold stays
+    assert (labels[20:30] == HOLD_AFTER_INHALE).all()  # the input is not changed

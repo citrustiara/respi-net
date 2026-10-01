@@ -40,6 +40,29 @@ HOLD = HOLD_AFTER_EXHALE
 MERGED_CLASS_NAMES_PL = ("wydech", "pauza", "wdech")
 
 
+def fold_short_holds(labels: np.ndarray, fs: float, min_hold_s: float) -> np.ndarray:
+    """Holds shorter than ``min_hold_s`` become part of the breaths around them (first half to the one before, second to the one after).
+
+    Datasets that call every visible stop a hold (the belt set of Szymański et al.: from about 0.6 s) are brought to the
+    rule of this work -- a hold is a stillness of several seconds, a shorter rest belongs to the breath -- before they
+    are merged with the rest.  Holds with no breath on either side are left as they are.
+    """
+
+    out = np.array(labels, copy=True)
+    minimum = int(round(min_hold_s * fs))
+    for start, stop, label in label_runs(labels):
+        if label not in (HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE) or stop - start >= minimum:
+            continue
+        before = int(out[start - 1]) if start > 0 and out[start - 1] in (EXHALE, INHALE) else None
+        after = int(out[stop]) if stop < len(out) and out[stop] in (EXHALE, INHALE) else None
+        if before is None and after is None:
+            continue
+        middle = (start + stop) // 2
+        out[start:middle] = before if before is not None else after
+        out[middle:stop] = after if after is not None else before
+    return out
+
+
 def merge_holds(labels: np.ndarray) -> np.ndarray:
     """``labels`` with hold-after-inhale turned into the single hold class (:data:`HOLD`); the rest is unchanged."""
 

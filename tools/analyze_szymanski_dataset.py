@@ -51,6 +51,7 @@ import numpy as np
 import pandas as pd
 
 from respi_net.breath_phases import (
+    fold_short_holds,
     CLASS_COLOURS,
     CLASS_NAMES,
     CLASS_NAMES_PL,
@@ -94,16 +95,23 @@ TIMING_TEXT = {
 }
 COACH_RUNS = ROOT / "data" / "processed" / "breath_phases" / "runs"
 EXPORT = ROOT / "data" / "processed" / "breath_phases" / "dataset_szymanski_belt_v1.npz"
+# "offline" is the detector as it is now (hold from 4 s, slow-motion check) against the labels brought to the same rule
+# (holds shorter than 4 s folded into the breaths around them); the rows below show it against the labels as published and the
+# older settings against the labels as published.
 MODES = {
-    "offline": {"causal": False},
-    "offline_short_holds": {"causal": False, "min_hold_s": 1.0},
+    "offline": {"causal": False, "fold_s": 4.0},
+    "offline_published_holds": {"causal": False},
+    "offline_2s": {"causal": False, "min_hold_s": 2.0, "slow_motion_fraction": None},
+    "offline_short_holds": {"causal": False, "min_hold_s": 1.0, "slow_motion_fraction": None},
     "realtime": {"causal": True},
 }
 
 
-def score_run(run: LabelledRun, *, causal: bool = False, **settings: float) -> dict[str, float]:
+def score_run(run: LabelledRun, *, causal: bool = False, fold_s: float | None = None, **settings: float | None) -> dict[str, float]:
     predicted = detect_phases(run.features[0], run.fs, causal=causal, **settings)
     reference = np.where(run.labels == NOISE, IGNORE, run.labels)
+    if fold_s is not None:
+        reference = fold_short_holds(reference, run.fs, fold_s)
     phase = score_phases(reference, predicted)
     timing = boundary_errors(reference, predicted, run.time_s)
     entry = {
