@@ -29,6 +29,9 @@ MIN_HOLD_S = 4.0
 GUARD_S = 0.2
 HOLD_GUARD_S = 2.5  # where a hold begins is fuzzy by 2-4 s on the phone (the slow slide after a deep breath): not scored
 
+# The deterministic detector as set up for the phone trace: pause from MIN_HOLD_S, slow shallow breaths still count as motion.
+PHONE_DETECTOR = {"min_hold_s": MIN_HOLD_S, "slow_motion_fraction": 0.25}
+
 CLASS_NAMES = {EXHALE: "exhale", HOLD: "hold", INHALE: "inhale", NOISE: "noise"}
 CLASS_BY_NAME = {name: code for code, name in CLASS_NAMES.items()}
 KEY_TO_CLASS = {"e": EXHALE, "h": HOLD, "i": INHALE, "n": NOISE}
@@ -210,3 +213,54 @@ def snap_labels(labels: np.ndarray, grid: np.ndarray, trace: np.ndarray, **kwarg
         if label != IGNORE
     ]
     return segments_to_labels(snap_segments(segments, grid, trace, **kwargs), grid)
+
+
+def boundary_offsets(
+    segments: Sequence[Segment], grid: np.ndarray, trace: np.ndarray, *, reach_s: float = 1.0, low_pass_hz: float = 1.0
+) -> dict[str, dict[str, float]]:
+    """How far a labeller's inhale/exhale boundaries sit from the turning points of the trace, by kind.
+
+    ``trough`` is exhale->inhale, ``crest`` inhale->exhale; the offset is boundary minus turning point in seconds
+    (positive = later).  A steady offset is the labeller's convention (a click lands after the visible turn; a
+    detector may start the boundary at the beginning of the rest at the bottom), not noise: it can be measured on
+    the labeller's own marks and taken out with :func:`shift_boundaries`.
+    """
+
+    smooth = light_filter(np.asarray(trace, dtype=float), 1.0 / float(np.median(np.diff(grid))), low_pass_hz)
+    offsets: dict[str, list[float]] = {"trough": [], "crest": []}
+    for before, after in zip(segments, segments[1:]):
+        if abs(before.end_s - after.start_s) > 1e-6 or (before.label, after.label) not in ((INHALE, EXHALE), (EXHALE, INHALE)):
+            continue
+        window = (grid >= before.end_s - reach_s) & (grid <= before.end_s + reach_s)
+        if window.sum() < 3:
+            continue
+        crest = before.label == INHALE
+        turn = float(grid[window][np.argmax(smooth[window]) if crest else np.argmin(smooth[window])])
+        offsets["crest" if crest else "trough"].append(before.end_s - turn)
+    return {
+        kind: {
+            "n": float(len(values)),
+            "median_s": float(np.median(values)) if values else float("nan"),
+            "iqr_s": float(np.subtract(*np.percentile(values, [75, 25]))) if values else float("nan"),
+        }
+        for kind, values in offsets.items()
+    }
+
+
+def shift_boundaries(segments: Sequence[Segment], offsets: dict[str, dict[str, float]]) -> list[Segment]:
+    """Take a measured convention out of the labels: move each inhale/exhale boundary by minus its kind's median offset."""
+
+    starts = [segment.start_s for segment in segments]
+    ends = [segment.end_s for segment in segments]
+    for index in range(len(segments) - 1):
+        before, after = segments[index].label, segments[index + 1].label
+        if abs(ends[index] - starts[index + 1]) > 1e-6 or (before, after) not in ((INHALE, EXHALE), (EXHALE, INHALE)):
+            continue
+        shift = offsets["crest" if before == INHALE else "trough"]["median_s"]
+        if not np.isfinite(shift):
+            continue
+        moment = ends[index] - shift
+        if starts[index] + 0.3 < moment < ends[index + 1] - 0.3:
+            ends[index] = moment
+            starts[index + 1] = moment
+    return [Segment(a, b, segment.label) for a, b, segment in zip(starts, ends, segments)]

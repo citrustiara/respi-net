@@ -115,3 +115,24 @@ def test_a_settle_into_a_hold_belongs_to_the_hold() -> None:
     late_hold = (t >= 5.0) & (t < 12.5)
     assert np.mean(realtime[late_hold] == HOLD_AFTER_INHALE) > 0.95
     assert not np.any(realtime[(t >= 3.0) & (t < 13.0)] == HOLD_AFTER_EXHALE)
+
+
+def test_a_slow_shallow_breath_after_fast_deep_ones_is_motion_only_with_the_slow_motion_check() -> None:
+    from respi_net.phase_baseline import detect_phases
+
+    fs = 20.0
+    t = np.arange(0.0, 70.0, 1 / fs)
+    trace = np.zeros_like(t)
+    start = 10.0
+    while start < 33.0:  # fast deep breaths: 20 units in 1.6 s, every 2 s
+        inside = (t >= start) & (t < start + 1.6)
+        trace[inside] = 20.0 * np.sin(np.pi * (t[inside] - start) / 1.6) ** 2
+        start += 2.0
+    slow = (t >= 36.0) & (t < 40.0)  # then one slow inhale: 12 units over 4 s
+    trace[slow] = 12.0 * (t[slow] - 36.0) / 4.0
+    trace[(t >= 40.0) & (t < 60.0)] = 12.0
+    middle = slice(int(36.5 * fs), int(39.5 * fs))
+    plain = detect_phases(trace, fs, min_hold_s=4.0)
+    aware = detect_phases(trace, fs, min_hold_s=4.0, slow_motion_fraction=0.25)
+    assert (plain[middle] == INHALE).mean() == 0.0  # the speed threshold set by the fast breaths calls it still
+    assert (aware[middle] == INHALE).mean() > 0.9

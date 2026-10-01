@@ -31,6 +31,30 @@ from .chest_signal import light_filter
 from .phase_metrics import enforce_min_duration
 
 
+def _slow_motion(smooth: np.ndarray, fs: float, fraction: float, window_s: float, depth_window_s: float = 30.0) -> np.ndarray:
+    """Direction (+1 / -1 / 0) of a slow but real movement that the speed threshold misses.
+
+    A shallow breath right after deep, fast ones is slower than half the speed set by those deep breaths and would
+    pass for stillness.  It still moves the trace by a visible part of the local breath depth within ``window_s``,
+    which a hold (noise and a slow settle) does not: net change over the window above ``fraction`` of the depth
+    (95th minus 5th percentile over ``depth_window_s``) counts as motion.
+    """
+
+    n = len(smooth)
+    half_window = max(1, int(round(window_s * fs / 2)))
+    ahead = np.minimum(np.arange(n) + half_window, n - 1)
+    behind = np.maximum(np.arange(n) - half_window, 0)
+    change = smooth[ahead] - smooth[behind]
+    depth = np.empty(n)
+    step = max(1, int(round(fs)))
+    reach = int(round(depth_window_s * fs / 2))
+    for start in range(0, n, step):
+        lo, hi = max(0, start - reach), min(n, start + reach)
+        depth[start : start + step] = np.subtract(*np.percentile(smooth[lo:hi], [95, 5]))
+    limit = fraction * np.maximum(depth, 1e-12)
+    return np.where(change > limit, 1, np.where(change < -limit, -1, 0)).astype(np.int8)
+
+
 def _speed_scale(speed: np.ndarray, fs: float, window_s: float, *, causal: bool) -> np.ndarray:
     """Typical breathing speed around each sample (80th percentile of |velocity|).
 
@@ -187,8 +211,14 @@ def detect_phases(
     scale_window_s: float = 30.0,
     max_settle_s: float = 0.8,
     max_settle_fraction: float = 0.4,
+    slow_motion_fraction: float | None = None,
+    slow_motion_window_s: float = 1.5,
 ) -> np.ndarray:
     """Phase labels (0-3, IGNORE before the first motion) for a chest signal rising on inhale.
+
+    ``slow_motion_fraction`` (offline only, off by default) also counts a slow movement as motion when it changes
+    the trace by that fraction of the local breath depth within ``slow_motion_window_s``; the phone labeller uses
+    0.25 (see :func:`_slow_motion`).
 
     Settings left as ``None`` come from :data:`REALTIME_SETTINGS` or
     :data:`OFFLINE_SETTINGS`.
@@ -207,6 +237,8 @@ def detect_phases(
     scale = _speed_scale(np.abs(velocity), fs, scale_window_s, causal=causal)
     threshold = still_fraction * scale
     direction = np.where(velocity > threshold, 1, np.where(velocity < -threshold, -1, 0)).astype(np.int8)
+    if slow_motion_fraction is not None and not causal:
+        direction = np.where(direction == 0, _slow_motion(smooth, fs, slow_motion_fraction, slow_motion_window_s), direction).astype(np.int8)
     if causal:
         return _causal(direction, smooth, fs, min_hold_s, min_phase_s, max_settle_s, max_settle_fraction)
     direction = _absorb_settles(direction, smooth, fs, min_hold_s, max_settle_s, max_settle_fraction)

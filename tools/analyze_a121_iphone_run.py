@@ -56,6 +56,7 @@ from respi_net.breath_phases import CLASS_COLOURS, IGNORE, MERGED_CLASS_NAMES_PL
 from respi_net.chest_signal import a121_chest_signal, imu_chest_signal, light_filter
 from respi_net.label_alignment import align_cues, cue_phases, estimate_lag
 from respi_net.phase_baseline import detect_phases
+from respi_net.phone_annotation import PHONE_DETECTOR
 from respi_net.phase_metrics import boundary_errors, score_phases
 
 SESSIONS = ROOT / "data" / "raw" / "nn" / "a121_iphone"
@@ -206,8 +207,8 @@ def analyse(run_prefix: Path) -> dict[str, object]:
     reference = align_cues(grid, fused, records, fs=GRID_HZ, lag_s=fused_lag)
     reference_labels = merge_holds(reference.labels)
     radar_detected = merge_holds(detect_phases(radar, GRID_HZ))
-    phone_detected = merge_holds(detect_phases(phone, GRID_HZ))
-    phone_shifted_detected = merge_holds(detect_phases(phone_aligned, GRID_HZ))
+    phone_detected = merge_holds(detect_phases(phone, GRID_HZ, **PHONE_DETECTOR))
+    phone_shifted_detected = merge_holds(detect_phases(phone_aligned, GRID_HZ, **PHONE_DETECTOR))
     cue_labels = np.full(len(grid), IGNORE, dtype=np.int8)
     for phase in phases:
         if phase.label != IGNORE:
@@ -340,7 +341,7 @@ def analyse_free(run_prefix: Path) -> dict[str, object]:
     drift_after = float(np.polyfit([r["start_s"] for r in good], [r["delay_s"] for r in good], 1)[0] * 60.0) if len(good) >= 3 else float("nan")
     phone_aligned = shifted(grid, phone, delay)
     radar_labels = merge_holds(detect_phases(radar, GRID_HZ))
-    phone_labels = merge_holds(detect_phases(phone_aligned, GRID_HZ))
+    phone_labels = merge_holds(detect_phases(phone_aligned, GRID_HZ, **PHONE_DETECTOR))
     blocks = []
     for row in cues.itertuples():
         inside = (grid >= max(row.start_s, start)) & (grid < row.end_s)

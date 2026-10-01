@@ -126,3 +126,17 @@ def test_snapping_leaves_holds_alone_and_works_on_label_arrays() -> None:
     labels = segments_to_labels([Segment(6.2, 9.3, INHALE), Segment(9.3, 12.2, EXHALE)], grid)
     snapped = snap_labels(labels, grid, trace)
     assert abs(grid[np.flatnonzero(snapped == EXHALE)[0]] - 9.0) < 0.15
+
+
+def test_a_steady_click_lag_is_measured_and_taken_out() -> None:
+    from respi_net.phone_annotation import boundary_offsets, shift_boundaries
+
+    grid = np.arange(0.0, 60.0, 0.05)
+    trace = -np.cos(2 * np.pi * grid / 6.0)  # troughs at 0, 6, 12 ...; crests at 3, 9, 15 ...
+    lag = 0.25
+    marks = [(6.0 + lag, INHALE), (9.0 + lag, EXHALE), (12.0 + lag, INHALE), (15.0 + lag, EXHALE), (18.0 + lag, INHALE)]
+    segments = marks_to_segments(marks, 21.25)
+    offsets = boundary_offsets(segments, grid, trace)
+    assert abs(offsets["crest"]["median_s"] - lag) < 0.1 and abs(offsets["trough"]["median_s"] - lag) < 0.1
+    corrected = shift_boundaries(segments, offsets)
+    assert abs(corrected[0].end_s - 9.0) < 0.12 and abs(corrected[1].end_s - 12.0) < 0.12

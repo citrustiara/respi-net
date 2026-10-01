@@ -27,9 +27,20 @@ if str(SRC) not in sys.path:
 
 import numpy as np
 
-from respi_net.breath_phases import IGNORE, merge_holds
+from respi_net.breath_phases import IGNORE, label_runs, merge_holds
 from respi_net.phase_baseline import detect_phases
-from respi_net.phone_annotation import compare_labels, load_segments, oriented_phone, segments_to_labels, snap_labels, snap_segments
+from respi_net.phone_annotation import (
+    PHONE_DETECTOR,
+    Segment,
+    boundary_offsets,
+    compare_labels,
+    load_segments,
+    oriented_phone,
+    segments_to_labels,
+    shift_boundaries,
+    snap_labels,
+    snap_segments,
+)
 
 SESSIONS = ROOT / "data" / "raw" / "nn" / "a121_iphone"
 GRID_HZ = 20.0
@@ -48,17 +59,41 @@ def reliability(first: Path, second: Path, session: str | None = None, run: str 
     return out
 
 
-def validate(session: str, run: str, annotation: Path, min_holds: list[float]) -> dict[str, object]:
+def validate(session: str, run: str, annotation: Path, min_holds: list[float], slow_motion: bool = True) -> dict[str, object]:
     grid, phone, sign = oriented_phone(SESSIONS / session / run, GRID_HZ)
     segments = load_segments(annotation)
     reference = segments_to_labels(segments, grid)
     snapped_reference = segments_to_labels(snap_segments(segments, grid, phone), grid)
     out: dict[str, object] = {"phone_sign": sign, "annotated_s": float(np.sum(reference != IGNORE) / GRID_HZ)}
     for minimum in min_holds:
-        detected = merge_holds(detect_phases(phone, GRID_HZ, min_hold_s=minimum))
+        detected = merge_holds(detect_phases(phone, GRID_HZ, min_hold_s=minimum, slow_motion_fraction=PHONE_DETECTOR["slow_motion_fraction"] if slow_motion else None))
         out[f"min_hold_{minimum:g}s"] = compare_labels(reference, detected, grid)
         out[f"min_hold_{minimum:g}s_snapped"] = compare_labels(snapped_reference, snap_labels(detected, grid, phone), grid)
     return out
+
+
+def convention(session: str, run: str, annotation: Path) -> dict[str, object]:
+    """The labeller's boundary convention against the detector's, and what taking each out does to the agreement."""
+
+    grid, phone, _ = oriented_phone(SESSIONS / session / run, GRID_HZ)
+    segments = load_segments(annotation)
+    detected = merge_holds(detect_phases(phone, GRID_HZ, **PHONE_DETECTOR))
+    detector_segments = [
+        Segment(float(grid[a]), float(grid[min(b, len(grid) - 1)]), int(c)) for a, b, c in label_runs(detected) if c != IGNORE
+    ]
+    mine, theirs = boundary_offsets(segments, grid, phone), boundary_offsets(detector_segments, grid, phone)
+    reference_raw = segments_to_labels(segments, grid)
+    reference_shifted = segments_to_labels(shift_boundaries(segments, mine), grid)
+    detector_shifted = segments_to_labels(shift_boundaries(detector_segments, theirs), grid)
+    return {
+        "labeller_offsets": mine,
+        "detector_offsets": theirs,
+        "agreement_raw": compare_labels(reference_raw, detected, grid),
+        "agreement_conventions_removed": compare_labels(reference_shifted, detector_shifted, grid),
+        "agreement_snapped": compare_labels(
+            segments_to_labels(snap_segments(segments, grid, phone), grid), snap_labels(detected, grid, phone), grid
+        ),
+    }
 
 
 def main() -> int:
@@ -74,8 +109,16 @@ def main() -> int:
     val.add_argument("--run", required=True)
     val.add_argument("annotation", type=Path)
     val.add_argument("--min-hold", type=float, nargs="+", default=[2.0, 3.0, 4.0], help="minimum hold lengths to try [s]")
+    con = sub.add_parser("convention", help="the labeller's and the detector's boundary convention, and the agreement with each taken out")
+    con.add_argument("--session", required=True)
+    con.add_argument("--run", required=True)
+    con.add_argument("annotation", type=Path)
+    val.add_argument("--no-slow-motion", action="store_true", help="the plain detector, without the slow-motion check")
     args = parser.parse_args()
-    result = reliability(args.first, args.second, args.session, args.run) if args.command == "reliability" else validate(args.session, args.run, args.annotation, args.min_hold)
+    if args.command == "convention":
+        print(json.dumps(convention(args.session, args.run, args.annotation), indent=2))
+        return 0
+    result = reliability(args.first, args.second, args.session, args.run) if args.command == "reliability" else validate(args.session, args.run, args.annotation, args.min_hold, not args.no_slow_motion)
     print(json.dumps(result, indent=2))
     return 0
 
