@@ -27,7 +27,7 @@ from .phase_metrics import BoundaryScores, PhaseScores, boundary_errors, score_p
 
 MIN_HOLD_S = 4.0
 GUARD_S = 0.2
-HOLD_GUARD_S = 2.5  # where a hold begins is fuzzy by 2-4 s on the phone (the slow slide after a deep breath): not scored
+HOLD_GUARD_S = 2.5  # where a hold begins or ends is fuzzy by 2-4 s on the phone (the slow slide after a deep breath, a slight drift before the next inhale): not scored
 
 # The deterministic detector as set up for the phone trace: pause from MIN_HOLD_S, slow shallow breaths still count as motion.
 PHONE_DETECTOR = {"min_hold_s": MIN_HOLD_S, "slow_motion_fraction": 0.25}
@@ -99,16 +99,16 @@ def load_segments(path: Path) -> list[Segment]:
 def guard_mask(labels: np.ndarray, grid: np.ndarray, guard_s: float = GUARD_S, hold_guard_s: float = HOLD_GUARD_S) -> np.ndarray:
     """``labels`` with the samples around a class change set to :data:`IGNORE` (timing is scored apart).
 
-    ``guard_s`` on each side of a change; ``hold_guard_s`` where the change enters a hold, because the start of a
-    hold is fuzzy by a second or two (a slow settle follows a deep breath).
+    ``guard_s`` on each side of a change; ``hold_guard_s`` where the change enters or leaves a hold, because both edges
+    of a hold are fuzzy by a second or more (a slow settle follows a deep breath; a slight drift can precede the next inhale).
     """
 
     out = np.array(labels, copy=True)
     change = np.flatnonzero(np.diff(labels.astype(int)) != 0) + 1
     step = float(np.median(np.diff(grid))) if len(grid) > 1 else 1.0
     for index in change:
-        entering_hold = labels[index] == HOLD and labels[index - 1] != IGNORE
-        reach = int(round((max(guard_s, hold_guard_s) if entering_hold else guard_s) / step))
+        at_hold = (labels[index] == HOLD and labels[index - 1] != IGNORE) or (labels[index - 1] == HOLD and labels[index] != IGNORE)
+        reach = int(round((max(guard_s, hold_guard_s) if at_hold else guard_s) / step))
         out[max(0, index - reach) : index + reach] = IGNORE
     return out
 
