@@ -292,8 +292,10 @@ def a121_config_for(
     distance_cm: float | None = None,
     start_m: float | None = None,
     end_m: float | None = None,
+    profile: int | None = None,
+    hwaas: int | None = None,
 ) -> A121Config:
-    """Radar settings for breathing at up to ~2 m.
+    """Radar settings for breathing at up to ~2 m; ``profile`` (1-5) and ``hwaas`` override them for longer distances.
 
     The range is ``--a121-start-m``/``--a121-end-m`` when given, otherwise the
     chest distance ± 0.5 m, otherwise 0.2-2.5 m.
@@ -310,7 +312,16 @@ def a121_config_for(
         raise ValueError("Zakres A121 musi być skończony i nieujemny.")
     if end - start < 0.05:
         raise ValueError(f"Zakres A121 {start:g}-{end:g} m jest pusty: koniec musi leżeć co najmniej 5 cm za początkiem.")
-    return A121Config(start_m=round(start, 3), end_m=round(end, 3), **A121_BASE_SETTINGS)
+    settings = dict(A121_BASE_SETTINGS)
+    if profile is not None:
+        if not 1 <= int(profile) <= 5:
+            raise ValueError("Profil A121 musi należeć do zakresu 1-5.")
+        settings["profile"] = int(profile)
+    if hwaas is not None:
+        if int(hwaas) < 1:
+            raise ValueError("HWAAS musi być dodatnie.")
+        settings["hwaas"] = int(hwaas)
+    return A121Config(start_m=round(start, 3), end_m=round(end, 3), **settings)
 
 
 def normalize_posture(value: str) -> str:
@@ -1351,6 +1362,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--a121-start-m", type=float, help="Początek zakresu A121 [m] (nadpisuje zakres domyślny).")
     parser.add_argument("--a121-end-m", type=float, help="Koniec zakresu A121 [m] (nadpisuje zakres domyślny).")
+    parser.add_argument("--a121-profile", type=int, help="Profil A121 1-5 (domyślnie 3; wyższy = dłuższy impuls, większy zasięg, gorsza rozdzielczość).")
+    parser.add_argument("--a121-hwaas", type=int, help="HWAAS A121 (domyślnie 32; więcej = mniej szumu, wolniejsze przemiatanie).")
     parser.add_argument("--session-name", help="Nazwa katalogu sesji; domyślnie a121_iphone_<data_godzina>.")
     parser.add_argument(
         "--output-dir",
@@ -1391,7 +1404,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.distance_cm is not None and args.distance_cm <= 0:
         parser.error("--distance-cm musi być dodatnie.")
     try:
-        a121_config = a121_config_for(distance_cm=args.distance_cm, start_m=args.a121_start_m, end_m=args.a121_end_m)
+        a121_config = a121_config_for(
+            distance_cm=args.distance_cm,
+            start_m=args.a121_start_m,
+            end_m=args.a121_end_m,
+            profile=args.a121_profile,
+            hwaas=args.a121_hwaas,
+        )
     except ValueError as exc:
         parser.error(str(exc))
 

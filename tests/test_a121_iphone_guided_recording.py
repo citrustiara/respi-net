@@ -708,3 +708,13 @@ def test_autostart_retries_a_failed_connection(tmp_path: Path, monkeypatch: pyte
         assert len(attempts) > tool.A121_CONNECT_ATTEMPTS
     finally:
         window.close()
+
+
+def test_a121_profile_and_hwaas_can_be_overridden_for_long_distances() -> None:
+    near = tool.a121_config_for(distance_cm=100.0)
+    far = tool.a121_config_for(distance_cm=700.0, profile=5, hwaas=64)
+    assert (near.profile, near.hwaas) == (3, 32)
+    assert (far.profile, far.hwaas) == (5, 64)
+    assert (far.start_m, far.end_m) == (6.5, 7.5)  # the chest distance +- 0.5 m
+    with pytest.raises(ValueError):
+        tool.a121_config_for(profile=6)
