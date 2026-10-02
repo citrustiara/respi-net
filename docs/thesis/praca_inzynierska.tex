@@ -3275,10 +3275,28 @@ moment granicy jest wtedy wspólną konwencją, a~porównanie dotyczy kolejnośc
 faz. Ten sam fragment oznacza się po raz drugi po co najmniej dobie, bez patrzenia na pierwsze
 oznaczenie: różnica między dwoma przejściami jest niepewnością samego odniesienia
 (zgodność próbek poza \SI{0.2}{s} od granic, odsetek znalezionych granic, ich
-przesunięcie). Detektor na telefonie (pauza od \SI{2}{s}, \SI{3}{s} i~\SI{4}{s})
-jest dostatecznie dobry, gdy odbiega od oznaczeń tak samo, jak oba przejścia od
+przesunięcie). Detektor na telefonie (próg pauzy sprawdzono dla \SI{2}{s}, \SI{3}{s} i~\SI{4}{s}; wybrano
+\SI{4}{s}) jest dostatecznie dobry, gdy odbiega od oznaczeń tak samo, jak oba przejścia od
 siebie; do oznaczania długich sesji używa się go dopiero wtedy. Narzędzia
-(\texttt{score\_phone\_annotations.py}) i~protokół są gotowe.
+(\texttt{score\_phone\_annotations.py}) i~protokół opisano niżej, a~wyniki w~tab.~\ref{tab:fazy-reczne}.
+
+\paragraph{Jak mierzy się zgodność.} Wszystkie porównania działają na siatce \SI{20}{Hz}
+i~na trzech klasach z~szumem (wydech, pauza, wdech). \emph{Zgodność próbek} to odsetek próbek
+o~tej samej klasie spośród tych, które oznaczono po obu stronach, bez \SI{0.2}{s} wokół każdej zmiany
+klasy w~odniesieniu i~bez \SI{2.5}{s} wokół początku i~końca każdej pauzy (moment granicy ocenia się
+osobno); makro-F1 liczy się po klasach obecnych w~odniesieniu. \emph{Granice znalezione} to odsetek granic
+odniesienia (zmian klasy), do których detektor ma granicę tego samego rodzaju w~granicach \SI{1}{s};
+\emph{błąd granicy} to mediana odległości w~czasie takich par, a~\emph{fałszywe granice} to
+nieprzypisane granice detektora w~przeliczeniu na minutę oznaczonego fragmentu. Zgodność podaje się
+w~trzech wariantach: z~surowymi kliknięciami, po odjęciu zmierzonych przesunięć obu stron
+i~po przesunięciu obu stron do zwrotów przebiegu (opis niżej). Ten sam rachunek, zastosowany do
+dwóch przejść oznaczającego (\texttt{reliability}), daje niepewność odniesienia, a~do detektora
+i~jednego przejścia (\texttt{validate}) --- jego zgodność z~odniesieniem. Kolejność sesji była następująca:
+pierwsze przejście po pięciu fragmentach trzech nagrań (\SI{438}{s}); jednokrotne ponowne oznaczenie
+fragmentu \SIrange{60}{160}{s} po obejrzeniu wyjścia detektora i~regułach (dla treningu oznaczającego,
+nie jako pomiar niezależny); drugie, ślepe przejście po około \SI{22}{h} dla trzech fragmentów.
+Ograniczenia pomiaru: jeden oznaczający i~jedna osoba, a~próg pauzy i~poprawkę ruchu powolnego
+dobrano na tych samych oznaczeniach, więc zgodność detektora jest nieco zawyżona.
 
 \paragraph{Konwencja granic i jej uwzględnianie.} Konwencja systemu jest jedna: granica
 wdech--wydech leży w~szczycie przebiegu telefonu, wydech--wdech w~dnie (przebieg
@@ -3361,6 +3379,37 @@ wyznacza się od nowa dla każdej sesji oznaczania.
 Wcześniejsze dwa oznaczenia fragmentu \SIrange{60}{160}{s} (drugie po zapoznaniu się z~detektorem
 i~regułą początku pauzy) zgadzają się w~96,6\% surowo i~99,7\% po przesunięciu, więc nie są
 niezależnym pomiarem.
+
+\paragraph{Pozycja ciała.} Telefon mierzy nachylenie żeber względem grawitacji, a~oś główną ruchu
+wyznacza się z~samych danych (analiza głównych składowych), więc przebieg nie zależy od tego, jak
+telefon jest obrócony ani jak leży osoba; zmienia się co najwyżej amplituda. W~nagraniach
+z~telefonem przy dolnych żebrach, w~trzech pozycjach, amplituda (percentyle 5--95) wynosiła
+\SIrange{22}{27}{mg}, a~zgodność detektora z~odniesieniem \SIrange{93}{100}{\percent}
+(tab.~\ref{tab:fazy-pozycje}). W~nagraniu 12-minutowym amplituda zmieniała się
+w~blokach od \SI{15}{mg} do \SI{31}{mg} (głębokość oddechu), nie od pozycji. Pozycji nie
+porównywano w~tej samej sesji, a~różnice amplitudy między sesjami mogą też wynikać z~naciągu paska i~dnia.
+Warunkiem jest swobodny ruch żeber pod telefonem. Leżenie na telefonie albo oparcie go
+o~nieruchomy przedmiot (ścianę, oparcie) ogranicza ruch i~takich ułożeń nie badano; oczekuje się
+spadku amplitudy, ale to założenie, nie wynik. Dotychczasowe wyniki dotyczą jednej osoby.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Telefon przy dolnych żebrach w~różnych pozycjach: amplituda przebiegu i~zgodność detektora
+z~odniesieniem (dla pilotażu odniesienie z~komend i~obu czujników, dla pozostałych oznaczenia ręczne
+po przesunięciu do zwrotów; pauzy bez \SI{2.5}{s} wokół krawędzi).}
+\label{tab:fazy-pozycje}
+\begin{tabular}{@{}p{4.6cm}p{4.4cm}rr@{}}
+\toprule
+Nagranie & pozycja & amplituda [mg] & zgodność \\
+\midrule
+pilotaż \SI{90}{s} & siedzenie w~fotelu odchylonym o~\SI{60}{\degree} & 22 & 93,4\% \\
+\SI{3}{min}, pauzy & leżenie na plecach & 24 & 98,1--98,6\% \\
+\SI{3}{min}, regularny oddech i~pauza & półbokiem & 27 & 99,0--100,0\% \\
+\SI{3}{min}, powtórka & półbokiem & 26 & 99,0--100,0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Zbiór zewnętrzny z~pasem oddechowym}
 \label{sec:sieci-zbior-szymanski}
