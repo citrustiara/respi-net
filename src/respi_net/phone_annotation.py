@@ -82,13 +82,19 @@ def segments_to_labels(segments: Sequence[Segment], grid: np.ndarray) -> np.ndar
     return labels
 
 
-def save_segments(path: Path, segments: Sequence[Segment]) -> None:
+def save_segments(path: Path, segments: Sequence[Segment], clicked_s: Sequence[float | None] | None = None) -> None:
+    """Save segments; ``clicked_s`` (one per segment) keeps the raw click time when the viewer snapped it to a turning point."""
+
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["start_s", "end_s", "class"])
-        for segment in segments:
-            writer.writerow([f"{segment.start_s:.3f}", f"{segment.end_s:.3f}", CLASS_NAMES[segment.label]])
+        writer.writerow(["start_s", "end_s", "class"] + (["clicked_start_s"] if clicked_s is not None else []))
+        for index, segment in enumerate(segments):
+            row = [f"{segment.start_s:.3f}", f"{segment.end_s:.3f}", CLASS_NAMES[segment.label]]
+            if clicked_s is not None:
+                raw = clicked_s[index] if index < len(clicked_s) else None
+                row.append("" if raw is None else f"{raw:.3f}")
+            writer.writerow(row)
 
 
 def load_segments(path: Path) -> list[Segment]:
@@ -172,6 +178,16 @@ def oriented_phone(run_prefix: Path, grid_hz: float = 20.0) -> tuple[np.ndarray,
                     best = corr
         sign = 1.0 if best >= 0 else -1.0
     return grid, sign * trace, sign
+
+
+def turning_point(grid: np.ndarray, smooth: np.ndarray, time_s: float, label: int, *, reach_s: float = 0.8) -> float:
+    """Time of the turning point nearest ``time_s`` for a boundary that starts ``label``: an inhale starts at a trough, an exhale at a crest."""
+
+    window = (grid >= time_s - reach_s) & (grid <= time_s + reach_s)
+    if window.sum() < 3:
+        return float(time_s)
+    times = grid[window]
+    return float(times[np.argmin(smooth[window]) if label == INHALE else np.argmax(smooth[window])])
 
 
 def snap_segments(

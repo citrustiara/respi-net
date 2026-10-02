@@ -3306,7 +3306,16 @@ tej konwencji, które nie są szumem: wyznacza się je z~ich własnych granic ja
 (granica minus zwrot przebiegu) osobno dla szczytu i~dna. W~pięciu fragmentach kliknięcia
 oznaczającego leżały średnio \SIrange{0.12}{0.20}{s} po szczycie i~\SIrange{0.09}{0.24}{s}
 po dnie, a~detektor stawiał granicę wydech--wdech \SIrange{0.15}{0.32}{s} przed dnem
-(początek krótkiego spoczynku) i~na szczycie. Takie przesunięcie uwzględnia się w~trzech
+(początek krótkiego spoczynku) i~na szczycie. Część przesunięcia oznaczającego ma przyczynę w~narzędziu: znacznik lądował o~jeden piksel na prawo
+od kursora, a~piksel to \SIrange{0.02}{0.08}{s} w~oknach \SIrange{50}{100}{s}; reszta to ocena
+wzrokowa zwrotu, który człowiek widzi chwilę po tym, jak nastąpił. Narzędzie poprawiono u~źródła: granice
+wdech--wydech przyciągają się w~chwili klikania do najbliższego zwrotu przebiegu (w~granicach
+\SI{0.8}{s}), kursor pokazuje, gdzie wyląduje znacznik (linia i~kółko na przebiegu), do dokładnych
+kliknięć służą klawisze powiększania wokół wskaźnika i~przesuwania, a~surowy czas kliknięcia zostaje
+w~osobnej kolumnie. Oznaczenia wykonane przed tą zmianą (wszystkie wyniki powyżej) mają mierzone
+przesunięcie i~uwzględnia się je tak, jak niżej; w~nowych oznaczeniach \texttt{convention} ma
+wykazać przesunięcie bliskie zera, co jest sprawdzianem poprawki. Pomiar przesunięcia zostaje, bo
+odróżnia usterkę narzędzia od cechy oznaczającego i~działa dla oznaczeń innych osób. Przesunięcie uwzględnia się w~trzech
 przypadkach: (1)~przesunięcie oznaczającego odejmuje się od jego granic
 (\texttt{boundary\_offsets}, \texttt{shift\_boundaries}), co pozwala użyć oznaczeń
 osoby o~innym nawyku i~nadal ocenić dokładność; (2)~to samo robi się z~granicami detektora;

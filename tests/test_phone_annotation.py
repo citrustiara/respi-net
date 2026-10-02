@@ -140,3 +140,33 @@ def test_a_steady_click_lag_is_measured_and_taken_out() -> None:
     assert abs(offsets["crest"]["median_s"] - lag) < 0.1 and abs(offsets["trough"]["median_s"] - lag) < 0.1
     corrected = shift_boundaries(segments, offsets)
     assert abs(corrected[0].end_s - 9.0) < 0.12 and abs(corrected[1].end_s - 12.0) < 0.12
+
+
+def _trough_snapper(grid: np.ndarray, trace: np.ndarray):
+    from respi_net.chest_signal import light_filter
+    from respi_net.phone_annotation import turning_point
+
+    smooth = light_filter(trace, 1.0 / float(np.median(np.diff(grid))), 1.0)
+    return lambda time_s, label: turning_point(grid, smooth, time_s, label)
+
+
+def test_clicks_snap_to_the_turning_point_and_keep_the_raw_time() -> None:
+    grid = np.arange(0.0, 60.0, 0.05)
+    trace = -np.cos(2 * np.pi * grid / 6.0)  # troughs at 0, 6, 12 ...; crests at 3, 9, 15 ...
+    session = AnnotationSession(0.0, 60.0, _trough_snapper(grid, trace))
+    session.click(6.3)  # an inhale starts at a trough: lands on 6.0
+    session.click(9.25)  # exhale starts at a crest: 9.0
+    session.key("h")
+    session.click(12.4)  # a hold is placed exactly where it is clicked
+    assert [round(t, 1) for t, _ in session.marks] == [6.0, 9.0, 12.4]
+    assert [round(c, 2) for c in session.clicks] == [6.3, 9.25, 12.4]
+    assert [round(x, 2) for x in session.clicked()] == [6.3, 9.25, 12.4]
+    session.key("ctrl+z")
+    assert len(session.marks) == 2 and len(session.clicks) == 2
+
+
+def test_the_raw_click_time_is_saved_as_an_extra_column(tmp_path: Path) -> None:
+    save_segments(tmp_path / "x.csv", [Segment(1.0, 2.0, INHALE), Segment(2.0, 3.0, EXHALE)], [1.2, None])
+    text = (tmp_path / "x.csv").read_text(encoding="utf-8").splitlines()
+    assert text[0] == "start_s,end_s,class,clicked_start_s" and text[1].endswith(",1.200") and text[2].endswith(",")
+    assert load_segments(tmp_path / "x.csv") == [Segment(1.0, 2.0, INHALE), Segment(2.0, 3.0, EXHALE)]
