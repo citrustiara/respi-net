@@ -109,6 +109,12 @@ def minutes(runs: list[LabelledRun]) -> dict[str, float]:
     return {"labelled": round(float(counts.sum()) / fs / 60.0, 1), **{name: round(float(c) / fs / 60.0, 1) for name, c in zip(CLASS_NAMES, counts)}}
 
 
+def training_noise_bank(runs: list[LabelledRun], splits: dict[str, str]):
+    """Real hold noise from the TRAINING runs only: a bank that included validation or test runs would put their signal into training copies."""
+
+    return noise_bank_from_holds([run for run in runs if splits[run.run_id] == "train"])
+
+
 def augment(runs: list[LabelledRun], splits: dict[str, str], bank, rng: np.random.Generator) -> list[LabelledRun]:
     low, high = np.log(NOISE_RATIO)
     return [
@@ -179,7 +185,7 @@ def main() -> int:
         raise SystemExit("No coach runs: run tools/build_breath_phase_labels.py first.")
     coach_splits = reference_splits(OUT / "dataset_coach_v1.npz", coach)
     belt_splits = reference_splits(OUT / "dataset_szymanski_belt_v1.npz", belt)
-    bank = noise_bank_from_holds(coach)
+    bank = training_noise_bank(coach, coach_splits)
 
     coach_aug = augment(coach, coach_splits, bank, rng)
     belt_aug = augment(belt, belt_splits, bank, rng)

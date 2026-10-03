@@ -30,6 +30,8 @@ import numpy as np
 from respi_net.breath_phases import IGNORE, label_runs, merge_holds
 from respi_net.phase_baseline import detect_phases
 from respi_net.phone_annotation import (
+    GUARD_S,
+    HOLD_GUARD_S,
     PHONE_DETECTOR,
     Segment,
     boundary_offsets,
@@ -50,7 +52,12 @@ def reliability(first: Path, second: Path, session: str | None = None, run: str 
     a, b = load_segments(first), load_segments(second)
     end = max(segment.end_s for segment in [*a, *b])
     grid = np.arange(0.0, end + 1.0, 1.0 / GRID_HZ)
-    out: dict[str, object] = {"first_vs_second": compare_labels(segments_to_labels(a, grid), segments_to_labels(b, grid), grid)}
+    out: dict[str, object] = {
+        "first_vs_second": compare_labels(segments_to_labels(a, grid), segments_to_labels(b, grid), grid),
+        "first_vs_second_guarded": compare_labels(
+            segments_to_labels(a, grid), segments_to_labels(b, grid), grid, guard_s=GUARD_S, hold_guard_s=HOLD_GUARD_S
+        ),
+    }
     if session and run:  # both passes snapped to the turning points of the trace they were drawn on
         full_grid, trace, _ = oriented_phone(SESSIONS / session / run, GRID_HZ)
         out["first_vs_second_snapped"] = compare_labels(
@@ -68,6 +75,7 @@ def validate(session: str, run: str, annotation: Path, min_holds: list[float], s
     for minimum in min_holds:
         detected = merge_holds(detect_phases(phone, GRID_HZ, min_hold_s=minimum, slow_motion_fraction=PHONE_DETECTOR["slow_motion_fraction"] if slow_motion else None))
         out[f"min_hold_{minimum:g}s"] = compare_labels(reference, detected, grid)
+        out[f"min_hold_{minimum:g}s_guarded"] = compare_labels(reference, detected, grid, guard_s=GUARD_S, hold_guard_s=HOLD_GUARD_S)
         out[f"min_hold_{minimum:g}s_snapped"] = compare_labels(snapped_reference, snap_labels(detected, grid, phone), grid)
     return out
 
@@ -89,6 +97,7 @@ def convention(session: str, run: str, annotation: Path) -> dict[str, object]:
         "labeller_offsets": mine,
         "detector_offsets": theirs,
         "agreement_raw": compare_labels(reference_raw, detected, grid),
+        "agreement_raw_guarded": compare_labels(reference_raw, detected, grid, guard_s=GUARD_S, hold_guard_s=HOLD_GUARD_S),
         "agreement_conventions_removed": compare_labels(reference_shifted, detector_shifted, grid),
         "agreement_snapped": compare_labels(
             segments_to_labels(snap_segments(segments, grid, phone), grid), snap_labels(detected, grid, phone), grid

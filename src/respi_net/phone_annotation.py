@@ -27,7 +27,7 @@ from .phase_metrics import BoundaryScores, PhaseScores, boundary_errors, score_p
 
 MIN_HOLD_S = 4.0
 GUARD_S = 0.2
-HOLD_GUARD_S = 2.5  # where a hold begins or ends is fuzzy by 2-4 s on the phone (the slow slide after a deep breath, a slight drift before the next inhale): not scored
+HOLD_GUARD_S = 2.5  # sensitivity variant only: where a hold begins or ends is fuzzy by 2-4 s on the phone (the slow slide after a deep breath, a slight drift before the next inhale): not scored
 
 # The deterministic detector as set up for the phone trace: pause from MIN_HOLD_S, slow shallow breaths still count as motion.
 PHONE_DETECTOR = {"min_hold_s": MIN_HOLD_S, "slow_motion_fraction": 0.25}
@@ -124,11 +124,16 @@ def compare_labels(
     other: np.ndarray,
     grid: np.ndarray,
     *,
-    guard_s: float = GUARD_S,
-    hold_guard_s: float = HOLD_GUARD_S,
+    guard_s: float = 0.0,
+    hold_guard_s: float = 0.0,
     tolerance_s: float = 1.0,
 ) -> dict[str, float]:
-    """Sample agreement away from the boundaries, and boundary timing, of ``other`` against ``reference``."""
+    """Sample agreement and boundary timing of ``other`` against ``reference``.
+
+    Unguarded by default: nothing is left out of the score.  ``guard_s=GUARD_S`` and ``hold_guard_s=HOLD_GUARD_S`` give the
+    guarded variant (samples around class changes and hold edges not scored), which hides where a labelling error is most
+    likely and is only a sensitivity analysis.
+    """
 
     both = (reference != IGNORE) & (other != IGNORE)
     ref = np.where(both, reference, IGNORE)

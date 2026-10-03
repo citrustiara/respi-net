@@ -64,3 +64,19 @@ def test_synthetic_runs_are_labelled_a121_like_runs() -> None:
     breathing = run.labels != NOISE
     velocity = run.features[1]
     assert np.median(velocity[breathing & (run.labels == INHALE)]) > 0
+
+
+def test_the_noise_bank_comes_from_training_runs_only() -> None:
+    import sys
+    from pathlib import Path
+
+    tools = str(Path(__file__).resolve().parents[1] / "tools")
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+    from build_artificial_data import training_noise_bank
+
+    train = _run()
+    other = _run()
+    object.__setattr__(other, "run_id", "run1")  # the same hold noise, but from a held-out run
+    bank = training_noise_bank([train, other], {"run0": "train", "run1": "test"})
+    assert len(bank.segments) == len(noise_bank_from_holds([train]).segments) > 0

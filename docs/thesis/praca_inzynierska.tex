@@ -3045,8 +3045,9 @@ Porównanie z~radarem służy więc do dwóch rzeczy: (1)~wyrównania obu sygna�
 w~czasie (ile telefon wyprzedza lub spóźnia się względem radaru) oraz
 (2)~kontroli, gdy osoba oddycha bez komend. Wzorcem jest tylko nagranie
 kontrolowane, z~bliska, z~komendami: etykiety z~komend dopasowane do zwrotów
-sygnału będącego sumą obu czujników. Takie połączenie nie jest rygorystyczne,
-ale żaden z~czujników nie ocenia wtedy sam siebie. Pilotaż dotyczy jednej osoby;
+sygnału będącego sumą obu czujników. Takie połączenie nie jest niezależne: odniesienie zawiera oba badane czujniki,
+a~znak osi telefonu wyznacza korelacja z~radarem, więc wynik opisuje spójność, nie niezależną
+dokładność. Pilotaż dotyczy jednej osoby;
 oddech naturalny bez komend i~pozostałe pozycje wymagają osobnych nagrań.
 
 \paragraph{Układ.} Osoba siedziała w~fotelu odchylonym o~około \SI{60}{\degree}.
@@ -3069,17 +3070,16 @@ różnic telefon~$-$~radar. Następnie telefon przesunięto o~to opóźnienie,
 zsumowano oba znormalizowane sygnały i~dopasowano do niego komendy metodą
 z~podrozdz.~\ref{sec:sieci-korekta} (to jest odniesienie). Oba czujniki oznaczono
 tym samym detektorem co radar (podrozdz.~\ref{sec:sieci-baseline}).
-Pauzy po wdechu i~po wydechu połączono w~jedną klasę ,,pauza'': telefon wraca po
-każdym oddechu do poziomu wyjściowego, więc nie odtwarza objętości płuc i~nie
-odróżnia tych pauz (rys.~\ref{fig:fazy-telefon-pauzy}), a~do oznaczania granic
-rodzaj pauzy nie jest potrzebny.
+Pauzy po wdechu i~po wydechu połączono w~jedną klasę ,,pauza'': w~rzucie na jedną oś telefon
+wraca po każdym oddechu do poziomu wyjściowego i~nie odróżnia tych pauz
+(rys.~\ref{fig:fazy-telefon-pauzy}, podrozdz.~\ref{sec:sieci-oznaczanie-reczne}).
 
 \begin{table}[H]
 \centering
 \caption{Telefon przy żebrach i~radar, jedno nagranie \SI{90}{s} z~lekkim
 oddechem. Odniesienie: komendy dopasowane do sumy obu czujników; trzy klasy
 (wydech, pauza, wdech). Dolna tabela: ten sam detektor na radarze i~na telefonie
-przesuniętym o~opóźnienie oraz etykiety z~komend dopasowane do jednego czujnika.}
+przesuniętym o~opóźnienie oraz etykiety z~komend dopasowane do jednego czujnika. Odniesienie zawiera oba czujniki (spójność, nie niezależna dokładność).}
 \label{tab:fazy-telefon}
 \small
 \begin{tabular}{lr}
@@ -3160,8 +3160,9 @@ na radarze, z~96\% znalezionych granic i~0,7 fałszywej na minutę w~obu przypad
 czujniki zgadzają się ze sobą w~96,6\%. W~tym spokojnym, bliskim nagraniu radar nie jest więc
 gorszy od telefonu. Wcześniejsza przewaga telefonu (90,5\% wobec 85,4\%) wynikała z~dawnego progu
 pauzy \SI{2}{s}: naturalny spoczynek między oddechami (1--3~s) radar w~płytkim oddechu
-wydłużał do rozmiaru ,,pauzy'' (trzy fałszywe pauzy w~pierwszych \SI{35}{s}). Telefon pozostaje
-lepszy tam, gdzie radar ma dryf lub słaby sygnał (podrozdz.~\ref{sec:sieci-oznaczanie-reczne}).
+wydłużał do rozmiaru ,,pauzy'' (trzy fałszywe pauzy w~pierwszych \SI{35}{s}). Telefon bywa pewniejszy dla zwykłych
+oddechów tam, gdzie radar ma dryf lub słaby sygnał, ale nie wokół głębokich oddechów przed pauzą
+(podrozdz.~\ref{sec:sieci-oznaczanie-reczne}).
 W~prawdziwej pauzie telefon jest płaski, a~radar dryfuje o~około \SI{1.5}{mm}. Radar z~telefonem
 przy żebrach daje czytelny oddech (echo \SI{58}{dB}, korelacja szablonu komend
 0,67, 89\% granic ze zwrotem), lecz nie ma jeszcze nagrania tego samego oddechu
@@ -3204,37 +3205,34 @@ przewodnika, z~radarem skierowanym na klatkę (amplituda \SI{11.6}{mm} zamiast
 odcinkach wynosiło od \SI{-0.15}{s} do \SI{0.09}{s} (rozrzut \SI{0.08}{s}),
 a~bez korekty zegara radaru dochodziło do \SI{-0.29}{s}. Detektory na telefonie
 i~na radarze zgadzają się w~87\%; pauz dłuższych niż \SI{4}{s} telefon znalazł 4,
-radar 5, wspólne są 4. Osoba wykonała prawdziwe pauzy, ale nie
-zapisano ich rodzaju; rodzaj widać w~radarze po poziomie klatki
-(rys.~\ref{fig:fazy-telefon-pauzy}): wysoki plateau w~\SI{51}{s}--\SI{61}{s}
-i~\SI{81}{s}--\SI{93}{s} (pauza po wdechu: 87\% i~72\% zakresu oddechu) i~niski w~\SI{110}{s}--\SI{125}{s}
-(po wydechu: 30\% zakresu). W~telefonie wszystkie trzy pauzy leżą przy dole zakresu (2, 9 i~11\%). Telefon po szybkim skoku przy wdechu wraca w~ciągu około
-\SI{2}{s} do poziomu wyjściowego, więc oba rodzaje pauz wyglądają w~nim tak
-samo; przed połączeniem klas detektor na telefonie nazywał wszystkie pauzy
-pauzami po wydechu i~według poziomu radaru mylił się w~co najmniej 2 z~5 (radar
-w~3 z~5). Początek i~koniec samego bezruchu telefon i~radar wykrywają zgodnie.
+radar 5, wspólne są 4. Osoba wykonała prawdziwe pauzy, ale nie zapisano ich rodzaju. Rodzaj pauzy
+oceniono z~poziomu klatki w~radarze względem lokalnego poziomu końcowowydechowego z~poprzednich
+\SI{25}{s} (rys.~\ref{fig:fazy-telefon-pauzy}): pauza w~\SI{51}{s}--\SI{61}{s} leży wysoko (90\% amplitudy
+oddechu), w~\SI{110}{s}--\SI{125}{s} nisko (poniżej poziomu końcowowydechowego), a~pauza w~\SI{81}{s}--\SI{93}{s}
+(37\%) jest niejednoznaczna; poziom względem globalnego zakresu oddechu byłby tu mylący, bo radar
+dryfuje. W~telefonie wszystkie trzy pauzy leżą przy dole zakresu (2, 9 i~11\%): w~rzucie na jedną oś
+oba rodzaje pauz wyglądają tak samo, a~opadanie po głębokim wdechu wygląda jak wydech
+(ograniczenie opisane w~podrozdz.~\ref{sec:sieci-oznaczanie-reczne}).
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{fazy_telefon_pauzy.png}
     \caption[Pauzy w~radarze i~w~telefonie]{Trzy pauzy w~nagraniu 3-minutowym (radar na klatkę, telefon
-    przy żebrach); poziom w~pauzie to mediana bez \SI{2.5}{s} przy krawędziach. Radar odróżnia pauzy po
-    wdechu (wysoko w~zakresie oddechu) od pauzy po wydechu (nisko), a~telefon w~każdej z~nich wraca do tego
-    samego poziomu wyjściowego, dlatego pauzy po wdechu i~po wydechu połączono w~jedną klasę.}
+    przy żebrach); poziom w~pauzie to mediana bez \SI{2.5}{s} przy krawędziach, rodzaj pauzy z~lokalnego poziomu
+    radaru. Radar pokazuje poziom klatki, a~telefon (rzut na jedną oś) w~każdej z~pauz wraca do tego samego poziomu
+    wyjściowego, dlatego pauzy po wdechu i~po wydechu połączono w~jedną klasę.}
     \label{fig:fazy-telefon-pauzy}
 \end{figure}
 
-\paragraph{Wniosek z~nagrań.} Po korekcie zegara radaru telefon przy żebrach
-jest stabilnym odniesieniem czasowym dla radaru (opóźnienie około zera,
-niepewność $\pm$\SI{0.1}{s}--\SI{0.2}{s}, bez dryfu), widzi oddech naturalny
-również tam, gdzie radar pod kątem prawie go nie widzi, i~w~nagraniu
-kontrolowanym oznacza wdech, wydech i~pauzę z~dokładnością 93,4\% względem odniesienia
-z~komend i~obu czujników (ten sam detektor na radarze: 93,1\%). Nie odtwarza objętości płuc, więc nie rozróżnia rodzaju pauzy; stąd jedna klasa
-,,pauza'' (rodzaj pauzy można dodać z~poziomu klatki w~radarze). To dowód
-zgodności czasowej i~jakości oznaczania na jednym nagraniu kontrolowanym, a~nie
-na różnych osobach, pozycjach i~oddechu naturalnym, gdzie nie ma jeszcze
-niezależnego wzorca. Fragmenty, w~których radar prawie nie widzi
-oddechu, zostają w~uczeniu (sieć ma właśnie tam działać), ale ocenia się je osobno.
+\paragraph{Wniosek z~nagrań.} Po korekcie zegara radaru telefon przy żebrach jest stabilnym odniesieniem
+czasowym dla radaru (opóźnienie około zera, niepewność $\pm$\SI{0.1}{s}--\SI{0.2}{s}, bez dryfu w~obrębie
+sesji, choć różne między sesjami), widzi oddech naturalny również tam, gdzie radar pod kątem prawie go nie widzi,
+i~spójnie oznacza zwykłe oddechy oraz bezruch. Nie jest natomiast zweryfikowanym odniesieniem wokół głębokich
+oddechów przed pauzą (podrozdz.~\ref{sec:sieci-oznaczanie-reczne}), a~zgodność 86--90\% z~oznaczeniami ręcznymi
+na surowych próbkach jest niższa od powtarzalności samego oznaczającego (92--96\%). Do czasu niezależnej
+walidacji (pas oddechowy, przepływ powietrza albo bliski radar jako nauczyciel) telefon służy do wyznaczania
+czasu zwykłych oddechów i~rozróżniania ruchu od bezruchu. Fragmenty, w~których radar prawie nie widzi oddechu,
+zostają w~uczeniu (sieć ma właśnie tam działać), ale ocenia się je osobno.
 
 \paragraph{Napotkane problemy.} Dwa rejestratory uruchomione na tej samej
 nazwie sesji dzieliły port radaru i~telefon (w~logu: rozłączenie BLE i~przekroczenie
@@ -3245,189 +3243,199 @@ sesji (odległość \SI{100}{cm}, pozycja leżąca, telefon na brzuchu) były
 domyślne lub błędne; poprawki zapisano w~notatce sesji, pliki surowe pozostały
 bez zmian.
 
-\subsection{Ręczne oznaczanie jako odniesienie}
+\subsection{Ręczne oznaczanie jako kandydat na odniesienie}
 \label{sec:sieci-oznaczanie-reczne}
-Odniesieniem dla sieci o~wejściu z~radaru jest ruch dolnych żeber zmierzony
-telefonem, oznaczony ręcznie na krótkich fragmentach i~rozszerzony na długie
-nagrania przez detektor zweryfikowany na tych oznaczeniach. Radar jest innym
-czujnikiem niż telefon, więc ocena sieci na tym odniesieniu nie jest kołowa;
-odniesienie opisuje ruch żeber, a~nie przepływ powietrza. Oznacza się cztery
-klasy: wydech, pauzę, wdech i~szum (ruch, kaszel, mowa), przy czym obie pauzy
-połączono w~jedną. Pauzą jest bezruch trwający co najmniej \SI{4}{s}. W~trzech nagraniach z~telefonem
-naturalne spoczynki między oddechami trwają \SIrange{0.8}{3.1}{s}, a~zamierzone
-pauzy \SIrange{4.4}{15}{s}, więc próg leży w~tej przerwie; krótszy spoczynek należy do
-oddechu. W~zbiorze \cite{szymanski2025} pauzą jest każde widoczne zatrzymanie od
-około \SI{0.6}{s} (mediana \SI{1.4}{s} po wydechu i~\SI{1.8}{s} po wdechu), więc jego
-krótkie pauzy trzeba przed połączeniem zbiorów doliczyć do sąsiednich oddechów. Granice stawia się na
-zwrocie sygnału (wdech--wydech w~szczycie, wydech--wdech w~dnie), a~początek
-pauzy w~załamaniu, w~którym stromy spadek po głębokim oddechu przechodzi we wolne osiadanie.
-Początek pauzy jest na telefonie nieostry o~2--4~s (radar pokazuje pełne płuca już od załamania,
-telefon wypłaszcza się później), a~koniec o~podobną wartość (lekki dryf przed wyraźnym wdechem), więc
-\SI{2.5}{s} wokół początku i~końca każdej pauzy nie jest oceniane ani używane w~uczeniu.
+Kandydatem na odniesienie dla sieci o~wejściu z~radaru jest ruch dolnych żeber zmierzony
+telefonem i~oznaczony ręcznie na krótkich fragmentach; detektor miałby go rozszerzyć na długie
+nagrania. Radar jest innym czujnikiem niż telefon, więc ocena sieci na takim odniesieniu nie
+byłaby kołowa. Odniesienie opisuje jednak ruch żeber, a~nie przepływ powietrza, i~---jak pokazano
+niżej---nie zostało zweryfikowane niezależnie: zgodność z~oznaczeniami wykonanymi na tym samym
+przebiegu mierzy powtarzalność oznaczania, a~nie dokładność, bo błąd wspólny dla oznaczającego
+i~detektora jest w~niej niewidoczny. Oznacza się cztery klasy: wydech, pauzę, wdech i~szum (ruch,
+kaszel, mowa), przy czym obie pauzy połączono w~jedną. Pauzą jest bezruch trwający co najmniej
+\SI{4}{s}. W~trzech nagraniach z~telefonem naturalne spoczynki między oddechami trwają
+\SIrange{0.8}{3.1}{s}, a~zamierzone pauzy \SIrange{4.4}{15}{s}, więc próg leży w~tej przerwie;
+krótszy spoczynek należy do oddechu. Jest to przyjęta definicja, a~nie wynik fizjologiczny.
+W~zbiorze \cite{szymanski2025} pauzą jest każde widoczne zatrzymanie od około \SI{0.6}{s}
+(mediana \SI{1.4}{s} po wydechu i~\SI{1.8}{s} po wdechu); w~skorygowanych etykietach pasa 758 z~882
+pauz jest krótszych niż \SI{4}{s} (1049 z~5562 oznaczonych sekund, 19\%), więc przed połączeniem
+zbiorów trzeba zdecydować, co z~nimi zrobić. Doliczenie ich do sąsiednich oddechów
+(\texttt{fold\_short\_holds}) uznaje nieruchomą klatkę za oddychającą, czyli popełnia ten sam rodzaj
+błędu co telefon po głębokim wdechu, dlatego do wstępnego uczenia lepsze jest zamaskowanie takich
+fragmentów. Granice wdech--wydech stawia się na zwrocie przebiegu (wdech--wydech w~szczycie,
+wydech--wdech w~dnie). Początku i~końca pauzy nie da się z~samego telefonu wyznaczyć wiarygodnie
+(niżej); w~oznaczeniach ręcznych początek zaznaczano w~załamaniu, w~którym stromy spadek po
+głębokim oddechu przechodzi we wolne osiadanie, co jest przybliżeniem spóźnionym o~\SIrange{2}{5}{s}
+względem plateau w~radarze.
 
-Oznaczający widzi wyłącznie przebieg z~telefonu, bez radaru i~bez wyjścia
-detektora (znak osi przebiegu wyznacza jedna liczba, korelacja z~radarem), i~klika
-początki kolejnych faz w~narzędziu \texttt{annotate\_phone\_phases.py}. Kliknięcie ląduje około \SI{0.2}{s} po widocznym zwrocie, a~detektor stawia granicę
-wdech--wydech na początku krótkiego spoczynku na dnie, więc przy porównaniu obie strony
-przesuwa się do najbliższego zwrotu przebiegu (szczytu lub dna, w~granicach \SI{0.8}{s});
-moment granicy jest wtedy wspólną konwencją, a~porównanie dotyczy kolejności i~rodzaju
-faz. Ten sam fragment oznacza się po raz drugi po co najmniej dobie, bez patrzenia na pierwsze
-oznaczenie: różnica między dwoma przejściami jest niepewnością samego odniesienia
-(zgodność próbek poza \SI{0.2}{s} od granic, odsetek znalezionych granic, ich
-przesunięcie). Detektor na telefonie (próg pauzy sprawdzono dla \SI{2}{s}, \SI{3}{s} i~\SI{4}{s}; wybrano
-\SI{4}{s}) jest dostatecznie dobry, gdy odbiega od oznaczeń tak samo, jak oba przejścia od
-siebie; do oznaczania długich sesji używa się go dopiero wtedy. Narzędzia
-(\texttt{score\_phone\_annotations.py}) i~protokół opisano niżej, a~wyniki w~tab.~\ref{tab:fazy-reczne}.
+Oznaczający widzi wyłącznie przebieg z~telefonu, bez radaru i~bez wyjścia detektora (znak osi
+przebiegu wyznacza jedna liczba, korelacja z~radarem), i~klika początki kolejnych faz w~narzędziu
+\texttt{annotate\_phone\_phases.py}. Ten sam fragment oznacza się po raz drugi po co najmniej dobie,
+bez patrzenia na pierwsze oznaczenie. Detektor na telefonie (próg pauzy sprawdzono dla \SI{2}{s},
+\SI{3}{s} i~\SI{4}{s}; wybrano \SI{4}{s}) uznawano za dostatecznie dobry, gdy odbiega od oznaczeń tak
+samo, jak oba przejścia od siebie. Na surowych próbkach to kryterium nie jest spełnione (niżej), a~poza
+tym mierzy ono wyłącznie powtarzalność, więc do oznaczania długich sesji nie wystarcza.
 
 \paragraph{Jak mierzy się zgodność.} Wszystkie porównania działają na siatce \SI{20}{Hz}
 i~na trzech klasach z~szumem (wydech, pauza, wdech). \emph{Zgodność próbek} to odsetek próbek
-o~tej samej klasie spośród tych, które oznaczono po obu stronach, bez \SI{0.2}{s} wokół każdej zmiany
-klasy w~odniesieniu i~bez \SI{2.5}{s} wokół początku i~końca każdej pauzy (moment granicy ocenia się
-osobno); makro-F1 liczy się po klasach obecnych w~odniesieniu. \emph{Granice znalezione} to odsetek granic
-odniesienia (zmian klasy), do których detektor ma granicę tego samego rodzaju w~granicach \SI{1}{s};
-\emph{błąd granicy} to mediana odległości w~czasie takich par, a~\emph{fałszywe granice} to
-nieprzypisane granice detektora w~przeliczeniu na minutę oznaczonego fragmentu. Zgodność podaje się
-w~trzech wariantach: z~surowymi kliknięciami, po odjęciu zmierzonych przesunięć obu stron
-i~po przesunięciu obu stron do zwrotów przebiegu (opis niżej). Ten sam rachunek, zastosowany do
-dwóch przejść oznaczającego (\texttt{reliability}), daje niepewność odniesienia, a~do detektora
-i~jednego przejścia (\texttt{validate}) --- jego zgodność z~odniesieniem. Kolejność sesji była następująca:
-pierwsze przejście po pięciu fragmentach trzech nagrań (\SI{438}{s}); jednokrotne ponowne oznaczenie
-fragmentu \SIrange{60}{160}{s} po obejrzeniu wyjścia detektora i~regułach (dla treningu oznaczającego,
-nie jako pomiar niezależny); drugie, ślepe przejście po około \SI{22}{h} dla trzech fragmentów.
-Ograniczenia pomiaru: jeden oznaczający i~jedna osoba, a~próg pauzy i~poprawkę ruchu powolnego
-dobrano na tych samych oznaczeniach, więc zgodność detektora jest nieco zawyżona.
+o~tej samej klasie spośród tych, które oznaczono po obu stronach; makro-F1 liczy się po klasach
+obecnych w~odniesieniu. Wynik główny jest \emph{bez marginesów}: nic nie jest wyłączane
+z~oceny. Wariant z~marginesami (bez \SI{0.2}{s} wokół zmian klasy i~bez \SI{2.5}{s} wokół
+początku i~końca pauz) podaje się tylko jako analizę czułości, bo ukrywa miejsce, w~którym błąd jest
+najbardziej prawdopodobny (marginesy pokrywają 78,6\% sekund uznanych niżej za podejrzane i~usuwają
+28\% oznaczonego czasu). \emph{Granice znalezione} to odsetek granic odniesienia, do których detektor
+ma granicę tego samego rodzaju w~granicach \SI{1}{s}; \emph{błąd granicy} to mediana odległości w~czasie
+takich par, a~\emph{fałszywe granice} to nieprzypisane granice detektora na minutę oznaczonego
+fragmentu. Dodatkowo podaje się zgodność po odjęciu zmierzonych przesunięć obu stron i~po
+przesunięciu obu stron do zwrotów przebiegu (niżej); są to analizy poboczne, bo zrównują momenty
+granic i~tym samym zacierają błędy czasu, także te prawdziwe. Ten sam rachunek dla dwóch
+przejść oznaczającego (\texttt{reliability}) daje powtarzalność, a~dla detektora i~jednego
+przejścia (\texttt{validate}) jego zgodność z~oznaczeniami. Kolejność sesji: pierwsze przejście po
+pięciu fragmentach trzech nagrań (\SI{438}{s}); jednokrotne ponowne oznaczenie fragmentu
+\SIrange{60}{160}{s} po obejrzeniu wyjścia detektora (trening oznaczającego, nie pomiar
+niezależny); drugie, ślepe przejście po około \SI{22}{h} dla trzech fragmentów. Ograniczenia:
+jeden oznaczający i~jedna osoba, a~próg pauzy i~poprawkę ruchu powolnego dobrano na tych samych
+oznaczeniach.
 
-\paragraph{Konwencja granic i jej uwzględnianie.} Konwencja systemu jest jedna: granica
-wdech--wydech leży w~szczycie przebiegu telefonu, wydech--wdech w~dnie (przebieg
-wygładzony dolnoprzepustowo do \SI{1}{Hz}), początek pauzy w~załamaniu, a~koniec w~pierwszym
-wyraźnym ruchu. Oznaczający i~detektor mają jednak własne, stałe przesunięcia względem
-tej konwencji, które nie są szumem: wyznacza się je z~ich własnych granic jako medianę różnicy
-(granica minus zwrot przebiegu) osobno dla szczytu i~dna. W~pięciu fragmentach kliknięcia
-oznaczającego leżały średnio \SIrange{0.12}{0.20}{s} po szczycie i~\SIrange{0.09}{0.24}{s}
-po dnie, a~detektor stawiał granicę wydech--wdech \SIrange{0.15}{0.32}{s} przed dnem
-(początek krótkiego spoczynku) i~na szczycie. Część przesunięcia oznaczającego ma przyczynę w~narzędziu: znacznik lądował o~jeden piksel na prawo
-od kursora, a~piksel to \SIrange{0.02}{0.08}{s} w~oknach \SIrange{50}{100}{s}; reszta to ocena
-wzrokowa zwrotu, który człowiek widzi chwilę po tym, jak nastąpił. Narzędzie poprawiono u~źródła: granice
-wdech--wydech przyciągają się w~chwili klikania do najbliższego zwrotu przebiegu (w~granicach
-\SI{0.8}{s}), kursor pokazuje, gdzie wyląduje znacznik (linia i~kółko na przebiegu), do dokładnych
-kliknięć służą klawisze powiększania wokół wskaźnika i~przesuwania, a~surowy czas kliknięcia zostaje
-w~osobnej kolumnie. Oznaczenia wykonane przed tą zmianą (wszystkie wyniki powyżej) mają mierzone
-przesunięcie i~uwzględnia się je tak, jak niżej; w~nowych oznaczeniach \texttt{convention} ma
-wykazać przesunięcie bliskie zera, co jest sprawdzianem poprawki. Pomiar przesunięcia zostaje, bo
-odróżnia usterkę narzędzia od cechy oznaczającego i~działa dla oznaczeń innych osób. Przesunięcie uwzględnia się w~trzech
-przypadkach: (1)~przesunięcie oznaczającego odejmuje się od jego granic
-(\texttt{boundary\_offsets}, \texttt{shift\_boundaries}), co pozwala użyć oznaczeń
-osoby o~innym nawyku i~nadal ocenić dokładność; (2)~to samo robi się z~granicami detektora;
-(3)~przy porównaniu obie strony można przesunąć do najbliższego zwrotu (\texttt{snap}), co
-usuwa też rozrzut pojedynczych kliknięć, ale zostawia do porównania wyłącznie kolejność
-i~rodzaj faz. Dla pauz stosuje się inne reguły: początek i~koniec pauzy są nieostre o~2--4~s, więc
-\SI{2.5}{s} wokół nich nie jest oceniane; spoczynki krótsze niż \SI{4}{s} należą do oddechu,
-więc krótkie pauzy z~innych zbiorów (w~\cite{szymanski2025} od około \SI{0.6}{s}) dolicza się
-do sąsiednich oddechów przed połączeniem zbiorów; opóźnienia czujników (średnia krocząca
-pasa, zegar radaru, spóźnienie znaczników telefonu) koryguje się osobno i~wcześniej, a~przed
-użyciem oznaczeń nowej osoby uruchamia się \texttt{score\_phone\_annotations.py convention},
-żeby zobaczyć jej przesunięcia.
+\paragraph{Konwencja granic i jej uwzględnianie.} Oznaczający i~detektor mają własne, stałe
+przesunięcia względem zwrotów przebiegu (wygładzonego do \SI{1}{Hz}), które nie są szumem:
+wyznacza się je z~ich własnych granic jako medianę różnicy (granica minus zwrot) osobno dla szczytu
+i~dna. W~pięciu fragmentach kliknięcia oznaczającego leżały średnio \SIrange{0.12}{0.20}{s} po
+szczycie i~\SIrange{0.09}{0.24}{s} po dnie, a~detektor stawiał granicę wydech--wdech
+\SIrange{0.15}{0.32}{s} przed dnem (początek krótkiego spoczynku) i~na szczycie. Część przesunięcia
+oznaczającego ma przyczynę w~narzędziu: znacznik lądował o~jeden piksel na prawo od kursora,
+a~piksel to \SIrange{0.02}{0.08}{s} w~oknach \SIrange{50}{100}{s}; reszta to ocena wzrokowa zwrotu,
+który człowiek widzi chwilę po tym, jak nastąpił. Narzędzie poprawiono u~źródła: granice wdech--wydech
+przyciągają się w~chwili klikania do najbliższego zwrotu (w~granicach \SI{0.8}{s}), kursor pokazuje,
+gdzie wyląduje znacznik, do dokładnych kliknięć służą klawisze powiększania i~przesuwania, a~surowy czas
+kliknięcia zostaje w~osobnej kolumnie. Oznaczenia wykonane przed tą zmianą mają mierzone przesunięcie;
+odejmuje się je od granic oznaczającego (\texttt{boundary\_offsets}, \texttt{shift\_boundaries}),
+a~to samo robi się z~granicami detektora. Pomiar przesunięcia zostaje, bo odróżnia usterkę narzędzia od
+cechy oznaczającego i~działa dla oznaczeń innych osób; w~drugim przejściu kliknięcia w~dnie leżały
+średnio \SI{-0.01}{s} od zwrotu zamiast \SI{0.24}{s}, więc przesunięcie wyznacza się od nowa dla
+każdej sesji. Konwencja dotyczy tylko granic wdech--wydech; początki i~końce pauz oraz opóźnienia
+czujników (średnia krocząca pasa, zegar radaru, spóźnienie znaczników telefonu) mają osobne reguły
+opisane w~innych miejscach.
 
-\paragraph{Poprawka detektora.} Pierwsze oznaczenia pokazały jedną rzeczywistą pomyłkę
-detektora: po serii głębokich, szybkich oddechów wolny, płytki wdech (około \SI{10}{mg}
-w~\SI{4}{s}) został uznany za bezruch, bo próg ruchu wynosi połowę typowej prędkości z~okna
-\SI{30}{s}, ustalonej przez szybkie oddechy. Detektor dostał sprawdzenie ruchu powolnego:
-próbka jest ruchem, gdy w~oknie \SI{1.5}{s} przebieg zmienia się o~więcej niż 0,25 lokalnej
-głębokości oddechu (percentyle 5--95 w~oknie \SI{30}{s}), czego nie robi pauza. Na fragmencie
-z~tym oddechem zgodność wzrosła z~93,7 do 98,6\% (po przesunięciu do zwrotów), w~pozostałych
-czterech nie zmieniła się; próg wybrano na tych samych oznaczeniach, więc wynik jest dla
-tego fragmentu zawyżony. Zmianę sprawdzono więc na pozostałych danych, zanim włączono ją dla
-wszystkich czujników: nagrania sterowane 92,2\%~$\to$~93,7\%, pas przy regule \SI{4}{s}
-bez zmian (85,6\% wobec 85,4\% bez i~z~poprawką), radar względem oznaczeń z~telefonu bez zmian
-(89,5\% wobec 89,4\%). Przy okazji okazało się, że próg pauzy \SI{4}{s} jest dla detektora
-lepszy niż dawne \SI{2}{s}: radar względem oznaczeń z~telefonu 75,8\%~$\to$~89,5\%,
-nagrania sterowane 93,7\%~$\to$~94,5\%. Oba ustawienia (pauza od \SI{4}{s}, poprawka 0,25)
-są teraz domyślne w~trybie offline dla wszystkich czujników, a~tabele z~wynikami detektora
-w~tym rozdziale przeliczono. Tryb czasu rzeczywistego nie zmienił się. Koniec jednego fragmentu
-(po \SI{158.5}{s}), którego oznaczający nie zdążył ocenić, usunięto z~oznaczeń przed oceną.
+\paragraph{Poprawka detektora.} Pierwsze oznaczenia pokazały jedną pomyłkę detektora: po serii głębokich,
+szybkich oddechów wolny, płytki wdech (około \SI{10}{mg} w~\SI{4}{s}) został uznany za bezruch, bo
+próg ruchu wynosi połowę typowej prędkości z~okna \SI{30}{s}, ustalonej przez szybkie oddechy. Detektor
+dostał sprawdzenie ruchu powolnego: próbka jest ruchem, gdy w~oknie \SI{1.5}{s} przebieg zmienia się o~więcej
+niż 0,25 lokalnej głębokości oddechu (percentyle 5--95 w~oknie \SI{30}{s}), czego nie robi pauza. Na
+fragmencie z~tym oddechem zgodność próbek wzrosła z~85,0 do 87,7\% (po przesunięciu do zwrotów z~92,3 do
+95,9\%), w~pozostałych czterech nie zmieniła się. Próg wybrano na tych samych oznaczeniach, więc
+wynik jest zawyżony i~zmianę trzeba sprawdzić na nowych danych. Zmiana okazała się obojętna na pasie
+przy regule \SI{4}{s} (85,6\% wobec 85,4\%) i~na radarze względem oznaczeń z~telefonu (89,5\% wobec
+89,4\%), a~na nagraniach sterowanych dała 92,2\%~$\to$~93,7\%; nagrania sterowane mają jednak etykiety
+wyznaczone na sygnale radaru. Próg pauzy \SI{4}{s} zamiast dawnych \SI{2}{s} podniósł zgodność radaru
+względem oznaczeń z~telefonu z~75,8 do 89,5\%, a~nagrań sterowanych do 94,5\%; ta przewaga częściowo
+wynika z~tego, że definicję pauzy ustalono na tych samych danych. Oba ustawienia są domyślne w~trybie
+offline, a~w~czasie rzeczywistym pauza nadal wymaga \SI{1}{s} bezruchu, co trzeba jeszcze uzgodnić.
+Koniec jednego fragmentu (po \SI{158.5}{s}), którego oznaczający nie zdążył ocenić, usunięto
+z~oznaczeń przed oceną.
 
 \begin{table}[H]
 \centering
 \small
-\caption{Detektor na telefonie (pauza od \SI{4}{s}, sprawdzenie ruchu powolnego) wobec ręcznych
-oznaczeń, zgodność próbek: z~surowymi kliknięciami, po odjęciu zmierzonych przesunięć obu stron
-i~po przesunięciu do zwrotów przebiegu. Pauzy: bez \SI{2.5}{s} wokół początku i~końca.}
+\caption{Detektor na telefonie (pauza od \SI{4}{s}, sprawdzenie ruchu powolnego) wobec ręcznych oznaczeń
+(pierwsze przejście): zgodność próbek bez marginesów z~surowymi kliknięciami, po odjęciu zmierzonych
+przesunięć obu stron i~po przesunięciu do zwrotów przebiegu, oraz odsetek znalezionych granic
+(surowe kliknięcia). To powtarzalność oznaczania z~jednego czujnika, nie dokładność.}
 \label{tab:fazy-reczne}
 \begin{tabular}{lrrrrr}
 \toprule
 Fragment & s & surowe & bez przesunięć & do zwrotów & granice znalezione \\
 \midrule
-półbok, \SIrange{10}{60}{s} & 48 & 92,0\% & 98,9\% & 100,0\% & 100\% \\
-półbok, \SIrange{60}{160}{s} & 97 & 90,4\% & 95,6\% & 99,0\% & 100\% \\
-leżenie, \SIrange{20}{100}{s} & 77 & 93,0\% & 99,5\% & 100,0\% & 100\% \\
-leżenie, \SIrange{100}{180}{s} & 79 & 94,6\% & 99,4\% & 100,0\% & 88\% \\
-pauzy, \SIrange{20}{158}{s} & 137 & 93,5\% & 97,3\% & 98,6\% & 96\% \\
+półbok, \SIrange{10}{60}{s} & 48 & 86,1\% & 93,8\% & 99,6\% & 100\% \\
+półbok, \SIrange{60}{160}{s} & 97 & 88,9\% & 92,9\% & 97,7\% & 89\% \\
+leżenie, \SIrange{20}{100}{s} & 77 & 88,3\% & 96,0\% & 99,8\% & 100\% \\
+leżenie, \SIrange{100}{180}{s} & 79 & 87,0\% & 92,4\% & 94,9\% & 88\% \\
+pauzy, \SIrange{20}{158}{s} & 137 & 87,7\% & 93,0\% & 95,9\% & 96\% \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Razem 438~s oznaczeń (7,3~min) z~trzech nagrań jednej osoby; trzy fragmenty (oba z~nagrania
-leżenie i~pauzy) oznaczono bez wcześniejszego oglądania wyjścia detektora. Zgodność po odjęciu
-przesunięć (96--99\%) i~po przesunięciu do zwrotów (99--100\%) jest wyższa o~kilka punktów od
-surowej (90--95\%), czyli większość rozbieżności to konwencja granic, a~nie błędnie rozpoznane fazy.
+Razem 438~s oznaczeń (7,3~min) z~trzech nagrań jednej osoby; trzy fragmenty (oba z~nagrania leżenie
+i~pauzy) oznaczono bez wcześniejszego oglądania wyjścia detektora. Zgodność bez marginesów na
+surowych kliknięciach wynosi 86--89\%, po odjęciu przesunięć 92--96\% i~po przesunięciu do zwrotów
+95--99,8\%. Nie wolno z~tego wnioskować, że różnica jest wyłącznie konwencją granic: przesunięcie do zwrotów
+usuwa także prawdziwe błędy czasu, a~najgorsze fragmenty (leżenie \SIrange{100}{180}{s}, pauzy) zostają
+najniżej również po nim.
 
-Niepewność samego odniesienia wyznaczono z~drugiego przejścia po około \SI{22}{h}, bez
-patrzenia na pierwsze, dla trzech fragmentów. Dla fragmentu leżenie (\SIrange{100}{180}{s}) oba
-przejścia zgadzają się w~100,0\% (surowo i~po przesunięciu do zwrotów), dla trudniejszego
-fragmentu z~pauzami (\SIrange{20}{158}{s}) w~98,5\% surowo i~99,1\% po przesunięciu, a~dla fragmentu bez pauz
-(\SIrange{10}{60}{s}) w~98,8\% surowo i~100,0\% po przesunięciu. Rozbieżności
-powyżej \SI{0.4}{s} dotyczą tam wyłącznie końców pauz, gdzie przed wyraźnym wdechem pojawia się
-powolny, nieznaczny dryf, raz uznany za początek wdechu (dwa razy po około \SI{3}{s}). Stąd
-szerszy margines wokół obu krawędzi pauzy. Detektor jest od oznaczeń oddalony o~tyle samo, co
-oznaczenia od siebie: po przesunięciu do zwrotów zgadza się z~pierwszym i~drugim przejściem
-w~100,0 i~99,0\% (leżenie), 98,6 i~98,1\% (pauzy) oraz 100,0 i~100,0\% (bez pauz), a~oznaczenia między sobą w~100,0, 99,1 i~100,0\%.
-Stałe przesunięcie oznaczającego nie jest cechą na zawsze: w~drugim przejściu kliknięcia w~dnie leżały średnio
-\SI{-0.01}{s} od zwrotu zamiast \SI{0.24}{s}, a~na szczycie \SI{0.10}{s} zamiast \SI{0.15}{s}, więc przesunięcie
-wyznacza się od nowa dla każdej sesji oznaczania.
+\paragraph{Powtarzalność oznaczeń.} Drugie przejście po około \SI{22}{h}, bez patrzenia na pierwsze, dla
+trzech fragmentów daje zgodność obu przejść bez marginesów: 96,3\% (leżenie \SIrange{100}{180}{s}),
+92,0\% (pauzy \SIrange{20}{158}{s}) i~95,3\% (bez pauz \SIrange{10}{60}{s}); po przesunięciu do zwrotów
+98,5, 95,1 i~99,9\%. Detektor zgadza się z~pierwszym i~drugim przejściem w~87,0 i~88,5\%, 87,7 i~88,4\% oraz
+86,1 i~89,6\% (po przesunięciu: 94,9 i~95,3, 95,9 i~94,3, 99,6 i~99,8\%). Detektor jest więc o~5--8 punktów
+dalej od oznaczeń niż oznaczenia od siebie, a~kryterium ,,jak powtarzalność'' nie jest spełnione na surowych
+próbkach; spełniają je wyłącznie wartości po przesunięciu do zwrotów, które zacierają błędy czasu.
+Rozbieżności powyżej \SI{0.4}{s} między przejściami dotyczą końców pauz (około \SI{58}{s}--\SI{60}{s}
+i~\SI{103}{s}--\SI{105}{s}): według radaru jest tam prawdziwy wydech, który w~jednym przejściu uznano za
+pauzę, a~w~drugim za początek wdechu. Zmienność oznaczającego jest więc w~tym miejscu sygnałem, nie szumem.
 Wcześniejsze dwa oznaczenia fragmentu \SIrange{60}{160}{s} (drugie po zapoznaniu się z~detektorem
-i~regułą początku pauzy) zgadzają się w~96,6\% surowo i~99,7\% po przesunięciu, więc nie są
-niezależnym pomiarem.
+i~regułą początku pauzy) nie są niezależnym pomiarem.
 
-\paragraph{Wspólny błąd oznaczeń z samego telefonu.} Zgodność z~oznaczeniami ręcznymi mierzy
-powtarzalność oznaczania na jednym czujniku, a~nie zgodność z~prawdą: błąd wspólny dla oznaczającego
-i~detektora jest w~niej niewidoczny. Taki błąd istnieje po głębokim oddechu przed pauzą. Telefon po
-skoku wraca do poziomu wyjściowego, więc wolne opadanie po skoku wygląda jak wydech, a~prawdziwy
-wydech na końcu pauzy jest w~telefonie niewielkim spadkiem i~wpada do pauzy. Radar, który widzi
-poziom klatki, pokazuje, że płuca zostają pełne (rys.~\ref{fig:fazy-telefon-pauzy}). Detektor na samym radarze
-(niezależny od telefonu, choć sam nie jest wzorcem) różni się od oznaczeń ręcznych w~około 20\% czasu
-w~obu nagraniach z~głębokimi pauzami (27 z~137~s i~18 z~97~s), a~rozbieżności skupiają się w~epizodach
-\SIrange{2}{5}{s} po głębokim wdechu i~na końcu pauzy; w~fragmentach bez takich pauz ich nie ma.
-Oznaczenia z~telefonu są więc wiarygodne dla zwykłego oddechu i~dla samego bezruchu, a~wokół głębokich
-wdechów przed pauzą wymagają sprawdzenia drugim niezależnym wskaźnikiem (poziom klatki w~radarze albo
-pas oddechowy); do czasu takiego sprawdzenia zgodność 97--100\% opisuje powtarzalność, nie dokładność.
+\paragraph{Ograniczenie akcelerometru: pauza wygląda na początku jak wydech.} Przy rzucie przyspieszenia
+na jedną oś główną (przyjętym od początku) głęboki wdech przed pauzą daje wysoki, ostry skok, po którym
+przebieg opada w~ciągu kilku sekund do poziomu wyjściowego i~płasko przebiega przez pauzę. To opadanie
+wygląda jak wydech i~tak jest oznaczane, zarówno przez człowieka, jak i~przez detektor, choć radar pokazuje,
+że klatka zostaje w~plateau; prawdziwy wydech na końcu pauzy jest w~telefonie niewielkim spadkiem
+i~zostaje wchłonięty przez pauzę albo przez początek następnego wdechu. Skutki: początek pauzy
+jest oznaczany o~\SIrange{2.2}{5.2}{s} za późno, koniec pauzy za późno lub z~fałszywym wdechem,
+a~rodzaju pauzy (po wdechu czy po wydechu) nie da się odczytać, stąd jedna klasa. Przyczyna jest
+częściowo w~przetwarzaniu, a~częściowo fizyczna. Rzut jednoosiowy odrzuca drugi kierunek nachylenia,
+w~którym przesunięcie utrzymuje się przez pauzę po wdechu (w~wstępnej analizie we wszystkich 7 pauzach
+po wdechu i~z~powrotem w~chwili wydechu według radaru; odległość pełnej orientacji od położenia
+spoczynkowego rozdziela pauzy po wdechu i~po wydechu z~AUC 0,94 przy 7 i~5 pauzach u~jednej osoby,
+bez potwierdzenia). Całkowanie żyroskopu odtwarza ten sam kąt co akcelerometr ($R^2$ 0,98--0,999)
+i~nie dodaje informacji o~poziomie, a~filtr komplementarny nie poprawia wyniku. Fizycznie dolne boczne
+żebra leżą nad brzuchem, a~przy zamkniętej głośni objętość przemieszcza się między klatką
+a~brzuchem \cite{konno1967}, więc żebra mogą rozluźnić się, choć płuca pozostają pełne; ta interpretacja
+nie została sprawdzona. Rozmiar błędu zależy od kryterium: w~epizodach wokół głębokich pauz
+oznaczenia zgadzają się z~plateau radaru w~74\% sekund, a~wszystkich sekund prawdopodobnie błędnych
+jest od 24 (kryterium ostrożne, 5,5\% z~438~s, przedział 18--30) do 32 (7,4\%); w~zwykłym oddechu zgodność
+wynosi 88--99\% przy tolerancji \SI{0.5}{s}. Radar nie jest wzorcem: plateau w~\SIrange{95}{103}{s} nie
+jest nieruchome (nachylenia $-0{,}27$, $-0{,}29$ i~$+0{,}16$~mm/s w~trzech komórkach zakresu), a~wysokość
+względem globalnego zakresu oddechu przy dryfie nie dowodzi ,,pełnych płuc''. Rozstrzygnąć może tylko
+niezależny pomiar (pas oddechowy, przepływ powietrza).
+
+\paragraph{Co z tego wynika dla oznaczania.} (1)~Zgodność 87--100\% opisuje powtarzalność oznaczania
+z~jednego czujnika i~nie wolno jej nazywać dokładnością. (2)~Telefon jest wiarygodny dla zwykłych
+oddechów i~dla samego bezruchu. (3)~Bez niezależnego wskaźnika telefon nie wyznacza początku ani końca
+pauzy po głębokim wdechu; przy oznaczaniu z~samego telefonu fragment od skoku większego niż dwukrotna
+mediana poprzednich pięciu oddechów, po którym następuje co najmniej \SI{4}{s} bezruchu, należy maskować
+w~całości (opadanie i~nierozstrzygnięty koniec pauzy), a~nie zgadywać wydech lub wdech. (4)~W~sesjach
+z~silnym radarem początek i~koniec pauzy można poprawić z~plateau radaru, ale taki wynik jest zgodny z~ruchem
+klatki widzianym przez radar, więc ocena radaru na nim nie jest niezależna. (5)~Wiarygodność odniesienia
+sprawdzi nagranie z~pasem oddechowym lub przepływem powietrza, z~pauzami obu rodzajów i~z~przerwanymi
+wydechami (podrozdz.~\ref{sec:sieci-dyskusja}).
 
 \paragraph{Pozycja ciała.} Telefon mierzy nachylenie żeber względem grawitacji, a~oś główną ruchu
-wyznacza się z~samych danych (analiza głównych składowych), więc przebieg nie zależy od tego, jak
-telefon jest obrócony ani jak leży osoba; zmienia się co najwyżej amplituda. W~nagraniach
-z~telefonem przy dolnych żebrach, w~trzech pozycjach, amplituda (percentyle 5--95) wynosiła
-\SIrange{22}{27}{mg}, a~zgodność detektora z~odniesieniem \SIrange{93}{100}{\percent}
-(tab.~\ref{tab:fazy-pozycje}). W~nagraniu 12-minutowym amplituda zmieniała się
-w~blokach od \SI{15}{mg} do \SI{31}{mg} (głębokość oddechu), nie od pozycji. Pozycji nie
-porównywano w~tej samej sesji, a~różnice amplitudy między sesjami mogą też wynikać z~naciągu paska i~dnia.
-Warunkiem jest swobodny ruch żeber pod telefonem. Leżenie na telefonie albo oparcie go
-o~nieruchomy przedmiot (ścianę, oparcie) ogranicza ruch i~takich ułożeń nie badano; oczekuje się
-spadku amplitudy, ale to założenie, nie wynik. Dotychczasowe wyniki dotyczą jednej osoby.
+wyznacza się z~samych danych (analiza głównych składowych), co usuwa wpływ obrotu telefonu, ale nie
+mechaniki ciała w~danej pozycji. W~trzech pozycjach z~telefonem przy dolnych żebrach amplituda
+(percentyle 5--95) wynosiła \SIrange{22}{27}{mg}, a~zgodność detektora z~oznaczeniami bez marginesów
+86--90\% (tab.~\ref{tab:fazy-pozycje}); jest to powtarzalność oznaczania w~każdej pozycji, nie dowód, że
+przebieg od pozycji nie zależy. W~nagraniu 12-minutowym amplituda zmieniała się w~blokach od \SI{15}{mg} do
+\SI{31}{mg} (głębokość oddechu). Pozycji nie porównywano w~tej samej sesji, a~różnice amplitudy mogą też
+wynikać z~naciągu paska i~dnia. Warunkiem jest swobodny ruch żeber pod telefonem: leżenie na telefonie albo
+oparcie go o~nieruchomy przedmiot (ścianę, oparcie) ogranicza ruch i~takich ułożeń nie badano;
+oczekuje się spadku amplitudy, ale to założenie, nie wynik. Wszystkie wyniki dotyczą jednej osoby.
 
 \begin{table}[H]
 \centering
 \small
 \caption{Telefon przy dolnych żebrach w~różnych pozycjach: amplituda przebiegu i~zgodność detektora
-z~odniesieniem (dla pilotażu odniesienie z~komend i~obu czujników, dla pozostałych oznaczenia ręczne
-po przesunięciu do zwrotów; pauzy bez \SI{2.5}{s} wokół krawędzi).}
+z~odniesieniem bez marginesów (dla pilotażu odniesienie z~komend i~obu czujników, dla pozostałych
+pierwsze i~drugie przejście oznaczającego). To powtarzalność, nie dokładność.}
 \label{tab:fazy-pozycje}
 \begin{tabular}{@{}p{4.6cm}p{4.4cm}rr@{}}
 \toprule
 Nagranie & pozycja & amplituda [mg] & zgodność \\
 \midrule
 pilotaż \SI{90}{s} & siedzenie w~fotelu odchylonym o~\SI{60}{\degree} & 22 & 93,4\% \\
-\SI{3}{min}, pauzy & leżenie na plecach & 24 & 98,1--98,6\% \\
-\SI{3}{min}, regularny oddech i~pauza & półbokiem & 27 & 99,0--100,0\% \\
-\SI{3}{min}, powtórka & półbokiem & 26 & 99,0--100,0\% \\
+\SI{3}{min}, pauzy & leżenie na plecach & 24 & 87,7--88,4\% \\
+\SI{3}{min}, regularny oddech i~pauza & półbokiem & 27 & 87,0--88,5\% \\
+\SI{3}{min}, powtórka & półbokiem & 26 & 86,1--89,6\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -3647,7 +3655,7 @@ Sygnał jest interpolowany liniowo, a~etykiety biorą wartość najbliższej
 próbki, więc granice faz przesuwają się razem z~ruchem, a~zmienia się tempo
 oddechu (12~oddechów/min z~przewodnika przechodzi w~8,6--17). Do kopii
 dodaje się rzeczywisty szum radaru --- losowy fragment sygnału A121 z~pauz
-nagrań sterowanych (\SI{4.4}{min}; zostaje w~nich ruch serca, drobne ruchy
+nagrań sterowanych, tylko z~nagrań uczących (\SI{3.0}{min}; zostaje w~nich ruch serca, drobne ruchy
 ciała i~szum czujnika), bez trendu liniowego --- o~odchyleniu standardowym
 3--30\% wielkości oddechu (rozrzutu percentyli 5--95), oraz powolny dryf:
 błądzenie losowe wygładzone w~oknie \SI{5}{s}, nie szybsze niż 0,3 wielkości
@@ -3812,18 +3820,28 @@ na mieszance --- każdy wariant z~kilku ziaren losowych.
 Tymczasowym punktem odniesienia jest tab.~\ref{tab:fazy-baseline}.}
 
 \section{Dyskusja i dalsze kroki}
-Ograniczenia obecnego etapu są jasne: jeden badany, etykiety wyznaczone na
-sygnale samego radaru, brak pauz po wdechu i~fragmentów szumu we własnych
-danych oznaczonych (ma je zbiór \cite{szymanski2025}) oraz niezweryfikowany
-tor odniesienia. Kolejne kroki:
+\label{sec:sieci-dyskusja}
+Ograniczenia obecnego etapu są jasne: jeden badany, etykiety nagrań sterowanych wyznaczone na
+sygnale samego radaru, brak pauz po wdechu i~fragmentów szumu we własnych danych oznaczonych
+(ma je zbiór \cite{szymanski2025}) oraz odniesienie z~telefonu, które nie zostało zweryfikowane
+niezależnie i~ma opisane w~podrozdz.~\ref{sec:sieci-oznaczanie-reczne} ograniczenie wokół głębokich oddechów
+przed pauzą. Kolejne kroki:
 \begin{enumerate}
-  \item równoczesne nagrania A121 i~telefonu jako toru odniesienia, bez
+  \item niezależna weryfikacja odniesienia: jedna sesja (około \SIrange{20}{30}{min}) z~telefonem, pasem
+  oddechowym (najlepiej dwa pasy, na klatce i~na brzuchu, oraz czujnik przepływu powietrza przy nosie)
+  i~radarem z~bliska, z~pauzami obu rodzajów po \SI{4}{s}, \SI{8}{s} i~\SI{12}{s}, przerwanymi wydechami
+  i~znacznikami synchronizacji na początku i~na końcu; przetwarzanie zamraża się przed drugą częścią sesji,
+  oznaczenia z~przepływu powstają bez wiedzy o~wyjściu algorytmów, a~wynik ocenia się bez marginesów
+  (przyjęte kryterium: co najmniej 95\% poprawnie znalezionych końców pauz i~90.~percentyl błędu granicy
+  nie większy niż \SI{0.3}{s}); aplikacja ma przy tym zapisywać pełną orientację telefonu i~wektor
+  grawitacji, a~nie tylko rzut przyspieszenia;
+  \item dopiero po tej weryfikacji równoczesne nagrania A121 i~telefonu jako toru odniesienia, bez
   przewodnika: 12-minutowe sesje obejmujące oddech spokojny, wolny, szybki
   i~bardzo płytki, pauzy obu rodzajów, oddech nieregularny i~ruch, w~pięciu
   pozycjach ciała (łącznie około \SIrange{2.5}{3}{h}, z~sesjami testowymi
   z~osobnych dni); telefon przymocowany do ciała poza wiązką radaru, bo silnie
   odbija fale \SI{60}{GHz}; jeśli okaże się niewystarczający --- pas
-  oddechowy;
+  oddechowy lub bliski drugi radar jako nauczyciel;
   \item trudny zbiór testowy (odległości do \SI{7}{m}, oddech płytki i~szybki); nagrania innych osób
   jako opcjonalne, późniejsze sprawdzenie uogólnienia (system kalibrowany dla jednej osoby);
   \item wybór jednej definicji pauzy dla danych własnych i~zbioru
