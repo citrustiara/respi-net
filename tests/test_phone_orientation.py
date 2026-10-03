@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
-from respi_net.phone_orientation import breath_troughs, gravity_tilt, orientation_distance
+from respi_net.phone_orientation import breath_troughs, gravity_tilt, orientation_distance, run_orientation_distance
 
 FS = 20.0
 
@@ -40,3 +41,18 @@ def test_a_hold_after_inhale_stays_elevated_in_the_second_tilt_direction() -> No
     after = (t >= 66) & (t < 70)
     assert d[hold].mean() > 3.0 * d[after].mean() + 0.5  # elevated through the hold, gone after the exhale
     assert trace[hold].max() < 0.2  # while the single-axis trace is back at its baseline
+
+
+def test_run_orientation_distance_reads_a_recorder_run(tmp_path) -> None:
+    t = np.arange(0.0, 60.0, 0.01)
+    a = 1 - np.cos(2 * np.pi * t / 5.0)
+    acc = _tilted(a, np.zeros_like(a))
+    origin = 1_000_000.0
+    prefix = tmp_path / "run_01"
+    pd.DataFrame({"start_wall_ms": [origin], "end_s": [60.0]}).to_csv(f"{prefix}_cues.csv", index=False)
+    pd.DataFrame({"Time_ms": origin + t * 1000.0, "ax": acc[:, 0], "ay": acc[:, 1], "az": acc[:, 2]}).to_csv(f"{prefix}_iphone.csv", index=False)
+    grid = np.arange(0.0, 60.0, 1 / FS)
+    d = run_orientation_distance(prefix, grid, np.interp(grid, t, a))
+    assert d.shape == grid.shape
+    late = grid > 10
+    assert np.corrcoef(d[late], np.interp(grid, t, a)[late])[0, 1] > 0.95  # one tilt direction: the distance is the breath

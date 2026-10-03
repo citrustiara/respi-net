@@ -13,6 +13,8 @@ for the distance itself.  It is an offline signal: the rest orientation looks ba
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from scipy.signal import find_peaks
 
@@ -77,3 +79,22 @@ def orientation_distance(
         lo = min(lo, max(0, last - 2))
         rest[i] = np.median(at_trough[lo : last + 1], axis=0)
     return np.linalg.norm(tilt - rest, axis=1)
+
+
+def run_orientation_distance(run_prefix: Path | str, grid: np.ndarray, trace: np.ndarray) -> np.ndarray:
+    """Orientation distance of one recorder run on ``grid`` (seconds from the run start), rest taken from the troughs of
+    ``trace`` (the single-axis phone trace on the same grid, rising on inhale)."""
+
+    import pandas as pd  # local: only the tools need it
+
+    cues = pd.read_csv(f"{run_prefix}_cues.csv")
+    origin = float(cues["start_wall_ms"].iloc[0])
+    df = pd.read_csv(f"{run_prefix}_iphone.csv")
+    t = (df["Time_ms"].to_numpy(float) - origin) / 1000.0
+    order = np.argsort(t, kind="stable")
+    t = t[order]
+    fs = 1.0 / float(np.median(np.diff(t)))
+    tilt_raw = gravity_tilt(df[["ax", "ay", "az"]].to_numpy(float)[order], fs)
+    tilt = np.column_stack([np.interp(grid, t, tilt_raw[:, k]) for k in range(2)])
+    grid_fs = 1.0 / float(np.median(np.diff(grid)))
+    return orientation_distance(tilt, breath_troughs(trace, grid_fs), grid_fs)

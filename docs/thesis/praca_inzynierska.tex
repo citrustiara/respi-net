@@ -3390,8 +3390,14 @@ spoczynkowego rozdziela pauzy po wdechu i~po wydechu z~AUC 0,94 przy 7 i~5 pauza
 bez potwierdzenia; rys.~\ref{fig:fazy-telefon-orientacja}). Całkowanie żyroskopu odtwarza ten sam kąt co akcelerometr ($R^2$ 0,98--0,999)
 i~nie dodaje informacji o~poziomie, a~filtr komplementarny nie poprawia wyniku. Fizycznie dolne boczne
 żebra leżą nad brzuchem, a~przy zamkniętej głośni objętość przemieszcza się między klatką
-a~brzuchem \cite{konno1967}, więc żebra mogą rozluźnić się, choć płuca pozostają pełne; ta interpretacja
-nie została sprawdzona. Rozmiar błędu zależy od kryterium: w~epizodach wokół głębokich pauz
+a~brzuchem \cite{konno1967}, więc żebra mogą rozluźnić się, choć płuca pozostają pełne. Do tego
+czujniki patrzą na różne miejsca: radar na środek przedniej ściany klatki (przesunięcie wzdłuż wiązki),
+telefon na boczną część dolnych żeber (nachylenie), a~te okolice nie muszą poruszać się tak samo; za
+tym przemawia też wyprzedzanie radaru przez telefon o~\SIrange{0.1}{0.3}{s} i~to, że w~nagraniu
+12-minutowym, przy innym zamocowaniu, ten sam sygnał jednoosiowy utrzymywał ok.~55\% poziomu
+w~pauzach po głębokim wdechu. Obie interpretacje nie zostały sprawdzone; rozstrzyga je nagranie
+z~telefonem kolejno w~kilku miejscach (boczne żebra, obok mostka, brzuch) przy radarze na środku klatki
+albo z~dwoma pasami (klatka i~brzuch). Rozmiar błędu zależy od kryterium: w~epizodach wokół głębokich pauz
 oznaczenia zgadzają się z~plateau radaru w~74\% sekund, a~wszystkich sekund prawdopodobnie błędnych
 jest od 24 (kryterium ostrożne, 5,5\% z~438~s, przedział 18--30) do 32 (7,4\%); w~zwykłym oddechu zgodność
 wynosi 88--99\% przy tolerancji \SI{0.5}{s}. Radar nie jest wzorcem: plateau w~\SIrange{95}{103}{s} nie
@@ -3414,12 +3420,61 @@ niezależny pomiar (pas oddechowy, przepływ powietrza).
     \label{fig:fazy-telefon-orientacja}
 \end{figure}
 
+\paragraph{Sprawdzenie na nagraniach, na których sygnału nie opracowywano.} Ten sam detektor (ustawienia
+telefonu) uruchomiono na sygnale jednoosiowym i~na odległości orientacji w~trzech nagraniach i~porównano
+z~etykietami detektora na radarze, bez marginesów, z~tolerancją granic \SI{0.5}{s}
+(\texttt{tools/score\_orientation\_vs\_radar.py}). Radar nie jest tu wzorcem, ale z~bliska jako jedyny
+pokazuje poziom klatki w~pauzie, więc służy za miarę jednego pytania: czy nowy sygnał naprawia pauzy po
+głębokim wdechu, nie psując zwykłego oddechu. Epizod to pauza radaru dłuższa niż \SI{4}{s} z~\SI{4}{s}
+po obu stronach (wdech przed nią i~wydech po niej). Wyniki są w~tab.~\ref{tab:fazy-orientacja}
+i~na rys.~\ref{fig:fazy-telefon-orientacja-kontrola}. W~nagraniu, na którym sygnału nie opracowywano
+i~w~którym są dwie wyraźne pauzy po głębokim wdechu, zgodność w~epizodach wzrosła z~66 do 78\%, w~zwykłym
+oddechu zmieniła się z~91,6 do 90,2\%; orientacja utrzymała 46 i~50\% zwykłego oddechu (sygnał jednoosiowy
+26 i~8\%) i~spadła do połowy \SIrange{0.9}{1.2}{s} po końcu pauzy radaru, gdy sam radar spadał po
+\SIrange{1.2}{1.5}{s}, a~sygnał jednoosiowy był w~dole już przed końcem pauzy. W~nagraniu z~radarem
+wycelowanym za wysoko jest jedna głęboka pauza (utrzymany poziom 31 do 50\%), a~pozostałe pauzy radaru są
+krótkie (\SIrange{4}{6}{s}) i~nie po głębokim wdechu, więc wynik się nie zmienił (61,6 i~61,2\%).
+Orientacja pokazuje więc koniec pauzy po głębokim wdechu, ale nie cały jej poziom: po szczycie wdechu
+spada do mniej więcej połowy, więc początek pauzy pozostaje niepewny. Trzy nagrania, jedna osoba,
+odniesieniem jest radar; to wskazówka, nie walidacja.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Zgodność etykiet z~telefonu z~etykietami detektora na radarze: sygnał jednoosiowy
+i~odległość orientacji, w~epizodach pauz radaru i~poza nimi (bez marginesów, tolerancja granic \SI{0.5}{s}).
+Nagrania kolejno: \texttt{phase1\_halfside\_02}, \texttt{phase1\_lying\_01}, \texttt{self\_lying\_3min\_01}; gwiazdka: nagranie, na którym sygnał orientacji opracowano.}
+\label{tab:fazy-orientacja}
+\begin{tabular}{lrrrrr}
+\toprule
+Nagranie & Epizody [s] & \multicolumn{2}{c}{W~epizodach [\%]} & \multicolumn{2}{c}{Poza epizodami [\%]} \\
+ & & jedna oś & orientacja & jedna oś & orientacja \\
+\midrule
+półbokiem, radar na klatce & 33 & 66,0 & 78,4 & 91,6 & 90,2 \\
+półbokiem, radar za wysoko & 69 & 61,6 & 61,2 & 91,8 & 91,6 \\
+na plecach, 3 min* & 81 & 79,1 & 86,9 & 92,3 & 93,6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_telefon_orientacja_kontrola.png}
+    \caption[Telefon: orientacja w~nagraniu kontrolnym]{Nagranie, na którym sygnału orientacji nie opracowywano
+    (\texttt{phase1\_halfside\_02}); pauzy (tło) wyznaczył detektor na radarze. Sygnał jednoosiowy (u~góry)
+    opada do poziomu wyjściowego przed końcem obu pauz po głębokim wdechu; orientacja (u~dołu) zostaje na mniej
+    więcej połowie zwykłego oddechu i~spada razem z~wydechem radaru.}
+    \label{fig:fazy-telefon-orientacja-kontrola}
+\end{figure}
+
 \paragraph{Co z tego wynika dla oznaczania.} (1)~Zgodność 87--100\% opisuje powtarzalność oznaczania
 z~jednego czujnika i~nie wolno jej nazywać dokładnością. (2)~Telefon jest wiarygodny dla zwykłych
 oddechów i~dla samego bezruchu. (3)~Bez niezależnego wskaźnika telefon nie wyznacza początku ani końca
 pauzy po głębokim wdechu; przy oznaczaniu z~samego telefonu fragment od skoku większego niż dwukrotna
 mediana poprzednich pięciu oddechów, po którym następuje co najmniej \SI{4}{s} bezruchu, należy maskować
-w~całości (opadanie i~nierozstrzygnięty koniec pauzy), a~nie zgadywać wydech lub wdech. (4)~W~sesjach
+w~całości (opadanie i~nierozstrzygnięty koniec pauzy), a~nie zgadywać wydech lub wdech; odległość
+orientacji (w~narzędziu do oznaczania druga, turkusowa linia) pozwala wskazać koniec takiej pauzy, ale nie
+jej początek. (4)~W~sesjach
 z~silnym radarem początek i~koniec pauzy można poprawić z~plateau radaru, ale taki wynik jest zgodny z~ruchem
 klatki widzianym przez radar, więc ocena radaru na nim nie jest niezależna. (5)~Wiarygodność odniesienia
 sprawdzi nagranie z~pasem oddechowym lub przepływem powietrza, z~pauzami obu rodzajów i~z~przerwanymi

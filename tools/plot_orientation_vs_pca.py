@@ -32,12 +32,14 @@ from scipy.signal import find_peaks
 
 from respi_net.chest_signal import a121_chest_signal
 from respi_net.phone_annotation import oriented_phone
-from respi_net.phone_orientation import breath_troughs, gravity_tilt, orientation_distance
+from respi_net.breath_phases import HOLD, merge_holds
+from respi_net.phase_baseline import detect_phases
+from respi_net.phone_orientation import breath_troughs, run_orientation_distance
 
 SESSIONS = ROOT / "data" / "raw" / "nn" / "a121_iphone"
 RUN = "run_01_nn_self_3min"
 GRID_HZ = 20.0
-# Episodes read off the radar plateau: (hold start, hold end = start of the radar's exhale, end of that exhale).
+# Episodes read off the radar plateau by eye (other sessions: holds of the radar detector, see radar_holds): (hold start, hold end = start of the radar's exhale, end of that exhale).
 EPISODES = {
     "self_lying_3min_01": [(49.65, 57.95, 60.05), (81.2, 93.4, None), (95.0, 103.3, 105.55), (110.3, 124.7, None)],
 }
@@ -50,13 +52,19 @@ def load(session: str):
     origin = float(cues["start_wall_ms"].iloc[0])
     radar_signal = a121_chest_signal(f"{prefix}_a121.csv", origin_ms=origin)
     radar = np.interp(grid, radar_signal.time_s, radar_signal.chest)
-    df = pd.read_csv(f"{prefix}_iphone.csv")
-    t = (df["Time_ms"].to_numpy(float) - origin) / 1000.0
-    order = np.argsort(t, kind="stable")
-    fs = 1.0 / float(np.median(np.diff(t[order])))
-    tilt100 = gravity_tilt(df[["ax", "ay", "az"]].to_numpy(float)[order], fs)
-    tilt = np.column_stack([np.interp(grid, t[order], tilt100[:, k]) for k in range(2)])
-    return grid, trace, radar, tilt
+    return grid, trace, radar, run_orientation_distance(prefix, grid, trace)
+
+
+def radar_holds(grid: np.ndarray, radar: np.ndarray, start: float, end: float) -> list[tuple[float, float, None]]:
+    """Holds of at least 4 s found by the deterministic detector on the radar: the episodes of a recording without hand-read ones."""
+
+    labels = merge_holds(detect_phases(radar, GRID_HZ))
+    edges = np.flatnonzero(np.diff(labels)) + 1
+    found = []
+    for lo, hi in zip(np.r_[0, edges], np.r_[edges, len(labels)]):
+        if labels[lo] == HOLD and grid[lo] >= start and grid[hi - 1] <= end and (hi - lo) / GRID_HZ >= 4.0:
+            found.append((float(grid[lo]), float(grid[hi - 1]), None))
+    return found
 
 
 def normalise(x: np.ndarray, lo: float, hi: float) -> np.ndarray:
@@ -87,10 +95,8 @@ def main() -> int:
     parser.add_argument("--start", type=float, default=40.0)
     parser.add_argument("--end", type=float, default=130.0)
     args = parser.parse_args()
-    grid, trace, radar, tilt = load(args.session)
-    troughs = breath_troughs(trace, GRID_HZ)
-    distance = orientation_distance(tilt, troughs, GRID_HZ)
-    episodes = EPISODES.get(args.session, [])
+    grid, trace, radar, distance = load(args.session)
+    episodes = EPISODES.get(args.session) or radar_holds(grid, radar, args.start, args.end)
     window = (grid >= args.start) & (grid <= args.end)
     r_lo, r_hi = np.percentile(radar[window], [1, 99])
     fig = plt.figure(figsize=(13, 9.4), constrained_layout=True)

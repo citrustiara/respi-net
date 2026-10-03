@@ -14,6 +14,11 @@ Inhale and exhale boundaries snap to the nearest turning point of the trace (a t
 0.8 s) and the pointer shows where the mark will land (a vertical line, a circle on the trace): what you see is what is saved, the raw
 click time is kept in the ``clicked_start_s`` column.  Holds and noise are placed exactly where you click.  ``--no-snap`` turns this off.
 
+A second, thinner teal line (on by default, ``--no-orientation`` hides it) is the phone's orientation distance from its rest
+position (:mod:`respi_net.phone_orientation`, scaled to the main trace).  The main trace falls back to its baseline soon after a deep
+inhale even when the breath is held; the teal line stays up through such a hold and falls with the real exhale, so use it for
+the start and end of holds after a deep inhale.
+
 A hold is a stillness of at least 4 s (natural rests between breaths last 1-3 s and belong to the breath).  The first click is the
 start of the first segment.  Use the toolbar to zoom; clicks do not count while a toolbar tool is active.
 
@@ -126,7 +131,22 @@ class AnnotationSession:
         return f"Następny odcinek: {NAMES_PL[self.next_class()]}   (e wydech, i wdech, h pauza, n szum, . koniec, Cmd/Ctrl+Z lub Backspace cofnij, prawy klik usuwa znacznik, s zapisz)"
 
 
-def draw(ax, grid: np.ndarray, trace: np.ndarray, session: AnnotationSession, xlim: tuple[float, float] | None = None) -> None:
+def scaled_to(signal: np.ndarray, trace: np.ndarray) -> np.ndarray:
+    """``signal`` rescaled to the 1-99 percentile range of ``trace``, to draw both on one axis."""
+
+    s_lo, s_hi = np.percentile(signal, [1, 99])
+    t_lo, t_hi = np.percentile(trace, [1, 99])
+    return t_lo + (signal - s_lo) / (s_hi - s_lo + 1e-12) * (t_hi - t_lo)
+
+
+def draw(
+    ax,
+    grid: np.ndarray,
+    trace: np.ndarray,
+    session: AnnotationSession,
+    xlim: tuple[float, float] | None = None,
+    orientation: np.ndarray | None = None,
+) -> None:
     ax.clear()
     left, right = xlim if xlim is not None else (session.window_start_s, session.window_end_s)
     inside = (grid >= min(left, session.window_start_s)) & (grid <= max(right, session.window_end_s))
@@ -134,6 +154,8 @@ def draw(ax, grid: np.ndarray, trace: np.ndarray, session: AnnotationSession, xl
         ax.axvspan(segment.start_s, segment.end_s, color=CLASS_COLOURS[segment.label], alpha=0.3, lw=0)
     for time_s, _ in session.marks:
         ax.axvline(time_s, color="#374151", lw=0.8, ls=(0, (3, 3)))
+    if orientation is not None:
+        ax.plot(grid[inside], orientation[inside], color="#0891b2", lw=0.9, alpha=0.85)
     ax.plot(grid[inside], trace[inside], color="#ea580c", lw=1.3)
     ax.set_xlim(left, right)
     ax.set_xlabel("czas od startu nagrania [s]")
@@ -155,6 +177,7 @@ def make_snapper(grid: np.ndarray, trace: np.ndarray):
 
 def run_viewer(args: argparse.Namespace) -> int:
     from respi_net.phone_annotation import oriented_phone
+    from respi_net.phone_orientation import run_orientation_distance
 
     plt = __import__("matplotlib.pyplot", fromlist=["pyplot"])
     for name in list(plt.rcParams):
@@ -162,6 +185,7 @@ def run_viewer(args: argparse.Namespace) -> int:
             plt.rcParams[name] = []
     prefix = SESSIONS / args.session / args.run
     grid, trace, sign = oriented_phone(prefix)
+    orientation = None if args.no_orientation else scaled_to(run_orientation_distance(prefix, grid, trace), trace)
     start, end = float(args.start), min(float(args.start) + float(args.length), float(grid[-1]))
     session = AnnotationSession(start, end, None if args.no_snap else make_snapper(grid, trace))
     path = output_path(args.session, args.run, args.annotator, start, end, args.pass_number)
@@ -176,7 +200,7 @@ def run_viewer(args: argparse.Namespace) -> int:
 
     def redraw() -> None:
         hover.clear()
-        draw(ax, grid, trace, session, (view[0], view[1]))
+        draw(ax, grid, trace, session, (view[0], view[1]), orientation)
         fig.canvas.draw_idle()
 
     def zoom(factor: float, centre: float | None) -> None:
@@ -267,6 +291,7 @@ def main() -> int:
     parser.add_argument("--annotator", default="maciek")
     parser.add_argument("--pass", dest="pass_number", type=int, default=1, help="1 for the first labelling, 2 for the repeat")
     parser.add_argument("--no-snap", action="store_true", help="place every mark exactly where you click (no pull to the turning point)")
+    parser.add_argument("--no-orientation", action="store_true", help="hide the orientation line (teal)")
     parser.add_argument("--demo", type=Path, default=None, help="draw a scripted example to this png and exit")
     args = parser.parse_args()
     if args.demo is not None:
