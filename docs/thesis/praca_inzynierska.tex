@@ -3387,7 +3387,7 @@ częściowo w~przetwarzaniu, a~częściowo fizyczna. Rzut jednoosiowy odrzuca dr
 w~którym przesunięcie utrzymuje się przez pauzę po wdechu (w~wstępnej analizie we wszystkich 7 pauzach
 po wdechu i~z~powrotem w~chwili wydechu według radaru; odległość pełnej orientacji od położenia
 spoczynkowego rozdziela pauzy po wdechu i~po wydechu z~AUC 0,94 przy 7 i~5 pauzach u~jednej osoby,
-bez potwierdzenia). Całkowanie żyroskopu odtwarza ten sam kąt co akcelerometr ($R^2$ 0,98--0,999)
+bez potwierdzenia; rys.~\ref{fig:fazy-telefon-orientacja}). Całkowanie żyroskopu odtwarza ten sam kąt co akcelerometr ($R^2$ 0,98--0,999)
 i~nie dodaje informacji o~poziomie, a~filtr komplementarny nie poprawia wyniku. Fizycznie dolne boczne
 żebra leżą nad brzuchem, a~przy zamkniętej głośni objętość przemieszcza się między klatką
 a~brzuchem \cite{konno1967}, więc żebra mogą rozluźnić się, choć płuca pozostają pełne; ta interpretacja
@@ -3398,6 +3398,21 @@ wynosi 88--99\% przy tolerancji \SI{0.5}{s}. Radar nie jest wzorcem: plateau w~\
 jest nieruchome (nachylenia $-0{,}27$, $-0{,}29$ i~$+0{,}16$~mm/s w~trzech komórkach zakresu), a~wysokość
 względem globalnego zakresu oddechu przy dryfie nie dowodzi ,,pełnych płuc''. Rozstrzygnąć może tylko
 niezależny pomiar (pas oddechowy, przepływ powietrza).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_telefon_orientacja.png}
+    \caption[Telefon: jedna oś i pełna orientacja]{Te same pauzy w~nagraniu 3-minutowym: u~góry
+    dotychczasowy sygnał z~telefonu (rzut przyspieszenia na jedną oś), u~dołu odległość pełnej orientacji
+    telefonu (nachylenia w~dwóch kierunkach) od położenia spoczynkowego, które wyznaczają dna
+    poprzednich oddechów. Czarna linia to radar, zielone tło to wydech radaru po pauzie. W~pauzach po
+    głębokim wdechu (\SIrange{50}{58}{s}, \SIrange{95}{103}{s}) orientacja utrzymuje poziom i~spada razem z~wydechem
+    radaru (po $+0{,}7$ i~$+0{,}5$~s), a~sygnał jednoosiowy wraca do poziomu wyjściowego jeszcze przed
+    końcem pauzy (ujemny czas w~tabeli); w~pauzie po wydechu (\SIrange{110}{125}{s}) obie wielkości
+    zostają przy dole. Wynik wstępny: jedno nagranie, to samo, na którym efekt zauważono, bez niezależnej
+    weryfikacji.}
+    \label{fig:fazy-telefon-orientacja}
+\end{figure}
 
 \paragraph{Co z tego wynika dla oznaczania.} (1)~Zgodność 87--100\% opisuje powtarzalność oznaczania
 z~jednego czujnika i~nie wolno jej nazywać dokładnością. (2)~Telefon jest wiarygodny dla zwykłych
