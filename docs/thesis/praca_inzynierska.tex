@@ -3480,7 +3480,13 @@ nagrania nie nadają się do uczenia sieci, która ma działać bez telefonu; te
 wiązką (w~bok, ekranem nie do radaru). (2)~Telefon na mostku jest słabszym czujnikiem: mostek przy
 siedzeniu przesuwa się do przodu, a~mało się przechyla, więc przebieg nachylenia jest zaszumiony
 (korelacja prędkości z~radarem $-0{,}13$, zgodność detektora z~komendami 78,6\% przy jednej osi i~71,4\%
-przy orientacji) i~w~pauzach dryfuje. Przyłożenie telefonu na środku nie usuwa więc problemu pauz,
+przy orientacji) i~w~pauzach dryfuje. Sam ruch mostka do przodu daje przyspieszenie około \SI{0.5}{mg} (z~drugiej pochodnej
+przebiegu radaru), czyli kilkanaście razy mniej niż zmiany składowej grawitacji przy ułamku stopnia
+przechyłu; po odjęciu grawitacji śledzonej żyroskopem przyspieszenie liniowe ma właściwą wielkość
+(\SIrange{0.5}{0.6}{mg}), ale zgadza się z~przyspieszeniem z~radaru tylko częściowo (korelacja
+$|r| = 0{,}43$--$0{,}54$). Przyspieszenie z~zasady nie pokazuje poziomu w~pauzie (stałe położenie to
+zerowe przyspieszenie na dowolnej wysokości), a~podwójne całkowanie dryfuje, więc ta oś mogłaby
+co najwyżej wskazać chwile ruchu. Przyłożenie telefonu na środku nie usuwa więc problemu pauz,
 a~pogarsza zarówno radar (jako dane do uczenia), jak i~sam telefon. Jedna para prób, jedna osoba,
 pozycja siedząca.
 
