@@ -1,0 +1,51 @@
+{
+  "name": "Telefon w wiązce radaru — 1 min z pauzami",
+  "description": "Około 70 s do porównania nagrania z telefonem na środku klatki i bez telefonu, w tej samej pozycji: rytmiczny oddech, pauza po głębokim wdechu i pauza po wydechu. Przy dyskomforcie przerwij próbę klawiszem Esc.",
+  "blocks": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Ustabilizuj pozycję i oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 3,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3
+    },
+    {
+      "kind": "inhale",
+      "duration_seconds": 3,
+      "detail": "Głęboki wdech i zatrzymaj powietrze w płucach."
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 8,
+      "label": "Pauza po głębokim wdechu 8 s",
+      "detail": "Pełne płuca — nie wypuszczaj powietrza."
+    },
+    {
+      "kind": "exhale",
+      "duration_seconds": 4,
+      "detail": "Spokojny wydech."
+    },
+    {
+      "kind": "paced",
+      "cycles": 3,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3
+    },
+    {
+      "kind": "hold",
+      "duration_seconds": 8,
+      "label": "Pauza po wydechu 8 s",
+      "detail": "Po wydechu: puste płuca — nie nabieraj powietrza."
+    },
+    {
+      "kind": "paced",
+      "cycles": 2,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3
+    }
+  ]
+}

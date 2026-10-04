@@ -3467,6 +3467,33 @@ na plecach, 3 min* & 81 & 79,1 & 86,9 & 92,3 & 93,6 \\
     \label{fig:fazy-telefon-orientacja-kontrola}
 \end{figure}
 
+\paragraph{Telefon na środku klatki.} Sprawdzono, czy problem pauz zniknie, gdy telefon i~radar patrzą na to
+samo miejsce. Nagrano dwie próby po \SI{73}{s} z~komendami (wzorzec \texttt{phone\_site\_1m}: oddech
+12/min, pauza \SI{8}{s} po głębokim wdechu i~pauza \SI{8}{s} po wydechu), siedząc, radar około
+\SI{0.6}{m} od klatki, jedna po drugiej bez zmiany pozycji: z~telefonem przypiętym na środku klatki,
+ekranem do radaru, i~z~telefonem odłożonym poza pole widzenia radaru (rys.~\ref{fig:fazy-telefon-srodek},
+\texttt{tools/plot\_phone\_site.py}). Wyniki są dwa. (1)~Telefon w~wiązce przejmuje echo: maksimum echa
+wzrosło z~60 do \SI{71}{dB} w~tej samej odległości, przebieg radaru stał się gładszy, pauzy płaskie
+(poziom w~pauzie po wdechu 99\% zamiast 85\% z~opadaniem), a~zgodność detektora z~komendami wzrosła
+z~88,8 do 91,8\%. Radar mierzy wtedy jednak sztywną płytkę na mostku, a~nie skórę i~ubranie, więc takie
+nagrania nie nadają się do uczenia sieci, która ma działać bez telefonu; telefon musi zostać poza
+wiązką (w~bok, ekranem nie do radaru). (2)~Telefon na mostku jest słabszym czujnikiem: mostek przy
+siedzeniu przesuwa się do przodu, a~mało się przechyla, więc przebieg nachylenia jest zaszumiony
+(korelacja prędkości z~radarem $-0{,}13$, zgodność detektora z~komendami 78,6\% przy jednej osi i~71,4\%
+przy orientacji) i~w~pauzach dryfuje. Przyłożenie telefonu na środku nie usuwa więc problemu pauz,
+a~pogarsza zarówno radar (jako dane do uczenia), jak i~sam telefon. Jedna para prób, jedna osoba,
+pozycja siedząca.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{fazy_telefon_srodek.png}
+    \caption[Telefon na środku klatki a radar]{Ta sama pozycja, dwie kolejne próby z~komendami (tło). U~góry
+    radar bez telefonu na klatce, w~środku radar z~telefonem na środku klatki ekranem do radaru (echo
+    o~\SI{10}{dB} silniejsze, przebieg gładszy, bo radar widzi głównie telefon), u~dołu przebieg samego
+    telefonu na mostku: zaszumiony i~dryfujący w~pauzach.}
+    \label{fig:fazy-telefon-srodek}
+\end{figure}
+
 \paragraph{Co z tego wynika dla oznaczania.} (1)~Zgodność 87--100\% opisuje powtarzalność oznaczania
 z~jednego czujnika i~nie wolno jej nazywać dokładnością. (2)~Telefon jest wiarygodny dla zwykłych
 oddechów i~dla samego bezruchu. (3)~Bez niezależnego wskaźnika telefon nie wyznacza początku ani końca
