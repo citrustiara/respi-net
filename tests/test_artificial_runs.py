@@ -80,3 +80,36 @@ def test_the_noise_bank_comes_from_training_runs_only() -> None:
     object.__setattr__(other, "run_id", "run1")  # the same hold noise, but from a held-out run
     bank = training_noise_bank([train, other], {"run0": "train", "run1": "test"})
     assert len(bank.segments) == len(noise_bank_from_holds([train]).segments) > 0
+
+
+def test_enhanced_copies_inherit_labels_instead_of_detecting_corrupted_signal() -> None:
+    from respi_net.artificial_runs import enhanced_augment_run, reduced_power_run
+    from respi_net.breath_synth import time_warp
+
+    run = _run()
+    before_x, before_y = run.features.copy(), run.labels.copy()
+    bank = noise_bank_from_holds([run])
+    for stretch in (.7, 1.4):
+        copy = enhanced_augment_run(run, stretch, .3, bank, np.random.default_rng(8), drift_per_min=.6)
+        _, expected = time_warp(run.features[0], run.labels, stretch)
+        np.testing.assert_array_equal(copy.labels, expected)
+        assert copy.group == run.group
+        np.testing.assert_allclose(copy.features[1], np.gradient(copy.features[0]) * copy.fs, rtol=.001, atol=.001)
+    for drop in (0, 6, 12):
+        copy = reduced_power_run(run, drop, np.random.default_rng(8))
+        np.testing.assert_array_equal(copy.labels, run.labels)
+        np.testing.assert_array_equal(copy.time_s, run.time_s)
+        assert copy.group == run.group and copy.meta["snr_db"] == 35 - drop
+    np.testing.assert_array_equal(run.features, before_x)
+    np.testing.assert_array_equal(run.labels, before_y)
+
+
+def test_reduced_power_model_rejects_nonphysical_belt_units() -> None:
+    import pytest
+    from dataclasses import replace
+    from respi_net.artificial_runs import reduced_power_run
+
+    run = _run()
+    belt = replace(run, meta={**run.meta, "units": "spread"})
+    with pytest.raises(ValueError, match="mm displacement"):
+        reduced_power_run(belt, 12, np.random.default_rng(0))

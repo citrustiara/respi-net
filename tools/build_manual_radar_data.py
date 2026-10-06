@@ -21,12 +21,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.ndimage import gaussian_filter1d
 
-from respi_net.artificial_runs import augment_run, breath_size, noise_bank_from_holds
+from respi_net.artificial_runs import enhanced_augment_run, noise_bank_from_holds, reduced_power_run
 from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES, IGNORE, label_runs
-from respi_net.breath_synth import a121_forward, displacement_from_iq
-from respi_net.chest_signal import ChestSignal, a121_chest_signal, light_filter
+from respi_net.chest_signal import ChestSignal, a121_chest_signal
 from respi_net.nn_dataset import LabelledRun, export_dataset, labelled_run, save_run
 
 BASE = ROOT / "annotations" / "radar_close_v1"
@@ -82,28 +80,11 @@ def artificial_copies(real: list[LabelledRun], splits: dict[str, str]) -> list[L
         for index, stretch in enumerate(STRETCH):
             ratio = float(np.exp(rng.uniform(np.log(.03), np.log(.3))))
             drift = (0.05, 0.1, 0.2, 0.3, 0.45, 0.6)[index]
-            copy = augment_run(run, stretch, ratio, bank, rng, drift_per_min=drift)
-            # A second, independent hold-noise component changes strength
-            # within the recording, rather than only between copies.
-            noise = bank.sample(len(copy.labels), rng)
-            envelope = gaussian_filter1d(rng.standard_normal(len(noise)), 3 * run.fs)
-            envelope = .5 + (envelope - envelope.min()) / (np.ptp(envelope) + 1e-12)
-            chest = copy.features[0] + noise * envelope * (.5 * ratio * breath_size(copy.features[0]) / (np.std(noise) + 1e-12))
-            signal = ChestSignal("a121+augmented", copy.time_s, copy.fs, chest, "mm", chest, copy.features[2])
-            meta = {**copy.meta, "drift_per_min": drift, "extra_noise_envelope": "0.5–1.5, smoothed over 3 s", "seed": SEED, "label_origin": "reviewed radar; inherited uncertainty"}
-            copies.append(labelled_run(copy.run_id, signal, copy.labels, group=run.group, subject=run.subject, meta=meta))
-        # Reduced reflected power at a fixed receiver noise floor. This is a
-        # simplified forward model, not a measured distance or an echo offset.
+            copy = enhanced_augment_run(run, stretch, ratio, bank, rng, drift_per_min=drift)
+            copies.append(copy)
         for drop in (0, 6, 12):
             iq_rng = np.random.default_rng(SEED + 100 + len(copies) // 9)
-            snr = 35.0 - drop
-            iq = a121_forward(run.features[0], run.fs, iq_rng, snr_db=snr, static_clutter=.08, fading=.15)
-            iq *= 10 ** (-drop / 20)  # restores the same absolute receiver noise floor
-            chest = light_filter(displacement_from_iq(iq), run.fs, 2.0)
-            echo = 20 * np.log10(np.maximum(np.abs(iq).max(axis=1), 1e-9))
-            signal = ChestSignal("empirical_trace+simulated_a121", run.time_s, run.fs, chest, "mm", chest, echo)
-            meta = {"augmented_from": run.run_id, "power_drop_db": drop, "snr_db": snr, "static_clutter": .08, "fading": .15, "seed": SEED, "label_origin": "reviewed radar; inherited uncertainty", "echo_units": "relative model dB, not calibrated measured echo"}
-            copies.append(labelled_run(f'{run.run_id}__iq_drop{drop}', signal, run.labels.copy(), group=run.group, subject=run.subject, meta=meta))
+            copies.append(reduced_power_run(run, drop, iq_rng))
     return copies
 
 

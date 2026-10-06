@@ -48,7 +48,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from respi_net.artificial_runs import augment_run, noise_bank_from_holds, synthetic_run
+from respi_net.artificial_runs import augment_run, enhanced_augment_run, noise_bank_from_holds, reduced_power_run, synthetic_run
 from respi_net.breath_phases import (
     CLASS_COLOURS,
     CLASS_NAMES,
@@ -62,7 +62,7 @@ from respi_net.breath_phases import (
     NUM_CLASSES,
     label_runs,
 )
-from respi_net.nn_dataset import LabelledRun, assign_splits, export_dataset, load_dataset, runs_in
+from respi_net.nn_dataset import LabelledRun, assign_splits, export_dataset, load_dataset, runs_in, save_run
 from respi_net.szymanski_dataset import recordings, to_labelled_run
 
 OUT = ROOT / "data" / "processed" / "breath_phases"
@@ -125,6 +125,22 @@ def augment(runs: list[LabelledRun], splits: dict[str, str], bank, rng: np.rando
     ]
 
 
+def enhanced_copies(runs: list[LabelledRun], splits: dict[str, str], bank, seed: int) -> list[LabelledRun]:
+    """Source labels survive corruption; only time stretching changes their grid."""
+    rng = np.random.default_rng(seed)
+    copies = []
+    for index, run in enumerate(runs):
+        if splits[run.run_id] != "train":
+            continue
+        for stretch, drift in zip(STRETCH, (.05, .1, .2, .3, .45, .6)):
+            ratio = float(np.exp(rng.uniform(*np.log(NOISE_RATIO))))
+            copies.append(enhanced_augment_run(run, stretch, ratio, bank, rng, drift_per_min=drift))
+        if run.meta.get("units") == "mm":
+            for drop in (0, 6, 12):
+                copies.append(reduced_power_run(run, drop, np.random.default_rng(seed + 100 + index)))
+    return copies
+
+
 def _shade(ax: plt.Axes, time_s: np.ndarray, chest: np.ndarray, labels: np.ndarray, title: str, ylabel: str) -> None:
     for start, stop, label in label_runs(labels):
         if label != IGNORE:
@@ -176,6 +192,10 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--thesis-figure", action="store_true")
     parser.add_argument("--notes-figure", type=Path, default=None, metavar="PNG", help="the same examples in English")
+    parser.add_argument("--enhanced", action="store_true", help="v2: time-varying noise, wider drift and reduced-power A121 replays")
+    parser.add_argument("--output-dir", type=Path, default=None, help="defaults to a separate enhanced_v2 directory with --enhanced")
+    parser.add_argument("--summary-path", type=Path, default=None, help="also save the aggregate summary at this path")
+    parser.add_argument("--own-examples-dir", type=Path, default=None, help="save small own-radar examples (never belt files)")
     args = parser.parse_args()
     rng = np.random.default_rng(args.seed)
 
@@ -192,31 +212,57 @@ def main() -> int:
     count = int(round(args.synthetic_minutes / args.synthetic_run_minutes))
     synthetic = [synthetic_run(index, args.synthetic_run_minutes * 60.0, FS, rng) for index in range(count)]
 
+    # Consume the legacy RNG draws above even in v2: purely synthetic runs
+    # remain the same as v1 for the same settings. Real copies use a new stream.
+    if args.enhanced:
+        coach_aug = enhanced_copies(coach, coach_splits, bank, args.seed + 20261006)
+        belt_aug = enhanced_copies(belt, belt_splits, bank, args.seed + 20261007)
+    destination = args.output_dir or (OUT / "enhanced_v2" if args.enhanced else OUT)
+    version = "v2" if args.enhanced else "v1"
+
     train_only = {run.run_id: "train" for run in [*coach_aug, *belt_aug, *synthetic]}
     sets = {
-        "dataset_pretrain_v1.npz": ([*belt, *belt_aug, *synthetic], {**belt_splits, **train_only},
+        f"dataset_pretrain_{version}.npz": ([*belt, *belt_aug, *synthetic], {**belt_splits, **train_only},
                                     "Belt (Szymanski et al., corrected labels) + augmented copies + synthetic A121; local use only"),
-        "dataset_finetune_v1.npz": ([*coach, *coach_aug], {**coach_splits, **train_only},
+        f"dataset_finetune_{version}.npz": ([*coach, *coach_aug], {**coach_splits, **train_only},
                                     "Own A121 coach runs + augmented copies of the training runs"),
     }
     summary: dict[str, object] = {
+        "version": version,
+        "seed": args.seed,
+        "split_status": "PROVISIONAL: inherited technical grouping; finalize from the complete acquisition plan before model selection or evaluation",
+        "label_transfer": "Existing source labels and IGNORE masks are inherited; nearest-neighbour time warp only; no detector or re-annotation on artificial signals",
+        "enhancements": {"time_varying_extra_noise": bool(args.enhanced), "drift_per_min": [.05, .1, .2, .3, .45, .6] if args.enhanced else [.3], "radar_power_drop_db": [0, 6, 12] if args.enhanced else [], "reduced_power_belt": False},
         "noise_bank_minutes": round(sum(segment.shape[-1] for segment in bank.segments) / FS / 60.0, 1),
         "stretch_factors": list(STRETCH),
         "noise_ratio": list(NOISE_RATIO),
         "sources": {
             "own_a121_coach": {"people": 1, **minutes(coach), "train": minutes([r for r in coach if coach_splits[r.run_id] == "train"])["labelled"]},
             "szymanski_belt": {"people": 3, **minutes(belt), "train": minutes([r for r in belt if belt_splits[r.run_id] == "train"])["labelled"]},
-            "augmented_own_a121": {"copies_per_run": len(STRETCH), **minutes(coach_aug)},
-            "augmented_belt": {"copies_per_run": len(STRETCH), **minutes(belt_aug)},
+            "augmented_own_a121": {"copies_per_run": 9 if args.enhanced else len(STRETCH), "runs": len(coach_aug), **minutes(coach_aug)},
+            "augmented_belt": {"copies_per_run": len(STRETCH), "runs": len(belt_aug), **minutes(belt_aug)},
             "synthetic_a121": {"runs": count, **minutes(synthetic)},
         },
         "datasets": {},
     }
     for name, (runs, splits, description) in sets.items():
-        meta = export_dataset(runs, OUT / name, window_s=60.0, stride_s=args.stride_s, warmup_s=20.0, splits=splits, description=description)
+        meta = export_dataset(runs, destination / name, window_s=60.0, stride_s=args.stride_s, warmup_s=20.0, splits=splits, description=description + "; splits provisional; source labels inherited")
         summary["datasets"][name] = {part: meta["splits"][part]["windows"] for part in ("train", "val", "test")}
         print(f"{name}: " + ", ".join(f"{part} {windows} windows" for part, windows in summary["datasets"][name].items()))
-    (OUT / "artificial_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (destination / "artificial_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    if args.summary_path:
+        args.summary_path.parent.mkdir(parents=True, exist_ok=True)
+        args.summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    if args.enhanced:
+        for run in [*coach_aug, *belt_aug]:
+            save_run(run, destination / "copies" / f"{run.run_id}.npz")
+    if args.own_examples_dir:
+        real = next(run for run in coach if coach_splits[run.run_id] == "train")
+        save_run(real, args.own_examples_dir / "source.npz")
+        for suffix in ("__x0.7", "__x1.4", "__iq_drop12"):
+            copy = next((run for run in coach_aug if run.run_id == real.run_id + suffix), None)
+            if copy is not None:
+                save_run(copy, args.own_examples_dir / f"example{suffix}.npz")
 
     print(f"\nLabelled minutes (noise bank: {summary['noise_bank_minutes']} min of real A121 holds)")
     header = f"{'source':22} {'labelled':>9} " + " ".join(f"{name[:12]:>12}" for name in CLASS_NAMES)

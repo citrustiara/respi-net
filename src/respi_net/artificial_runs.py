@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Iterable
 
 import numpy as np
+from scipy.ndimage import gaussian_filter1d
 from scipy.signal import detrend
 
 from .breath_phases import HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, label_runs
@@ -31,7 +32,7 @@ from .breath_synth import (
     simulate_breathing,
     time_warp,
 )
-from .chest_signal import ChestSignal
+from .chest_signal import ChestSignal, light_filter
 from .nn_dataset import LabelledRun, labelled_run
 
 # White noise comes from the A121 model instead, which adds its own per frame.
@@ -130,3 +131,53 @@ def synthetic_run(
     signal = ChestSignal("synthetic_a121", simulated.time_s, fs, chest, "mm", chest, echo_db, {"snr_db": snr})
     run_id = f"synthetic_{index:04d}"
     return labelled_run(run_id, signal, simulated.labels, group=run_id, subject="synthetic", meta={"dataset": "synthetic"})
+
+
+def enhanced_augment_run(
+    run: LabelledRun,
+    stretch: float,
+    noise_ratio: float,
+    bank: NoiseBank,
+    rng: np.random.Generator,
+    *,
+    drift_per_min: float,
+) -> LabelledRun:
+    """Existing augmentation plus a time-varying extra hold-noise component.
+
+    Labels are only time-warped, never re-detected from the corrupted signal.
+    Their IGNORE regions and source uncertainty are inherited unchanged.
+    """
+    copy = augment_run(run, stretch, noise_ratio, bank, rng, drift_per_min=drift_per_min)
+    noise = bank.sample(len(copy.labels), rng)
+    envelope = gaussian_filter1d(rng.standard_normal(len(noise)), 3 * run.fs)
+    envelope = .5 + (envelope - envelope.min()) / (np.ptp(envelope) + 1e-12)
+    chest = copy.features[0] + noise * envelope * (.5 * noise_ratio * breath_size(copy.features[0]) / (np.std(noise) + 1e-12))
+    signal = ChestSignal(f"{run.meta.get('source', 'real')}+augmented", copy.time_s, copy.fs, chest,
+                         str(run.meta.get("units", "")), chest, copy.features[2])
+    meta = {**copy.meta, "drift_per_min": drift_per_min,
+            "extra_noise_envelope": "0.5–1.5, smoothed over 3 s",
+            "label_origin": "source labels; inherited uncertainty; no re-labelling"}
+    return labelled_run(copy.run_id, signal, copy.labels, group=run.group, subject=run.subject, meta=meta)
+
+
+def reduced_power_run(run: LabelledRun, drop_db: float, rng: np.random.Generator) -> LabelledRun:
+    """Replay a measured mm displacement through A121 with weaker reflected power.
+
+    Receiver noise stays fixed; SNR is 35 minus drop_db. Arbitrary belt counts
+    are not physical millimetres, so this method is restricted to mm signals.
+    Labels, times, masks and group come from the original, not the IQ output.
+    """
+    if run.meta.get("units") != "mm" or not 0 <= drop_db <= 35:
+        raise ValueError("Reduced-power replay requires mm displacement and 0–35 dB drop")
+    snr = 35.0 - drop_db
+    iq = a121_forward(run.features[0], run.fs, rng, snr_db=snr, static_clutter=.08, fading=.15)
+    iq *= 10 ** (-drop_db / 20)
+    chest = light_filter(displacement_from_iq(iq), run.fs, 2.0)
+    echo = 20 * np.log10(np.maximum(np.abs(iq).max(axis=1), 1e-9))
+    signal = ChestSignal("empirical_trace+simulated_a121", run.time_s, run.fs, chest, "mm", chest, echo)
+    meta = {"augmented_from": run.run_id, "power_drop_db": drop_db, "snr_db": snr,
+            "static_clutter": .08, "fading": .15,
+            "label_origin": "source labels; inherited uncertainty; no re-labelling",
+            "echo_available": True, "echo_units": "relative model dB, not calibrated measured echo"}
+    return labelled_run(f"{run.run_id}__iq_drop{drop_db:g}", signal, run.labels.copy(),
+                        group=run.group, subject=run.subject, meta=meta)

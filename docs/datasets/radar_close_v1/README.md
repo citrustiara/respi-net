@@ -42,7 +42,7 @@ wyłącznie z treningu. Osobno generuje od zera oddechy, pauzy, westchnienia,
 tętno i ruch, a następnie modeluje A121: fazę IQ, clutter, fading i szum.
 
 Nowa paczka wykorzystuje istniejące `augment_run`, `noise_bank_from_holds`,
-`a121_forward` i `displacement_from_iq`; wspólne funkcje nie zostały zmienione.
+`a121_forward` i `displacement_from_iq`; nowe rozszerzenia są współdzielone przez oba buildery.
 Z dwóch nagrań treningowych powstało **18 kopii**, z 25,59 min odziedziczonych
 etykiet po maskowaniu (to nie jest 25,59 min nowych pomiarów):
 
@@ -66,6 +66,20 @@ kopii; augmentacja nie potwierdza poprawności oznaczeń.
 ![Przykłady augmentacji](artificial_examples.png)
 
 ## Zapis, odtwarzanie i wykorzystanie
+
+### Status podziału: roboczy, do ustalenia po zebraniu danych
+
+Obecne nazwy train/val/test są wyłącznie technicznym przydziałem potrzebnym
+do eksportu i kontroli pochodzenia kopii. Większość planowanych danych jeszcze
+nie istnieje. Nie traktujemy więc obecnych nagrań val/test jako zamrożonego
+zbioru do wyboru modelu, strojenia ani raportowania końcowych wyników.
+Po zakończeniu zbierania trzeba zaplanować podział po niezależnych sesjach
+(w razie potrzeby po osobach), ustalić bank szumu z nowego treningu i ponownie
+wygenerować kopie oraz okna. Przeniesienie tylko oryginału do testu przy
+pozostawieniu jego kopii lub szumu w treningu powodowałoby przeciek.
+
+W bieżącej wersji zachowujemy przydziały, żeby paczka pozostawała odtwarzalna;
+nie jest to twierdzenie, że obecny podział ma wartość końcowej walidacji.
 
 `annotations/radar_close_v1/sources/` zawiera niewielkie NPZ z czasem,
 przesunięciem przed/po filtrze i echem oraz SHA256 źródłowego CSV. Dzięki temu
@@ -93,6 +107,6 @@ uv run --offline python tools/build_manual_radar_data.py
 uv run --offline pytest -q tests/test_manual_radar_data.py tests/test_artificial_runs.py tests/test_breath_synth.py tests/test_breath_phase_dataset.py
 ```
 
-Seed: 20261006. Nie wykonano treningu sieci. Nowe warianty można później
-zastosować do wcześniejszych danych przez wspólny builder; ta paczka nie
-zmienia wcześniejszych eksportów ani danych pasa.
+Seed: 20261006. Nie wykonano treningu sieci. Nowe warianty zostały też zastosowane do wcześniejszych źródeł w osobnej
+paczce [artificial_v2](../artificial_v2/README.md). Wspólne funkcje znajdują się
+w `src/respi_net/artificial_runs.py`; wcześniejsze eksporty v1 są zachowane.

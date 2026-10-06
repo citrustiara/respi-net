@@ -1,0 +1,99 @@
+{
+  "version": "v2",
+  "seed": 0,
+  "split_status": "PROVISIONAL: inherited technical grouping; finalize from the complete acquisition plan before model selection or evaluation",
+  "label_transfer": "Existing source labels and IGNORE masks are inherited; nearest-neighbour time warp only; no detector or re-annotation on artificial signals",
+  "enhancements": {
+    "time_varying_extra_noise": true,
+    "drift_per_min": [
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.45,
+      0.6
+    ],
+    "radar_power_drop_db": [
+      0,
+      6,
+      12
+    ],
+    "reduced_power_belt": false
+  },
+  "noise_bank_minutes": 3.0,
+  "stretch_factors": [
+    0.7,
+    0.8,
+    0.9,
+    1.1,
+    1.25,
+    1.4
+  ],
+  "noise_ratio": [
+    0.03,
+    0.3
+  ],
+  "sources": {
+    "own_a121_coach": {
+      "people": 1,
+      "labelled": 21.4,
+      "exhale": 10.1,
+      "hold_after_exhale": 4.4,
+      "inhale": 6.9,
+      "hold_after_inhale": 0.0,
+      "noise": 0.0,
+      "train": 14.6
+    },
+    "szymanski_belt": {
+      "people": 3,
+      "labelled": 92.7,
+      "exhale": 31.4,
+      "hold_after_exhale": 18.6,
+      "inhale": 28.9,
+      "hold_after_inhale": 11.4,
+      "noise": 2.5,
+      "train": 64.7
+    },
+    "augmented_own_a121": {
+      "copies_per_run": 9,
+      "runs": 117,
+      "labelled": 133.9,
+      "exhale": 62.6,
+      "hold_after_exhale": 27.8,
+      "inhale": 43.6,
+      "hold_after_inhale": 0.0,
+      "noise": 0.0
+    },
+    "augmented_belt": {
+      "copies_per_run": 6,
+      "runs": 96,
+      "labelled": 398.2,
+      "exhale": 113.7,
+      "hold_after_exhale": 96.4,
+      "inhale": 106.0,
+      "hold_after_inhale": 68.2,
+      "noise": 13.9
+    },
+    "synthetic_a121": {
+      "runs": 60,
+      "labelled": 300.0,
+      "exhale": 152.2,
+      "hold_after_exhale": 23.0,
+      "inhale": 104.6,
+      "hold_after_inhale": 18.0,
+      "noise": 2.3
+    }
+  },
+  "datasets": {
+    "dataset_pretrain_v2.npz": {
+      "train": 3661,
+      "val": 72,
+      "test": 58
+    },
+    "dataset_finetune_v2.npz": {
+      "train": 507,
+      "val": 12,
+      "test": 12
+    }
+  }
+}
