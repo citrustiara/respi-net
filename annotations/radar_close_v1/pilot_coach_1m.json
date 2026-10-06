@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "annotator": "codex_visual_review",
+  "method": "Visual review of radar displacement and raw phase trace; extrema proposals from 0.7 Hz low-pass were inspected and selected. No IMU labels used. Provisional signal-based labels, not independent physiological ground truth.",
+  "boundary_guard_s": 0.3,
+  "hold_boundary_guard_s": 0.6,
+  "classes": {
+    "0": "exhale",
+    "1": "hold_after_exhale",
+    "2": "inhale",
+    "3": "hold_after_inhale",
+    "4": "noise",
+    "-1": "ignore"
+  },
+  "subject": "S01",
+  "session": "pilot_coach_1m",
+  "source": "data/raw/nn/a121_iphone/pilot_coach_1m/run_01_paced_12_hold_a121.csv",
+  "cues": "data/raw/nn/a121_iphone/pilot_coach_1m/run_01_paced_12_hold_cues.csv",
+  "manifest": "data/raw/nn/a121_iphone/pilot_coach_1m/manifest.json",
+  "split": "train",
+  "segments": [
+    [
+      11.61,
+      15.06,
+      0
+    ],
+    [
+      15.06,
+      16.91,
+      2
+    ],
+    [
+      16.91,
+      19.36,
+      0
+    ],
+    [
+      19.36,
+      21.46,
+      2
+    ],
+    [
+      21.46,
+      23.91,
+      0
+    ],
+    [
+      23.91,
+      26.51,
+      2
+    ],
+    [
+      26.51,
+      29.91,
+      0
+    ],
+    [
+      29.91,
+      31.86,
+      2
+    ],
+    [
+      31.86,
+      34.76,
+      0
+    ],
+    [
+      34.76,
+      36.81,
+      2
+    ],
+    [
+      36.81,
+      39.56,
+      0
+    ],
+    [
+      39.56,
+      41.76,
+      2
+    ],
+    [
+      41.76,
+      44.4,
+      0
+    ],
+    [
+      44.4,
+      59.2,
+      1
+    ],
+    [
+      59.2,
+      62.01,
+      2
+    ],
+    [
+      62.01,
+      64.71,
+      0
+    ],
+    [
+      64.71,
+      67.56,
+      2
+    ],
+    [
+      67.56,
+      69.71,
+      0
+    ],
+    [
+      69.71,
+      72.21,
+      2
+    ],
+    [
+      72.21,
+      74.56,
+      0
+    ],
+    [
+      74.56,
+      76.96,
+      2
+    ],
+    [
+      76.96,
+      79.16,
+      0
+    ],
+    [
+      79.16,
+      81.36,
+      2
+    ],
+    [
+      81.36,
+      85.01,
+      0
+    ],
+    [
+      85.01,
+      87.06,
+      2
+    ],
+    [
+      87.06,
+      89.91,
+      0
+    ]
+  ],
+  "notes": [
+    "Coached hold after exhale: onset chosen at transition to slow baseline drift, not final minimum. Coach is supporting context, not the boundary source."
+  ]
+}

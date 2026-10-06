@@ -1,0 +1,80 @@
+{
+  "seed": 20261006,
+  "real_runs": 4,
+  "artificial_runs": 18,
+  "real_labelled_seconds": {
+    "phase1_halfside_02": 106.3,
+    "pilot_coach_1m": 61.5,
+    "self_lying_3min_01": 57.1,
+    "sit_nophone_01": 47.65
+  },
+  "real_class_seconds": {
+    "exhale": 136.85,
+    "hold_after_exhale": 18.8,
+    "inhale": 98.5,
+    "hold_after_inhale": 18.4,
+    "noise": 0.0
+  },
+  "artificial_labelled_seconds": 1535.15,
+  "splits": {
+    "train": {
+      "windows": 156,
+      "runs": [
+        "phase1_halfside_02",
+        "phase1_halfside_02__iq_drop0",
+        "phase1_halfside_02__iq_drop12",
+        "phase1_halfside_02__iq_drop6",
+        "phase1_halfside_02__x0.7",
+        "phase1_halfside_02__x0.8",
+        "phase1_halfside_02__x0.9",
+        "phase1_halfside_02__x1.1",
+        "phase1_halfside_02__x1.25",
+        "phase1_halfside_02__x1.4",
+        "pilot_coach_1m",
+        "pilot_coach_1m__iq_drop0",
+        "pilot_coach_1m__iq_drop12",
+        "pilot_coach_1m__iq_drop6",
+        "pilot_coach_1m__x0.7",
+        "pilot_coach_1m__x0.8",
+        "pilot_coach_1m__x0.9",
+        "pilot_coach_1m__x1.1",
+        "pilot_coach_1m__x1.25",
+        "pilot_coach_1m__x1.4"
+      ],
+      "class_samples": [
+        40252,
+        9294,
+        31499,
+        10386,
+        0
+      ]
+    },
+    "val": {
+      "windows": 6,
+      "runs": [
+        "self_lying_3min_01"
+      ],
+      "class_samples": [
+        1266,
+        0,
+        928,
+        0,
+        0
+      ]
+    },
+    "test": {
+      "windows": 2,
+      "runs": [
+        "sit_nophone_01"
+      ],
+      "class_samples": [
+        538,
+        176,
+        337,
+        204,
+        0
+      ]
+    }
+  },
+  "validation": "Signal-based labels; not independent physiological ground truth. No IMU labels and no training performed."
+}

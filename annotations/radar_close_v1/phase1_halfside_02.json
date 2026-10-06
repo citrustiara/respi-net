@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "annotator": "codex_visual_review",
+  "method": "Visual review of radar displacement and raw phase trace; extrema proposals from 0.7 Hz low-pass were inspected and selected. No IMU labels used. Provisional signal-based labels, not independent physiological ground truth.",
+  "boundary_guard_s": 0.3,
+  "hold_boundary_guard_s": 0.6,
+  "classes": {
+    "0": "exhale",
+    "1": "hold_after_exhale",
+    "2": "inhale",
+    "3": "hold_after_inhale",
+    "4": "noise",
+    "-1": "ignore"
+  },
+  "subject": "S01",
+  "session": "phase1_halfside_02",
+  "source": "data/raw/nn/a121_iphone/phase1_halfside_02/run_01_nn_self_3min_a121.csv",
+  "cues": "data/raw/nn/a121_iphone/phase1_halfside_02/run_01_nn_self_3min_cues.csv",
+  "manifest": "data/raw/nn/a121_iphone/phase1_halfside_02/manifest.json",
+  "split": "train",
+  "segments": [
+    [
+      16.24,
+      18.49,
+      2
+    ],
+    [
+      18.49,
+      21.14,
+      0
+    ],
+    [
+      21.14,
+      23.64,
+      2
+    ],
+    [
+      23.64,
+      25.89,
+      0
+    ],
+    [
+      25.89,
+      28.24,
+      2
+    ],
+    [
+      28.24,
+      31.44,
+      0
+    ],
+    [
+      31.44,
+      33.49,
+      2
+    ],
+    [
+      33.49,
+      35.64,
+      0
+    ],
+    [
+      67.49,
+      74.5,
+      2
+    ],
+    [
+      74.5,
+      83.4,
+      3
+    ],
+    [
+      83.4,
+      87.29,
+      0
+    ],
+    [
+      87.29,
+      90.59,
+      2
+    ],
+    [
+      90.59,
+      94.99,
+      0
+    ],
+    [
+      94.99,
+      98.44,
+      2
+    ],
+    [
+      98.44,
+      103.89,
+      0
+    ],
+    [
+      103.89,
+      107.04,
+      2
+    ],
+    [
+      107.04,
+      112.29,
+      0
+    ],
+    [
+      112.29,
+      115.59,
+      2
+    ],
+    [
+      115.59,
+      120.34,
+      0
+    ],
+    [
+      120.34,
+      122.99,
+      2
+    ],
+    [
+      122.99,
+      127.39,
+      0
+    ],
+    [
+      127.39,
+      130.34,
+      2
+    ],
+    [
+      130.34,
+      134.69,
+      0
+    ],
+    [
+      134.69,
+      139.0,
+      2
+    ],
+    [
+      139.0,
+      145.6,
+      3
+    ],
+    [
+      145.6,
+      149.29,
+      0
+    ],
+    [
+      149.29,
+      152.19,
+      2
+    ],
+    [
+      152.19,
+      156.74,
+      0
+    ],
+    [
+      156.74,
+      159.29,
+      2
+    ],
+    [
+      159.29,
+      163.34,
+      0
+    ],
+    [
+      163.34,
+      165.79,
+      2
+    ],
+    [
+      165.79,
+      170.39,
+      0
+    ],
+    [
+      170.39,
+      173.29,
+      2
+    ],
+    [
+      173.29,
+      177.19,
+      0
+    ]
+  ],
+  "notes": [
+    "Ignore 0\u201316.24 s and 35.64\u201367.49 s: incomplete first breath, shallow/drifting and irregular section.",
+    "Two deliberate deep-inhale holds have visually clear plateaus; exact edges remain uncertain."
+  ]
+}

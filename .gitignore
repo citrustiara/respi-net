@@ -50,3 +50,6 @@ data/processed/
 data/external/
 # Model checkpoints and training metrics (tools/train_breath_phase_model.py)
 runs/
+# Small reviewed radar examples are committed with their labels, not checkpoints.
+!annotations/radar_close_v1/generated/runs/
+!annotations/radar_close_v1/generated/runs/*.npz

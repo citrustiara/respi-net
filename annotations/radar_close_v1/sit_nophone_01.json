@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "annotator": "codex_visual_review",
+  "method": "Visual review of radar displacement and raw phase trace; extrema proposals from 0.7 Hz low-pass were inspected and selected. No IMU labels used. Provisional signal-based labels, not independent physiological ground truth.",
+  "boundary_guard_s": 0.3,
+  "hold_boundary_guard_s": 0.6,
+  "classes": {
+    "0": "exhale",
+    "1": "hold_after_exhale",
+    "2": "inhale",
+    "3": "hold_after_inhale",
+    "4": "noise",
+    "-1": "ignore"
+  },
+  "subject": "S01",
+  "session": "sit_nophone_01",
+  "source": "data/raw/nn/a121_iphone/sit_nophone_01/run_01_phone_site_1m_a121.csv",
+  "cues": "data/raw/nn/a121_iphone/sit_nophone_01/run_01_phone_site_1m_cues.csv",
+  "manifest": "data/raw/nn/a121_iphone/sit_nophone_01/manifest.json",
+  "split": "test",
+  "segments": [
+    [
+      11.57,
+      14.72,
+      0
+    ],
+    [
+      14.72,
+      16.72,
+      2
+    ],
+    [
+      16.72,
+      20.07,
+      0
+    ],
+    [
+      20.07,
+      21.47,
+      2
+    ],
+    [
+      21.47,
+      25.32,
+      0
+    ],
+    [
+      25.32,
+      29.0,
+      2
+    ],
+    [
+      29.0,
+      35.5,
+      3
+    ],
+    [
+      35.5,
+      40.07,
+      0
+    ],
+    [
+      40.07,
+      42.27,
+      2
+    ],
+    [
+      42.27,
+      44.77,
+      0
+    ],
+    [
+      44.77,
+      46.87,
+      2
+    ],
+    [
+      46.87,
+      49.87,
+      0
+    ],
+    [
+      49.87,
+      52.42,
+      2
+    ],
+    [
+      52.42,
+      55.8,
+      0
+    ],
+    [
+      55.8,
+      62.2,
+      1
+    ],
+    [
+      62.2,
+      64.82,
+      2
+    ],
+    [
+      64.82,
+      68.17,
+      0
+    ],
+    [
+      68.17,
+      70.22,
+      2
+    ],
+    [
+      70.22,
+      73.0,
+      0
+    ]
+  ],
+  "notes": [
+    "Phone was off body and out of radar view. Both hold types supported by recorded coach commands.",
+    "Hold after exhale drifts appreciably: use as provisional signal-labelled test, not belt validation."
+  ]
+}
