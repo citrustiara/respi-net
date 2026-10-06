@@ -3,22 +3,22 @@
   "real_runs": 4,
   "artificial_runs": 18,
   "real_labelled_seconds": {
-    "phase1_halfside_02": 106.3,
-    "pilot_coach_1m": 61.5,
-    "self_lying_3min_01": 57.1,
-    "sit_nophone_01": 47.65
+    "phase1_halfside_02": 125.1,
+    "pilot_coach_1m": 73.4,
+    "self_lying_3min_01": 66.0,
+    "sit_nophone_01": 54.75
   },
   "real_class_seconds": {
-    "exhale": 136.85,
-    "hold_after_exhale": 18.8,
-    "inhale": 98.5,
-    "hold_after_inhale": 18.4,
+    "exhale": 159.9,
+    "hold_after_exhale": 19.25,
+    "inhale": 120.8,
+    "hold_after_inhale": 19.3,
     "noise": 0.0
   },
-  "artificial_labelled_seconds": 1535.15,
+  "artificial_labelled_seconds": 1816.45,
   "splits": {
     "train": {
-      "windows": 156,
+      "windows": 158,
       "runs": [
         "phase1_halfside_02",
         "phase1_halfside_02__iq_drop0",
@@ -42,10 +42,10 @@
         "pilot_coach_1m__x1.4"
       ],
       "class_samples": [
-        40252,
-        9294,
-        31499,
-        10386,
+        47065,
+        9468,
+        38300,
+        11223,
         0
       ]
     },
@@ -55,9 +55,9 @@
         "self_lying_3min_01"
       ],
       "class_samples": [
-        1266,
+        1435,
         0,
-        928,
+        1089,
         0,
         0
       ]
@@ -68,10 +68,10 @@
         "sit_nophone_01"
       ],
       "class_samples": [
-        538,
-        176,
-        337,
-        204,
+        613,
+        180,
+        425,
+        200,
         0
       ]
     }

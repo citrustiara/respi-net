@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "annotator": "codex_visual_review",
   "method": "Visual review of radar displacement and raw phase trace; extrema proposals from 0.7 Hz low-pass were inspected and selected. No IMU labels used. Provisional signal-based labels, not independent physiological ground truth.",
-  "boundary_guard_s": 0.3,
+  "boundary_guard_s": 0.0,
   "hold_boundary_guard_s": 0.6,
   "classes": {
     "0": "exhale",
@@ -152,5 +152,43 @@
   ],
   "notes": [
     "Coached hold after exhale: onset chosen at transition to slow baseline drift, not final minimum. Coach is supporting context, not the boundary source."
-  ]
+  ],
+  "boundary_overrides": [
+    {
+      "time_s": 44.4,
+      "guard_s": 0.6,
+      "reason": "Początek pauzy z osiadaniem i dryfem."
+    },
+    {
+      "time_s": 59.2,
+      "guard_s": 0.35,
+      "reason": "Wyjście z dryfującej pauzy, początek wzrostu."
+    },
+    {
+      "time_s": 62.01,
+      "guard_s": 0.3,
+      "reason": "Szczyt z dodatkowym lokalnym zwrotem."
+    },
+    {
+      "time_s": 67.56,
+      "guard_s": 0.3,
+      "reason": "Szczyt ma dwie lokalne nierówności."
+    },
+    {
+      "time_s": 76.96,
+      "guard_s": 0.3,
+      "reason": "Zaokrąglony szczyt."
+    },
+    {
+      "time_s": 81.36,
+      "guard_s": 0.3,
+      "reason": "Szeroki, prawie płaski szczyt."
+    },
+    {
+      "time_s": 87.06,
+      "guard_s": 0.3,
+      "reason": "Szczyt z dodatkowym lokalnym zwrotem."
+    }
+  ],
+  "guard_policy": "No automatic gaps at clear phase transitions. Only visually ambiguous edges have explicit margins; hold margins reflect settling uncertainty, not model latency."
 }

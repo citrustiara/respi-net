@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "annotator": "codex_visual_review",
   "method": "Visual review of radar displacement and raw phase trace; extrema proposals from 0.7 Hz low-pass were inspected and selected. No IMU labels used. Provisional signal-based labels, not independent physiological ground truth.",
-  "boundary_guard_s": 0.3,
+  "boundary_guard_s": 0.0,
   "hold_boundary_guard_s": 0.6,
   "classes": {
     "0": "exhale",
@@ -142,5 +142,68 @@
   ],
   "notes": [
     "Ignore long apparent plateaus and irregular middle section: session notes state no deliberate holds; radar flatness alone cannot establish physiological retention."
-  ]
+  ],
+  "boundary_overrides": [
+    {
+      "time_s": 18.28,
+      "guard_s": 0.2,
+      "reason": "Spłaszczony szczyt."
+    },
+    {
+      "time_s": 24.13,
+      "guard_s": 0.2,
+      "reason": "Spłaszczony szczyt."
+    },
+    {
+      "time_s": 29.88,
+      "guard_s": 0.2,
+      "reason": "Spłaszczony szczyt."
+    },
+    {
+      "time_s": 35.33,
+      "guard_s": 0.2,
+      "reason": "Zmiana poziomu bazowego."
+    },
+    {
+      "time_s": 41.63,
+      "guard_s": 0.2,
+      "reason": "Zmiana poziomu bazowego."
+    },
+    {
+      "time_s": 63.38,
+      "guard_s": 0.25,
+      "reason": "Nierówny szczyt w zmiennym oddechu."
+    },
+    {
+      "time_s": 68.08,
+      "guard_s": 0.25,
+      "reason": "Nierówny szczyt w zmiennym oddechu."
+    },
+    {
+      "time_s": 148.18,
+      "guard_s": 0.25,
+      "reason": "Mały nierówny szczyt."
+    },
+    {
+      "time_s": 154.78,
+      "guard_s": 0.25,
+      "reason": "Szeroki szczyt."
+    },
+    {
+      "time_s": 161.83,
+      "guard_s": 0.25,
+      "reason": "Szeroki szczyt z dryfem."
+    },
+    {
+      "time_s": 168.13,
+      "guard_s": 0.25,
+      "reason": "Nierówny szczyt."
+    },
+    {
+      "time_s": 173.83,
+      "guard_s": 0.25,
+      "reason": "Nierówny szczyt."
+    }
+  ],
+  "guard_policy": "No automatic gaps at clear phase transitions. Only visually ambiguous edges have explicit margins; hold margins reflect settling uncertainty, not model latency."
 }

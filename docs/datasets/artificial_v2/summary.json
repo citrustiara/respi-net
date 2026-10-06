@@ -1,5 +1,6 @@
 {
   "version": "v2",
+  "relationship_to_v1": "addition_only; real sources and the 60 identical synthetic runs are stored in v1 only",
   "seed": 0,
   "split_status": "PROVISIONAL: inherited technical grouping; finalize from the complete acquisition plan before model selection or evaluation",
   "label_transfer": "Existing source labels and IGNORE masks are inherited; nearest-neighbour time warp only; no detector or re-annotation on artificial signals",
@@ -75,25 +76,43 @@
       "noise": 13.9
     },
     "synthetic_a121": {
-      "runs": 60,
-      "labelled": 300.0,
-      "exhale": 152.2,
-      "hold_after_exhale": 23.0,
-      "inhale": 104.6,
-      "hold_after_inhale": 18.0,
-      "noise": 2.3
+      "runs": 0,
+      "labelled": 0.0,
+      "exhale": 0.0,
+      "hold_after_exhale": 0.0,
+      "inhale": 0.0,
+      "hold_after_inhale": 0.0,
+      "noise": 0.0
     }
   },
   "datasets": {
     "dataset_pretrain_v2.npz": {
-      "train": 3661,
-      "val": 72,
-      "test": 58
+      "train": 1861,
+      "val": 0,
+      "test": 0
     },
     "dataset_finetune_v2.npz": {
-      "train": 507,
-      "val": 12,
-      "test": 12
+      "train": 455,
+      "val": 0,
+      "test": 0
+    }
+  },
+  "combined": {
+    "pretrain": {
+      "windows": {
+        "train": 5522,
+        "val": 72,
+        "test": 58
+      },
+      "duplicates_removed": 0
+    },
+    "finetune": {
+      "windows": {
+        "train": 806,
+        "val": 12,
+        "test": 12
+      },
+      "duplicates_removed": 0
     }
   }
 }

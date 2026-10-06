@@ -2,7 +2,8 @@
 
 Wygenerowano 2026-10-06 z tych samych źródeł, z których korzystał wcześniejszy
 `tools/build_artificial_data.py`: 19 własnych nagrań A121 oraz 23 nagrania pasa
-Szymańskiego. Pliki v1 pozostają zachowane. Nie wykonano treningu.
+Szymańskiego. Pliki v1 pozostają zachowane. V2 jest **uzupełnieniem**, zawierającym wyłącznie
+nowe augmentacje. Nie wykonano treningu.
 
 ## Podziały są tymczasowe
 
@@ -31,8 +32,8 @@ szum, a etykiety mogą mieć błędy. Kopia dziedziczy te ograniczenia.
 - Szum, dryf i modelowe osłabienie echa: etykiety pozostają takie same.
   Krótkie dodatkowe oscylacje od szumu nie są nowymi oddechami.
 - Syntetyczne oddechy od zera: etykiety wynikają z generatora, przed modelem
-  IQ. Dla tej wersji zachowano te same 60 przebiegów co w v1 — nie dodawano
-  drugi raz modelu radaru do już zniekształconych syntetycznych sygnałów.
+  IQ. Te same 60 przebiegów pozostaje wyłącznie w v1 — v2 ich nie powiela.
+  Nie dodawano drugi raz modelu radaru do tych samych syntetycznych sygnałów.
 
 ## Co wygenerowano
 
@@ -42,7 +43,7 @@ Z roboczej części treningowej wcześniejszych źródeł:
 |---|---:|---:|
 | Własny A121 | 117 (13 źródeł × 9) | 133,9 |
 | Pas oddechowy | 96 (16 źródeł × 6) | 398,2 |
-| Generator A121 od zera, zachowany z v1 | 60 | 300,0 |
+| Generator A121 od zera | 0 nowych w v2 | 300,0 pozostaje wyłącznie w v1 |
 
 W każdej serii sześciu kopii: długość ×0,7 / 0,8 / 0,9 / 1,1 / 1,25 / 1,4;
 podstawowy szum z prawdziwych pauz o odchyleniu 3–30% zakresu p5–p95;
@@ -71,8 +72,10 @@ pochodnych w Git:
 
 ```text
 data/processed/breath_phases/enhanced_v2/
-  dataset_finetune_v2.npz    # własny radar + rozszerzone kopie
-  dataset_pretrain_v2.npz    # pas + rozszerzone kopie + generator A121
+  dataset_finetune_v2.npz    # tylko nowe rozszerzone kopie własnego radaru
+  dataset_pretrain_v2.npz    # tylko nowe rozszerzone kopie pasa
+  dataset_finetune_v1_plus_v2.npz  # v1 + dodatki, kontrola duplikatów
+  dataset_pretrain_v1_plus_v2.npz  # v1 + dodatki, kontrola duplikatów
   artificial_summary.json
   copies/*.npz             # 213 kopii z etykietami, metadanymi i grupą źródła
 ```
@@ -92,6 +95,30 @@ uv run --offline python tools/build_artificial_data.py --enhanced \
 
 Seed główny: 0. Rozszerzone kopie używają niezależnych seedów 20261006
 (A121) i 20261007 (pas); generator od zera zachowuje strumień losowy v1.
-Okna mają 60 s, krok 10 s i 20 s kontekstu bez celów uczenia. W v2 eksporty
-mają technicznie 507/12/12 okien finetune i 3661/72/58 pretrain, lecz liczby
-te nie opisują niezależnych prób ani ostatecznej walidacji.
+Okna mają 60 s, krok 10 s i 20 s kontekstu bez celów uczenia.
+
+## V1 i v2: suma, a nie zamiana
+
+Wcześniejszy eksport v2 zawierał całą bazę i te same 60 przebiegów
+syntetycznych co v1. Poprawiono builder: v2 zapisuje teraz wyłącznie 213
+nowych kopii. Dotychczasowe bazowe nagrania, sześć starszych wariantów
+augmentacji i generator pozostają w v1. Nowe kopie mają końcówkę
+`__enhanced_v2`, więc podobne współczynniki tempa nie powodują kolizji nazw.
+Ich szum i dryf są inne, zatem nie są identycznymi kopiami starej augmentacji.
+
+Do wykorzystania obu metod służą pliki `*_v1_plus_v2.npz`. Builder porównuje
+zawartość każdego okna (sygnał i etykiety) i zapisuje identyczne okna tylko
+raz. Konflikt podziału dla tej samej grupy źródłowej albo identycznych okien
+powoduje błąd. Same dodatki v2 mają wyłącznie roboczy przydział train;
+val/test pochodzą z v1 w pliku połączonym. Końcowy podział nadal wymaga
+ponownego ustalenia po zebraniu danych.
+
+Do uczenia wybierz połączony plik albo zestaw v1 i dodatków v2. Nie dodawaj
+v1 ani v2 ponownie obok pliku połączonego. W aktualnym eksporcie dodatki mają
+455 okien A121 i 1861 okien pasa; suma daje odpowiednio 806/12/12 oraz
+5522/72/58 okien w roboczym train/val/test. Kontrola zawartości potwierdziła
+brak identycznych okien między zachowanymi v1 a nowymi dodatkami.
+
+Wyświetlane wyżej źródło i przebieg od zera służą porównaniu na wykresie;
+nie są dodatkowo dołączane do eksportu v2. W `samples/source.npz` pozostaje
+mały przykład bazowy do inspekcji, a nie kolejny zbiór treningowy.

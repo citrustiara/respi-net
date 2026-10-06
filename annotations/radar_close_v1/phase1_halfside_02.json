@@ -1,9 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "annotator": "codex_visual_review",
   "method": "Visual review of radar displacement and raw phase trace; extrema proposals from 0.7 Hz low-pass were inspected and selected. No IMU labels used. Provisional signal-based labels, not independent physiological ground truth.",
-  "boundary_guard_s": 0.3,
-  "hold_boundary_guard_s": 0.6,
+  "boundary_guard_s": 0.0,
+  "hold_boundary_guard_s": 0.45,
   "classes": {
     "0": "exhale",
     "1": "hold_after_exhale",
@@ -191,7 +191,45 @@
     ]
   ],
   "notes": [
-    "Ignore 0\u201316.24 s and 35.64\u201367.49 s: incomplete first breath, shallow/drifting and irregular section.",
+    "Ignore 0–16.24 s and 35.64–67.49 s: incomplete first breath, shallow/drifting and irregular section.",
     "Two deliberate deep-inhale holds have visually clear plateaus; exact edges remain uncertain."
-  ]
+  ],
+  "boundary_overrides": [
+    {
+      "time_s": 74.5,
+      "guard_s": 0.45,
+      "reason": "Początek plateau po głębokim wdechu, wolne osiadanie."
+    },
+    {
+      "time_s": 83.4,
+      "guard_s": 0.25,
+      "reason": "Wyraźny spadek kończący plateau; pozostawiono niewielki margines."
+    },
+    {
+      "time_s": 139.0,
+      "guard_s": 0.45,
+      "reason": "Przejście głębokiego wdechu do plateau."
+    },
+    {
+      "time_s": 145.6,
+      "guard_s": 0.25,
+      "reason": "Wyraźny spadek na końcu pauzy."
+    },
+    {
+      "time_s": 90.59,
+      "guard_s": 0.2,
+      "reason": "Lekko spłaszczony szczyt."
+    },
+    {
+      "time_s": 98.44,
+      "guard_s": 0.2,
+      "reason": "Lekko spłaszczony szczyt."
+    },
+    {
+      "time_s": 159.29,
+      "guard_s": 0.2,
+      "reason": "Mniejsza amplituda zwrotu."
+    }
+  ],
+  "guard_policy": "No automatic gaps at clear phase transitions. Only visually ambiguous edges have explicit margins; hold margins reflect settling uncertainty, not model latency."
 }

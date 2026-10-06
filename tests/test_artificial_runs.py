@@ -113,3 +113,27 @@ def test_reduced_power_model_rejects_nonphysical_belt_units() -> None:
     belt = replace(run, meta={**run.meta, "units": "spread"})
     with pytest.raises(ValueError, match="mm displacement"):
         reduced_power_run(belt, 12, np.random.default_rng(0))
+
+
+def test_combined_export_deduplicates_contents_and_rejects_group_leakage(tmp_path) -> None:
+    import json
+    import sys
+    import pytest
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from build_artificial_data import merge_window_datasets
+
+    source = Path(__file__).resolve().parents[1] / "annotations/radar_close_v1/generated/dataset_manual_radar_v1.npz"
+    result = merge_window_datasets(source, source, tmp_path / "combined.npz")
+    with np.load(source, allow_pickle=False) as original, np.load(tmp_path / "combined.npz", allow_pickle=False) as combined:
+        assert result["duplicates_removed"] >= len(original["y"])
+        assert len(combined["y"]) <= len(original["y"])
+        # Change a group's split without changing its contents: fail instead
+        # of silently moving the same source between train and test.
+        meta = json.loads(str(original["meta"]))
+        first = next(iter(meta["runs"].values()))
+        first["split"] = "test" if first["split"] != "test" else "train"
+        fields = {key: original[key] for key in original.files if key != "meta"}
+        np.savez_compressed(tmp_path / "bad.npz", **fields, meta=np.array(json.dumps(meta)))
+    with pytest.raises(ValueError, match="source group"):
+        merge_window_datasets(source, tmp_path / "bad.npz", tmp_path / "bad_combined.npz")

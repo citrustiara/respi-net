@@ -20,6 +20,10 @@ Two datasets in the nn_dataset format, ready for
 * ``dataset_finetune_v1.npz``: the own A121 coach runs (real, split as in
   ``dataset_coach_v1.npz``) and their augmented copies (training only).
 
+With ``--enhanced``, ``enhanced_v2/`` holds addition-only v2 datasets and
+``*_v1_plus_v2.npz`` unions with content deduplication. Existing originals
+and the identical synthetic runs remain in v1 only. All splits are provisional.
+
 ``artificial_summary.json`` lists the labelled minutes per source, class and
 split, and ``--thesis-figure`` draws ``docs/thesis/figures/fazy_dane_sztuczne.png``
 (a synthetic run, and a real run next to one of its copies); ``--notes-figure
@@ -33,6 +37,8 @@ PNG`` draws the same in English for local notes.  Run
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -138,7 +144,54 @@ def enhanced_copies(runs: list[LabelledRun], splits: dict[str, str], bank, seed:
         if run.meta.get("units") == "mm":
             for drop in (0, 6, 12):
                 copies.append(reduced_power_run(run, drop, np.random.default_rng(seed + 100 + index)))
-    return copies
+    return [replace(run, run_id=run.run_id + "__enhanced_v2") for run in copies]
+
+
+def merge_window_datasets(base_path: Path, addition_path: Path, output_path: Path) -> dict:
+    """Union by window contents (features + labels), rejecting split conflicts.
+
+    Original windows occur once. New run IDs have a v2 suffix, but their group
+    remains the source group. Deduplication uses contents, not just names.
+    """
+    base, addition = load_dataset(base_path), load_dataset(addition_path)
+    for key in ("fs", "window_s", "warmup_s", "channels", "normalisation"):
+        if base["meta"][key] != addition["meta"][key]:
+            raise ValueError(f"Incompatible datasets: {key}")
+    group_splits = {}
+    for data in (base, addition):
+        for info in data["meta"]["runs"].values():
+            group, split = info["group"], info["split"]
+            if group in group_splits and group_splits[group] != split:
+                raise ValueError("A source group appears on different sides of the split")
+            group_splits[group] = split
+    selected = {"X": [], "y": [], "split": [], "run_id": [], "start_s": []}
+    seen = {}
+    duplicates = 0
+    for data in (base, addition):
+        for index in range(len(data["y"])):
+            fingerprint = hashlib.sha256(data["X"][index].tobytes() + data["y"][index].tobytes()).digest()
+            split = str(data["split"][index])
+            if fingerprint in seen:
+                if seen[fingerprint] != split:
+                    raise ValueError("Identical window appears on different sides of the split")
+                duplicates += 1
+                continue
+            seen[fingerprint] = split
+            for key in selected:
+                selected[key].append(data[key][index])
+    arrays = {key: np.asarray(values, dtype=base[key].dtype) for key, values in selected.items()}
+    meta = {**base["meta"], "description": "v1 plus additional v2 augmentations; identical windows stored once; provisional splits",
+            "runs": {**base["meta"]["runs"], **addition["meta"]["runs"]},
+            "parents": [str(base_path), str(addition_path)], "duplicates_removed": duplicates}
+    counts = {}
+    for split in ("train", "val", "test"):
+        mask = arrays["split"] == split
+        labels = arrays["y"][mask]
+        counts[split] = {"windows": int(np.sum(mask)), "runs": sorted(set(arrays["run_id"][mask])),
+                         "class_samples": np.bincount(labels[labels >= 0], minlength=NUM_CLASSES).tolist()}
+    meta["splits"] = counts
+    np.savez_compressed(output_path, **arrays, meta=np.array(json.dumps(meta)))
+    return {"windows": {split: counts[split]["windows"] for split in counts}, "duplicates_removed": duplicates}
 
 
 def _shade(ax: plt.Axes, time_s: np.ndarray, chest: np.ndarray, labels: np.ndarray, title: str, ylabel: str) -> None:
@@ -227,8 +280,16 @@ def main() -> int:
         f"dataset_finetune_{version}.npz": ([*coach, *coach_aug], {**coach_splits, **train_only},
                                     "Own A121 coach runs + augmented copies of the training runs"),
     }
+    if args.enhanced:
+        # V2 is an addition, not a second complete dataset. Real originals,
+        # old augmentation and synthetic runs already exist in v1.
+        sets = {
+            "dataset_pretrain_v2.npz": (belt_aug, train_only, "Additional v2 belt augmentations only; local use only"),
+            "dataset_finetune_v2.npz": (coach_aug, train_only, "Additional v2 own A121 augmentations only"),
+        }
     summary: dict[str, object] = {
         "version": version,
+        "relationship_to_v1": "addition_only; real sources and the 60 identical synthetic runs are stored in v1 only" if args.enhanced else "base",
         "seed": args.seed,
         "split_status": "PROVISIONAL: inherited technical grouping; finalize from the complete acquisition plan before model selection or evaluation",
         "label_transfer": "Existing source labels and IGNORE masks are inherited; nearest-neighbour time warp only; no detector or re-annotation on artificial signals",
@@ -241,7 +302,7 @@ def main() -> int:
             "szymanski_belt": {"people": 3, **minutes(belt), "train": minutes([r for r in belt if belt_splits[r.run_id] == "train"])["labelled"]},
             "augmented_own_a121": {"copies_per_run": 9 if args.enhanced else len(STRETCH), "runs": len(coach_aug), **minutes(coach_aug)},
             "augmented_belt": {"copies_per_run": len(STRETCH), "runs": len(belt_aug), **minutes(belt_aug)},
-            "synthetic_a121": {"runs": count, **minutes(synthetic)},
+            "synthetic_a121": {"runs": 0 if args.enhanced else count, **minutes([] if args.enhanced else synthetic)},
         },
         "datasets": {},
     }
@@ -249,18 +310,30 @@ def main() -> int:
         meta = export_dataset(runs, destination / name, window_s=60.0, stride_s=args.stride_s, warmup_s=20.0, splits=splits, description=description + "; splits provisional; source labels inherited")
         summary["datasets"][name] = {part: meta["splits"][part]["windows"] for part in ("train", "val", "test")}
         print(f"{name}: " + ", ".join(f"{part} {windows} windows" for part, windows in summary["datasets"][name].items()))
+    if args.enhanced:
+        summary["combined"] = {}
+        for kind in ("pretrain", "finetune"):
+            result = merge_window_datasets(OUT / f"dataset_{kind}_v1.npz", destination / f"dataset_{kind}_v2.npz",
+                                          destination / f"dataset_{kind}_v1_plus_v2.npz")
+            summary["combined"][kind] = result
+            print(f"Combined {kind}: {result}")
     (destination / "artificial_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     if args.summary_path:
         args.summary_path.parent.mkdir(parents=True, exist_ok=True)
         args.summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     if args.enhanced:
+        # Remove former v2 names produced by this builder before the addition
+        # convention, so an old full export cannot be mistaken for extra data.
+        for path in (destination / "copies").glob("*.npz"):
+            if not path.stem.endswith("__enhanced_v2"):
+                path.unlink()
         for run in [*coach_aug, *belt_aug]:
             save_run(run, destination / "copies" / f"{run.run_id}.npz")
     if args.own_examples_dir:
         real = next(run for run in coach if coach_splits[run.run_id] == "train")
         save_run(real, args.own_examples_dir / "source.npz")
         for suffix in ("__x0.7", "__x1.4", "__iq_drop12"):
-            copy = next((run for run in coach_aug if run.run_id == real.run_id + suffix), None)
+            copy = next((run for run in coach_aug if run.run_id == real.run_id + suffix + ("__enhanced_v2" if args.enhanced else "")), None)
             if copy is not None:
                 save_run(copy, args.own_examples_dir / f"example{suffix}.npz")
 
@@ -269,7 +342,7 @@ def main() -> int:
     print(header)
     for source, values in summary["sources"].items():
         print(f"{source:22} {values['labelled']:9.1f} " + " ".join(f"{values[name]:12.1f}" for name in CLASS_NAMES))
-    copy = next(run for run in coach_aug if run.meta["stretch"] == 1.25)
+    copy = next(run for run in coach_aug if run.meta.get("stretch") == 1.25)
     real = next(run for run in coach if run.run_id == copy.meta["augmented_from"])
     if args.thesis_figure:
         plot_examples(synthetic, real, copy, FIGURE, "pl")

@@ -15,14 +15,29 @@ pomiaru. Poza zaznaczonymi przedziałami wszystko pozostaje bez etykiety.
 
 | Nagranie | Podział | Oznaczony czas po maskowaniu | Uwagi |
 |---|---|---:|---|
-| `phase1_halfside_02` | train | 106,30 s | Czytelne cykle i dwie celowe pauzy po wdechu; pominięty słabszy fragment 35,64–67,49 s. |
-| `pilot_coach_1m` | train | 61,50 s | Czytelne cykle i długa pauza po wydechu; komendy wspierają interpretację pauzy. |
-| `self_lying_3min_01` | val | 57,10 s | Wybrane oddechy; pozorne plateau pominięte, bo notatki mówią o braku celowych pauz. |
-| `sit_nophone_01` | test | 47,65 s | Telefon poza ciałem i wiązką; rodzaje pauz wspierają komendy; widoczny dryf pozostaje ograniczeniem. |
+| `phase1_halfside_02` | train | 125,10 s | Czytelne cykle i dwie celowe pauzy po wdechu; pominięty słabszy fragment 35,64–67,49 s. |
+| `pilot_coach_1m` | train | 73,40 s | Czytelne cykle i długa pauza po wydechu; komendy wspierają interpretację pauzy. |
+| `self_lying_3min_01` | val | 66,00 s | Wybrane oddechy; pozorne plateau pominięte, bo notatki mówią o braku celowych pauz. |
+| `sit_nophone_01` | test | 54,75 s | Telefon poza ciałem i wiązką; rodzaje pauz wspierają komendy; widoczny dryf pozostaje ograniczeniem. |
 
-Razem **272,55 s (4,54 min)**. Zapas wokół granicy fazy: ±0,3 s; wokół
-granic pauzy: ±0,6 s. Marginesy oznaczają niepewność przyjętą w tej wersji,
-nie zmierzony błąd czasu. Nie oznaczono klasy szumu. To mały zbiór pilotażowy,
+Razem **319,25 s (5,32 min)**. W czytelnym sygnale nie ma automatycznych
+przerw przy wdech–wydech: etykieta zmienia się bezpośrednio na granicy.
+Tylko wskazane w przeglądzie szersze/nierówne szczyty mają lokalnie
+±0,2–0,3 s marginesu. Przy niejednoznacznych granicach pauz pozostawiono
+±0,25–0,7 s zależnie od ostrości zwrotu i osiadania. Nie ma mocnego powodu
+wycinać próbek przy każdym czystym zwrocie; korzyść z lokalnych marginesów
+wymaga dopiero sprawdzenia przy uczeniu.
+Każdy wyjątek zapisano w JSON jako `boundary_overrides` z czasem, marginesem
+i uzasadnieniem. Wyjątek zastępuje domyślny margines po obu stronach granicy,
+a nie dodaje kolejnego maskowania. Dłuższe nieoznaczone fragmenty pozostają
+pominięte. Są to marginesy ostrożności, nie zmierzony błąd czasu.
+
+Białe fragmenty nie są klasą pauzy. Nie wnoszą błędu do funkcji straty,
+lecz ich sygnał nadal jest kontekstem dla sieci. Nie narzucają opóźnienia
+predykcji ani tego, którą klasę sieć ma tam zwrócić. Przygotowano ponownie
+wszystkie 18 kopii i okna z aktualnych etykiet źródła.
+
+Nie oznaczono klasy szumu. To mały zbiór pilotażowy,
 nie kompletny materiał do oceny modelu pięcioklasowego.
 
 Wykresy obok tego pliku: niebieski wdech, zielony wydech, czerwony pauza po
@@ -43,8 +58,8 @@ tętno i ruch, a następnie modeluje A121: fazę IQ, clutter, fading i szum.
 
 Nowa paczka wykorzystuje istniejące `augment_run`, `noise_bank_from_holds`,
 `a121_forward` i `displacement_from_iq`; nowe rozszerzenia są współdzielone przez oba buildery.
-Z dwóch nagrań treningowych powstało **18 kopii**, z 25,59 min odziedziczonych
-etykiet po maskowaniu (to nie jest 25,59 min nowych pomiarów):
+Z dwóch nagrań treningowych powstało **18 kopii**, z 30,27 min odziedziczonych
+etykiet po maskowaniu (to nie jest 30,27 min nowych pomiarów):
 
 - 12 kopii ze starymi współczynnikami czasu i zakresem szumu, z dryfem
   zmienionym między kopiami: 0,05 / 0,1 / 0,2 / 0,3 / 0,45 / 0,6 zakresu
@@ -91,7 +106,7 @@ ignorowany przez Git zgodnie z istniejącą polityką repo.
 18 kopii, podsumowanie i `dataset_manual_radar_v1.npz` w istniejącym formacie
 sieci: 60 s okna, krok 10 s, pierwsze 20 s jako kontekst bez celów uczenia,
 normalizacja przyczynowa z poprzednich 30 s. Okna nakładają się, więc ich
-liczba nie jest liczbą niezależnych prób: **156 train, 6 val, 2 test**.
+liczba nie jest liczbą niezależnych prób: **158 train, 6 val, 2 test**.
 
 Każda kopia zachowuje grupę źródła. Walidacja i test zawierają tylko prawdziwe
 przebiegi i nie dostarczają szumu treningowego. Podział jest po nagraniach,

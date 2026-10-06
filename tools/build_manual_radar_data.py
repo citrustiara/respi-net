@@ -41,10 +41,20 @@ def reviewed_labels(time_s: np.ndarray, annotation: dict) -> np.ndarray:
             raise ValueError("Invalid, overlapping or unordered annotation segments")
         previous_end = end
         labels[(time_s >= start) & (time_s < end)] = label
-    # Masks cover selection edges too; no training targets outside review.
+    # One mask per boundary: take the larger adjacent default unless a
+    # reviewed, explicit override narrows/widens this particular edge.
+    guards = {}
     for start, end, label in annotation["segments"]:
         guard = annotation["hold_boundary_guard_s"] if label in (1, 3) else annotation["boundary_guard_s"]
         for edge in (start, end):
+            guards[edge] = max(guards.get(edge, 0), guard)
+    for override in annotation.get("boundary_overrides", []):
+        edge, guard = override["time_s"], override["guard_s"]
+        if edge not in guards or not np.isfinite(guard) or guard < 0:
+            raise ValueError("Boundary override must name an existing edge and a nonnegative finite margin")
+        guards[edge] = guard
+    for edge, guard in guards.items():
+        if guard > 0:
             labels[np.abs(time_s - edge) <= guard] = IGNORE
     return labels
 

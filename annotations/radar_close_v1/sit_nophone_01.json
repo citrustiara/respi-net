@@ -1,8 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "annotator": "codex_visual_review",
   "method": "Visual review of radar displacement and raw phase trace; extrema proposals from 0.7 Hz low-pass were inspected and selected. No IMU labels used. Provisional signal-based labels, not independent physiological ground truth.",
-  "boundary_guard_s": 0.3,
+  "boundary_guard_s": 0.0,
   "hold_boundary_guard_s": 0.6,
   "classes": {
     "0": "exhale",
@@ -118,5 +118,48 @@
   "notes": [
     "Phone was off body and out of radar view. Both hold types supported by recorded coach commands.",
     "Hold after exhale drifts appreciably: use as provisional signal-labelled test, not belt validation."
-  ]
+  ],
+  "boundary_overrides": [
+    {
+      "time_s": 11.57,
+      "guard_s": 0.3,
+      "reason": "Szeroki pierwszy szczyt."
+    },
+    {
+      "time_s": 21.47,
+      "guard_s": 0.3,
+      "reason": "Płytki, spłaszczony zwrot."
+    },
+    {
+      "time_s": 29.0,
+      "guard_s": 0.6,
+      "reason": "Nieostry początek plateau."
+    },
+    {
+      "time_s": 35.5,
+      "guard_s": 0.7,
+      "reason": "Koniec pauzy nakłada się na osiadanie."
+    },
+    {
+      "time_s": 52.42,
+      "guard_s": 0.3,
+      "reason": "Szeroki szczyt."
+    },
+    {
+      "time_s": 55.8,
+      "guard_s": 0.6,
+      "reason": "Początek pauzy z wyraźnym dryfem."
+    },
+    {
+      "time_s": 62.2,
+      "guard_s": 0.4,
+      "reason": "Wyjście z pauzy, zaokrąglony początek wzrostu."
+    },
+    {
+      "time_s": 70.22,
+      "guard_s": 0.3,
+      "reason": "Nierówny szczyt."
+    }
+  ],
+  "guard_policy": "No automatic gaps at clear phase transitions. Only visually ambiguous edges have explicit margins; hold margins reflect settling uncertainty, not model latency."
 }

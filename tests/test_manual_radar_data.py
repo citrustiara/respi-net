@@ -26,6 +26,30 @@ def test_reviewed_labels_mask_hold_edges_and_unreviewed_regions():
         builder.reviewed_labels(t, {**annotation, "segments": [[2, 6, 2], [5, 10, 3]]})
 
 
+def test_reviewed_edge_override_can_narrow_a_clear_hold_boundary():
+    t = np.arange(0, 15, .05)
+    annotation = {"segments": [[2, 5, 2], [5, 10, 3]], "boundary_guard_s": .15,
+                  "hold_boundary_guard_s": .6,
+                  "boundary_overrides": [{"time_s": 5, "guard_s": .2, "reason": "clear edge"}]}
+    y = builder.reviewed_labels(t, annotation)
+    assert np.all(y[np.abs(t - 5) < .2] == -1)
+    assert np.all(y[(t > 4.5) & (t < 4.75)] == 2)
+    assert np.all(y[(t > 5.25) & (t < 5.5)] == 3)
+    assert np.all(y[t > 10] == -1)
+    with pytest.raises(ValueError, match="existing edge"):
+        builder.reviewed_labels(t, {**annotation, "boundary_overrides": [{"time_s": 7, "guard_s": .2}]})
+
+
+def test_clear_transitions_have_no_automatic_gap_even_on_exact_sample():
+    t = np.arange(0, 10, .05)
+    annotation = {"segments": [[1, 5, 2], [5, 9, 0]], "boundary_guard_s": 0,
+                  "hold_boundary_guard_s": .6}
+    y = builder.reviewed_labels(t, annotation)
+    assert np.all(y[(t >= 1) & (t < 5)] == 2)
+    assert np.all(y[(t >= 5) & (t < 9)] == 0)
+    assert np.all(y[t < 1] == -1) and np.all(y[t >= 9] == -1)
+
+
 def test_bundle_preserves_source_groups_and_reduced_power_model():
     path = ROOT / "annotations" / "radar_close_v1" / "generated"
     with np.load(path / "dataset_manual_radar_v1.npz", allow_pickle=False) as data:
