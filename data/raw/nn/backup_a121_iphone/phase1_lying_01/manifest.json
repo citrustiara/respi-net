@@ -1,0 +1,175 @@
+{
+  "tool": "tools/a121_iphone_guided_recording.py",
+  "tool_version": "1.0",
+  "description": "Guided A121 radar + iPhone IMU (RespiPhoneIMU over BLE) recordings for the breathing-phase network: one breathing-pattern file per trial, the iPhone IMU is the phase reference.",
+  "created_at": "2026-10-01T21:34:02.604279+00:00",
+  "session_dir": "/Users/maciek/Documents/repos/respi-net/data/raw/nn/a121_iphone/phase1_lying_01",
+  "posture": "lying",
+  "distance_cm": 45.0,
+  "phone_placement": "iPhone running RespiPhoneIMU lies flat on the upper abdomen / lower sternum, screen up, top edge toward the head, strapped in place. The A121 is aimed at the upper chest and the phone is kept at least 10 cm from that spot, because the phone is a strong reflector that would dominate the radar echo. The subject keeps still.",
+  "a121_port": null,
+  "a121_config": {
+    "start_m": 0.3,
+    "end_m": 1.5,
+    "profile": 3,
+    "hwaas": 32,
+    "sweeps_per_frame": 8,
+    "frame_rate_hz": 20.0,
+    "step_length": 1
+  },
+  "iphone": {
+    "device": "RespiPhoneIMU",
+    "expected_sample_rate_hz": 100.0,
+    "autostart": true,
+    "min_coverage_percent": 95.0,
+    "max_gap_s": 0.25
+  },
+  "prep_seconds": 15.0,
+  "post_roll_s": 1.0,
+  "time_alignment": "All times are host epoch milliseconds (time.time()). A121 Timestamp_ms follows the sensor tick clock, anchored to the host clock when the A121 session started. iPhone Time_ms follows the phone's sample clock, anchored once to the host clock at the arrival of the first BLE packet, so it runs late by about one packet span plus BLE latency; iphone.ble_arrival.stamp_lateness_estimate_ms estimates that lag (subtract it from Time_ms; the minimum BLE latency remains). Cue start_wall_ms/end_wall_ms are measurement_start_wall_ms plus the pattern times. Sensor files hold the rows that arrived from the measurement start until the sensors were stopped post_roll_s after the pattern ended (the A121 file may open with a few frames still queued from just before the start); crop them with the cue wall times. The A121 stamps run about 0.17 percent fast (50/51 ms steps for frames that are 50 ms apart: 1.3 s too long over 12 minutes); use respi_net.chest_signal.regular_frame_times_ms, which a121_chest_signal applies, before comparing the radar with any other sensor.",
+  "trials": [
+    {
+      "number": 1,
+      "pattern_id": "nn_self_3min",
+      "pattern_name": "Sieć faz — nagranie bez przewodnika (3 min)",
+      "pattern_description": "3 minuty bez przewodnika: po ułożeniu się robisz w skrócie to, co w nagraniu 12-minutowym (spokojnie, wolno, szybko, płytko, pauzy po wdechu i wydechu, nieregularnie, ruch i kaszel). Okno nic nie podpowiada; fazy oddechu oznaczy telefon na ciele.",
+      "pattern_source": "configs/breathing_patterns/nn_self_3min.json",
+      "duration_s": 180.0,
+      "phases": 2,
+      "sections": [
+        {
+          "index": 0,
+          "start_s": 0.0,
+          "end_s": 10.0,
+          "kind": "settle",
+          "label": "Uspokojenie 10 s"
+        },
+        {
+          "index": 1,
+          "start_s": 10.0,
+          "end_s": 180.0,
+          "kind": "normal",
+          "label": "Bez przewodnika"
+        }
+      ]
+    }
+  ],
+  "measurements": [
+    {
+      "trial": {
+        "number": 1,
+        "pattern_id": "nn_self_3min",
+        "pattern_name": "Sieć faz — nagranie bez przewodnika (3 min)",
+        "pattern_description": "3 minuty bez przewodnika: po ułożeniu się robisz w skrócie to, co w nagraniu 12-minutowym (spokojnie, wolno, szybko, płytko, pauzy po wdechu i wydechu, nieregularnie, ruch i kaszel). Okno nic nie podpowiada; fazy oddechu oznaczy telefon na ciele.",
+        "pattern_source": "configs/breathing_patterns/nn_self_3min.json",
+        "duration_s": 180.0,
+        "phases": 2,
+        "sections": [
+          {
+            "index": 0,
+            "start_s": 0.0,
+            "end_s": 10.0,
+            "kind": "settle",
+            "label": "Uspokojenie 10 s"
+          },
+          {
+            "index": 1,
+            "start_s": 10.0,
+            "end_s": 180.0,
+            "kind": "normal",
+            "label": "Bez przewodnika"
+          }
+        ]
+      },
+      "setup": {
+        "posture": "lying",
+        "distance_cm": 45.0,
+        "phone_placement": "iPhone running RespiPhoneIMU lies flat on the upper abdomen / lower sternum, screen up, top edge toward the head, strapped in place. The A121 is aimed at the upper chest and the phone is kept at least 10 cm from that spot, because the phone is a strong reflector that would dominate the radar echo. The subject keeps still.",
+        "prep_seconds": 15.0,
+        "post_roll_s": 1.0
+      },
+      "measurement_start_utc": "2026-10-01T21:34:26.355067+00:00",
+      "measurement_start_wall_ms": 1790890466355.067,
+      "measurement_end_wall_ms": 1790890646355.067,
+      "capture_stop_wall_ms": 1790890647403.158,
+      "actual_seconds": 180.04444550001062,
+      "time_alignment": "All times are host epoch milliseconds (time.time()). A121 Timestamp_ms follows the sensor tick clock, anchored to the host clock when the A121 session started. iPhone Time_ms follows the phone's sample clock, anchored once to the host clock at the arrival of the first BLE packet, so it runs late by about one packet span plus BLE latency; iphone.ble_arrival.stamp_lateness_estimate_ms estimates that lag (subtract it from Time_ms; the minimum BLE latency remains). Cue start_wall_ms/end_wall_ms are measurement_start_wall_ms plus the pattern times. Sensor files hold the rows that arrived from the measurement start until the sensors were stopped post_roll_s after the pattern ended (the A121 file may open with a few frames still queued from just before the start); crop them with the cue wall times. The A121 stamps run about 0.17 percent fast (50/51 ms steps for frames that are 50 ms apart: 1.3 s too long over 12 minutes); use respi_net.chest_signal.regular_frame_times_ms, which a121_chest_signal applies, before comparing the radar with any other sensor.",
+      "files": {
+        "a121": "/Users/maciek/Documents/repos/respi-net/data/raw/nn/a121_iphone/phase1_lying_01/run_01_nn_self_3min_a121.csv",
+        "iphone": "/Users/maciek/Documents/repos/respi-net/data/raw/nn/a121_iphone/phase1_lying_01/run_01_nn_self_3min_iphone.csv",
+        "cues": "/Users/maciek/Documents/repos/respi-net/data/raw/nn/a121_iphone/phase1_lying_01/run_01_nn_self_3min_cues.csv"
+      },
+      "a121": {
+        "port": "/dev/cu.usbmodem5AEC0242031",
+        "config": {
+          "start_m": 0.3,
+          "end_m": 1.5,
+          "profile": 3,
+          "hwaas": 32,
+          "sweeps_per_frame": 8,
+          "frame_rate_hz": 20.0,
+          "step_length": 1
+        },
+        "effective": {
+          "start_point": 120,
+          "num_points": 81,
+          "step_length": 6,
+          "sweeps_per_frame": 8,
+          "first_distance_m": 0.30027288012206516,
+          "last_distance_m": 1.501364400610326
+        },
+        "frames": 3621,
+        "expected_frames": 3600,
+        "frames_in_window": 3594,
+        "frame_coverage_percent": 99.83333333333333,
+        "sample_rate_hz": 20.0,
+        "largest_gap_s": 0.051,
+        "first_frame_offset_s": 0.034722900390625,
+        "last_frame_offset_s": 179.97272290039064,
+        "median_peak_distance_m": 0.3753411001525815,
+        "median_target_distance_m": 0.3753411001525815,
+        "presence_percent": 100.0,
+        "dropped_results": 0,
+        "dropped_results_since_connect": 0
+      },
+      "iphone": {
+        "rows": 18132,
+        "sample_rate_hz": 100.0,
+        "estimated_missing_samples": 0,
+        "estimated_missing_percent": 0.0,
+        "device": "RespiPhoneIMU",
+        "expected_sample_rate_hz": 100.0,
+        "window_coverage": {
+          "rows": 18013,
+          "expected_rows": 18000,
+          "sample_coverage_percent": 100.07222222222222,
+          "time_coverage_s": 179.975,
+          "time_coverage_percent": 99.98611111111111,
+          "first_sample_offset_s": 0.02285009765625,
+          "last_sample_offset_s": 179.99785009765625,
+          "largest_gap_s": 0.01
+        },
+        "ble_batches": {
+          "received_batches": 1510,
+          "dropped_batches": 0,
+          "invalid_batches": 0,
+          "missing_batches": 0,
+          "duplicate_batches": 0,
+          "sequence_resets": 0
+        },
+        "ble_arrival": {
+          "packets": 1511,
+          "arrival_minus_last_stamp_ms": {
+            "min": -138.159912109375,
+            "median": -119.76904296875,
+            "p95": -104.8489990234375,
+            "max": -51.31689453125
+          },
+          "stamp_lateness_estimate_ms": 138.159912109375
+        }
+      },
+      "status": "accepted",
+      "accepted_at": "2026-10-01T21:37:28.980453+00:00"
+    }
+  ]
+}

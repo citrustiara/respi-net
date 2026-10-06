@@ -1,0 +1,273 @@
+{
+  "tool": "tools/a121_iphone_guided_recording.py",
+  "tool_version": "1.0",
+  "description": "Guided A121 radar + iPhone IMU (RespiPhoneIMU over BLE) recordings for the breathing-phase network: one breathing-pattern file per trial, the iPhone IMU is the phase reference.",
+  "created_at": "2026-09-30T23:19:41.678264+00:00",
+  "session_dir": "/Users/maciek/Documents/repos/respi-net/data/raw/nn/a121_iphone/self_lying_sideangle_d45_01",
+  "posture": "lying",
+  "distance_cm": 45.0,
+  "phone_placement": "iPhone running RespiPhoneIMU lies flat on the upper abdomen / lower sternum, screen up, top edge toward the head, strapped in place. The A121 is aimed at the upper chest and the phone is kept at least 10 cm from that spot, because the phone is a strong reflector that would dominate the radar echo. The subject keeps still.",
+  "a121_port": null,
+  "a121_config": {
+    "start_m": 0.3,
+    "end_m": 1.5,
+    "profile": 3,
+    "hwaas": 32,
+    "sweeps_per_frame": 8,
+    "frame_rate_hz": 20.0,
+    "step_length": 1
+  },
+  "iphone": {
+    "device": "RespiPhoneIMU",
+    "expected_sample_rate_hz": 100.0,
+    "autostart": true,
+    "min_coverage_percent": 95.0,
+    "max_gap_s": 0.25
+  },
+  "prep_seconds": 20.0,
+  "post_roll_s": 1.0,
+  "time_alignment": "All times are host epoch milliseconds (time.time()). A121 Timestamp_ms follows the sensor tick clock, anchored to the host clock when the A121 session started. iPhone Time_ms follows the phone's sample clock, anchored once to the host clock at the arrival of the first BLE packet, so it runs late by about one packet span plus BLE latency; iphone.ble_arrival.stamp_lateness_estimate_ms estimates that lag (subtract it from Time_ms; the minimum BLE latency remains). Cue start_wall_ms/end_wall_ms are measurement_start_wall_ms plus the pattern times. Sensor files hold the rows that arrived from the measurement start until the sensors were stopped post_roll_s after the pattern ended (the A121 file may open with a few frames still queued from just before the start); crop them with the cue wall times.",
+  "trials": [
+    {
+      "number": 1,
+      "pattern_id": "nn_self_12min",
+      "pattern_name": "Sieć faz — nagranie bez przewodnika (12 min)",
+      "pattern_description": "12 minut bez narzuconego rytmu. Okno tylko przypomina, co robić dalej, i piszczy przy zmianie; fazy oddechu oznaczy telefon na ciele, więc oddychaj po swojemu i nie dotykaj telefonu.",
+      "pattern_source": "configs/breathing_patterns/nn_self_12min.json",
+      "duration_s": 735.0,
+      "phases": 9,
+      "sections": [
+        {
+          "index": 0,
+          "start_s": 0.0,
+          "end_s": 15.0,
+          "kind": "settle",
+          "label": "Uspokojenie 15 s"
+        },
+        {
+          "index": 1,
+          "start_s": 15.0,
+          "end_s": 165.0,
+          "kind": "normal",
+          "label": "Spokojnie"
+        },
+        {
+          "index": 2,
+          "start_s": 165.0,
+          "end_s": 255.0,
+          "kind": "normal",
+          "label": "Wolno"
+        },
+        {
+          "index": 3,
+          "start_s": 255.0,
+          "end_s": 315.0,
+          "kind": "normal",
+          "label": "Szybko"
+        },
+        {
+          "index": 4,
+          "start_s": 315.0,
+          "end_s": 375.0,
+          "kind": "normal",
+          "label": "Płytko"
+        },
+        {
+          "index": 5,
+          "start_s": 375.0,
+          "end_s": 495.0,
+          "kind": "normal",
+          "label": "Pauzy"
+        },
+        {
+          "index": 6,
+          "start_s": 495.0,
+          "end_s": 555.0,
+          "kind": "normal",
+          "label": "Nieregularnie"
+        },
+        {
+          "index": 7,
+          "start_s": 555.0,
+          "end_s": 615.0,
+          "kind": "interference",
+          "label": "Ruch"
+        },
+        {
+          "index": 8,
+          "start_s": 615.0,
+          "end_s": 735.0,
+          "kind": "normal",
+          "label": "Spokojnie"
+        }
+      ]
+    }
+  ],
+  "measurements": [
+    {
+      "trial": {
+        "number": 1,
+        "pattern_id": "nn_self_12min",
+        "pattern_name": "Sieć faz — nagranie bez przewodnika (12 min)",
+        "pattern_description": "12 minut bez narzuconego rytmu. Okno tylko przypomina, co robić dalej, i piszczy przy zmianie; fazy oddechu oznaczy telefon na ciele, więc oddychaj po swojemu i nie dotykaj telefonu.",
+        "pattern_source": "configs/breathing_patterns/nn_self_12min.json",
+        "duration_s": 735.0,
+        "phases": 9,
+        "sections": [
+          {
+            "index": 0,
+            "start_s": 0.0,
+            "end_s": 15.0,
+            "kind": "settle",
+            "label": "Uspokojenie 15 s"
+          },
+          {
+            "index": 1,
+            "start_s": 15.0,
+            "end_s": 165.0,
+            "kind": "normal",
+            "label": "Spokojnie"
+          },
+          {
+            "index": 2,
+            "start_s": 165.0,
+            "end_s": 255.0,
+            "kind": "normal",
+            "label": "Wolno"
+          },
+          {
+            "index": 3,
+            "start_s": 255.0,
+            "end_s": 315.0,
+            "kind": "normal",
+            "label": "Szybko"
+          },
+          {
+            "index": 4,
+            "start_s": 315.0,
+            "end_s": 375.0,
+            "kind": "normal",
+            "label": "Płytko"
+          },
+          {
+            "index": 5,
+            "start_s": 375.0,
+            "end_s": 495.0,
+            "kind": "normal",
+            "label": "Pauzy"
+          },
+          {
+            "index": 6,
+            "start_s": 495.0,
+            "end_s": 555.0,
+            "kind": "normal",
+            "label": "Nieregularnie"
+          },
+          {
+            "index": 7,
+            "start_s": 555.0,
+            "end_s": 615.0,
+            "kind": "interference",
+            "label": "Ruch"
+          },
+          {
+            "index": 8,
+            "start_s": 615.0,
+            "end_s": 735.0,
+            "kind": "normal",
+            "label": "Spokojnie"
+          }
+        ]
+      },
+      "setup": {
+        "posture": "lying",
+        "distance_cm": 45.0,
+        "phone_placement": "iPhone running RespiPhoneIMU lies flat on the upper abdomen / lower sternum, screen up, top edge toward the head, strapped in place. The A121 is aimed at the upper chest and the phone is kept at least 10 cm from that spot, because the phone is a strong reflector that would dominate the radar echo. The subject keeps still.",
+        "prep_seconds": 20.0,
+        "post_roll_s": 1.0
+      },
+      "measurement_start_utc": "2026-09-30T23:20:10.173783+00:00",
+      "measurement_start_wall_ms": 1790810410173.783,
+      "measurement_end_wall_ms": 1790811145173.783,
+      "capture_stop_wall_ms": 1790811146208.056,
+      "actual_seconds": 735.0376583330799,
+      "time_alignment": "All times are host epoch milliseconds (time.time()). A121 Timestamp_ms follows the sensor tick clock, anchored to the host clock when the A121 session started. iPhone Time_ms follows the phone's sample clock, anchored once to the host clock at the arrival of the first BLE packet, so it runs late by about one packet span plus BLE latency; iphone.ble_arrival.stamp_lateness_estimate_ms estimates that lag (subtract it from Time_ms; the minimum BLE latency remains). Cue start_wall_ms/end_wall_ms are measurement_start_wall_ms plus the pattern times. Sensor files hold the rows that arrived from the measurement start until the sensors were stopped post_roll_s after the pattern ended (the A121 file may open with a few frames still queued from just before the start); crop them with the cue wall times.",
+      "files": {
+        "a121": "/Users/maciek/Documents/repos/respi-net/data/raw/nn/a121_iphone/self_lying_sideangle_d45_01/run_01_nn_self_12min_a121.csv",
+        "iphone": "/Users/maciek/Documents/repos/respi-net/data/raw/nn/a121_iphone/self_lying_sideangle_d45_01/run_01_nn_self_12min_iphone.csv",
+        "cues": "/Users/maciek/Documents/repos/respi-net/data/raw/nn/a121_iphone/self_lying_sideangle_d45_01/run_01_nn_self_12min_cues.csv"
+      },
+      "a121": {
+        "port": "/dev/cu.usbmodem5AEC0242031",
+        "config": {
+          "start_m": 0.3,
+          "end_m": 1.5,
+          "profile": 3,
+          "hwaas": 32,
+          "sweeps_per_frame": 8,
+          "frame_rate_hz": 20.0,
+          "step_length": 1
+        },
+        "effective": {
+          "start_point": 120,
+          "num_points": 81,
+          "step_length": 6,
+          "sweeps_per_frame": 8,
+          "first_distance_m": 0.30027288012206516,
+          "last_distance_m": 1.501364400610326
+        },
+        "frames": 14721,
+        "expected_frames": 14700,
+        "frames_in_window": 14675,
+        "frame_coverage_percent": 99.82993197278911,
+        "sample_rate_hz": 20.0,
+        "largest_gap_s": 0.051,
+        "first_frame_offset_s": 0.0422431640625,
+        "last_frame_offset_s": 734.9942431640625,
+        "median_peak_distance_m": 0.30027288012206516,
+        "median_target_distance_m": 0.405368388164788,
+        "presence_percent": 100.0,
+        "dropped_results": 0,
+        "dropped_results_since_connect": 0
+      },
+      "iphone": {
+        "rows": 73668,
+        "sample_rate_hz": 100.0,
+        "estimated_missing_samples": 0,
+        "estimated_missing_percent": 0.0,
+        "device": "RespiPhoneIMU",
+        "expected_sample_rate_hz": 100.0,
+        "window_coverage": {
+          "rows": 73553,
+          "expected_rows": 73500,
+          "sample_coverage_percent": 100.07210884353742,
+          "time_coverage_s": 734.942,
+          "time_coverage_percent": 99.99210884353741,
+          "first_sample_offset_s": 0.05460693359375,
+          "last_sample_offset_s": 734.9966069335937,
+          "largest_gap_s": 0.01
+        },
+        "ble_batches": {
+          "received_batches": 6139,
+          "dropped_batches": 0,
+          "invalid_batches": 0,
+          "missing_batches": 0,
+          "duplicate_batches": 0,
+          "sequence_resets": 0
+        },
+        "ble_arrival": {
+          "packets": 6139,
+          "arrival_minus_last_stamp_ms": {
+            "min": -157.5888671875,
+            "median": -131.8359375,
+            "p95": -111.8376220703125,
+            "max": -25.032958984375
+          },
+          "stamp_lateness_estimate_ms": 157.5888671875
+        }
+      },
+      "status": "accepted",
+      "accepted_at": "2026-09-30T23:32:27.670485+00:00"
+    }
+  ]
+}

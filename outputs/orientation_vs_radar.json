@@ -1,0 +1,281 @@
+{
+ "phase1_halfside_02": {
+  "developed_on": false,
+  "window_s": [
+   10.0,
+   160.0
+  ],
+  "scores": {
+   "single_axis": {
+    "all": {
+     "accuracy": 0.8587137620793069,
+     "seconds": 150.05,
+     "boundaries_found": 0.7674418604651163
+    },
+    "hold_episodes": {
+     "accuracy": 0.6601796407185628,
+     "seconds": 33.4,
+     "boundaries_found": 0.16666666666666666
+    },
+    "rest": {
+     "accuracy": 0.9155593656236605,
+     "seconds": 116.65,
+     "boundaries_found": 0.8648648648648649
+    }
+   },
+   "orientation": {
+    "all": {
+     "accuracy": 0.8760413195601466,
+     "seconds": 150.05,
+     "boundaries_found": 0.7674418604651163
+    },
+    "hold_episodes": {
+     "accuracy": 0.7844311377245509,
+     "seconds": 33.4,
+     "boundaries_found": 0.3333333333333333
+    },
+    "rest": {
+     "accuracy": 0.9022717531075868,
+     "seconds": 116.65,
+     "boundaries_found": 0.8378378378378378
+    }
+   }
+  },
+  "holds": [
+   {
+    "hold_s": [
+     73.65,
+     83.7
+    ],
+    "radar_kept": 6.438603077809984,
+    "kept_single_axis": 0.2562293544424751,
+    "kept_orientation": 0.4621663874106872,
+    "drop_single_axis_s": -0.5,
+    "drop_orientation_s": 1.2000000000000028,
+    "drop_radar_s": 1.4500000000000028
+   },
+   {
+    "hold_s": [
+     138.65,
+     145.9
+    ],
+    "radar_kept": 2.1703134158753477,
+    "kept_single_axis": 0.08389257995350378,
+    "kept_orientation": 0.5048528521667831,
+    "drop_single_axis_s": -0.5,
+    "drop_orientation_s": 0.9499999999999886,
+    "drop_radar_s": 1.25
+   }
+  ]
+ },
+ "phase1_lying_01": {
+  "developed_on": false,
+  "window_s": [
+   20.0,
+   180.0
+  ],
+  "scores": {
+   "single_axis": {
+    "all": {
+     "accuracy": 0.7875,
+     "seconds": 160.0,
+     "boundaries_found": 0.75
+    },
+    "hold_episodes": {
+     "accuracy": 0.6160520607375272,
+     "seconds": 69.15,
+     "boundaries_found": 0.26666666666666666
+    },
+    "rest": {
+     "accuracy": 0.9179966978536048,
+     "seconds": 90.85,
+     "boundaries_found": 0.918918918918919
+    }
+   },
+   "orientation": {
+    "all": {
+     "accuracy": 0.785,
+     "seconds": 160.0,
+     "boundaries_found": 0.7708333333333334
+    },
+    "hold_episodes": {
+     "accuracy": 0.6124367317425886,
+     "seconds": 69.15,
+     "boundaries_found": 0.3333333333333333
+    },
+    "rest": {
+     "accuracy": 0.9163456246560264,
+     "seconds": 90.85,
+     "boundaries_found": 0.918918918918919
+    }
+   }
+  },
+  "holds": [
+   {
+    "hold_s": [
+     28.1,
+     32.25
+    ],
+    "radar_kept": 2.1733295884732176,
+    "kept_single_axis": 0.26041735493230367,
+    "kept_orientation": 0.10326258208369626,
+    "drop_single_axis_s": NaN,
+    "drop_orientation_s": 2.5500000000000043,
+    "drop_radar_s": NaN
+   },
+   {
+    "hold_s": [
+     121.1,
+     136.4
+    ],
+    "radar_kept": 4.577581408057397,
+    "kept_single_axis": 0.3101913854356352,
+    "kept_orientation": 0.5003527113459421,
+    "drop_single_axis_s": -0.5,
+    "drop_orientation_s": 1.0,
+    "drop_radar_s": NaN
+   },
+   {
+    "hold_s": [
+     146.15,
+     150.2
+    ],
+    "radar_kept": NaN,
+    "kept_single_axis": 0.17367168172062283,
+    "kept_orientation": 0.15803057412224508,
+    "drop_single_axis_s": 4.549999999999983,
+    "drop_orientation_s": 4.299999999999983,
+    "drop_radar_s": NaN
+   },
+   {
+    "hold_s": [
+     162.5,
+     167.05
+    ],
+    "radar_kept": 1.7631220837797283,
+    "kept_single_axis": 0.21488081156726377,
+    "kept_orientation": 0.19415870815342673,
+    "drop_single_axis_s": NaN,
+    "drop_orientation_s": NaN,
+    "drop_radar_s": NaN
+   },
+   {
+    "hold_s": [
+     173.6,
+     179.95
+    ],
+    "radar_kept": NaN,
+    "kept_single_axis": 0.36594960227003565,
+    "kept_orientation": 0.37592188270104737,
+    "drop_single_axis_s": NaN,
+    "drop_orientation_s": NaN,
+    "drop_radar_s": NaN
+   }
+  ]
+ },
+ "self_lying_3min_01": {
+  "developed_on": true,
+  "window_s": [
+   20.0,
+   158.5
+  ],
+  "scores": {
+   "single_axis": {
+    "all": {
+     "accuracy": 0.8462648863226272,
+     "seconds": 138.55,
+     "boundaries_found": 0.8297872340425532
+    },
+    "hold_episodes": {
+     "accuracy": 0.7909429280397022,
+     "seconds": 80.6,
+     "boundaries_found": 0.6666666666666666
+    },
+    "rest": {
+     "accuracy": 0.9232096635030198,
+     "seconds": 57.95,
+     "boundaries_found": 0.9655172413793104
+    }
+   },
+   "orientation": {
+    "all": {
+     "accuracy": 0.8971490436665464,
+     "seconds": 138.55,
+     "boundaries_found": 0.9148936170212766
+    },
+    "hold_episodes": {
+     "accuracy": 0.8691066997518611,
+     "seconds": 80.6,
+     "boundaries_found": 0.8095238095238095
+    },
+    "rest": {
+     "accuracy": 0.9361518550474547,
+     "seconds": 57.95,
+     "boundaries_found": 1.0
+    }
+   }
+  },
+  "holds": [
+   {
+    "hold_s": [
+     34.55,
+     39.2
+    ],
+    "radar_kept": 0.9165923847600846,
+    "kept_single_axis": 0.19382479118961066,
+    "kept_orientation": 0.12384204961647677,
+    "drop_single_axis_s": -0.5,
+    "drop_orientation_s": -0.5,
+    "drop_radar_s": NaN
+   },
+   {
+    "hold_s": [
+     49.05,
+     57.7
+    ],
+    "radar_kept": 2.584718071126837,
+    "kept_single_axis": 0.021554396130181442,
+    "kept_orientation": 1.2434434582513563,
+    "drop_single_axis_s": -0.5,
+    "drop_orientation_s": 0.9500000000000028,
+    "drop_radar_s": 1.7999999999999972
+   },
+   {
+    "hold_s": [
+     80.95,
+     92.95
+    ],
+    "radar_kept": 0.36868659913025725,
+    "kept_single_axis": 0.04769653559050113,
+    "kept_orientation": 0.19772717847049487,
+    "drop_single_axis_s": -0.3999999999999915,
+    "drop_orientation_s": NaN,
+    "drop_radar_s": NaN
+   },
+   {
+    "hold_s": [
+     95.0,
+     102.9
+    ],
+    "radar_kept": 1.2729218373732685,
+    "kept_single_axis": 0.14905451351663895,
+    "kept_orientation": 0.5061639554972952,
+    "drop_single_axis_s": -0.5,
+    "drop_orientation_s": 0.8499999999999943,
+    "drop_radar_s": 0.5999999999999943
+   },
+   {
+    "hold_s": [
+     110.75,
+     124.2
+    ],
+    "radar_kept": -0.026052852924210498,
+    "kept_single_axis": 0.14274155780837522,
+    "kept_orientation": 0.07270102942302346,
+    "drop_single_axis_s": NaN,
+    "drop_orientation_s": 0.5,
+    "drop_radar_s": NaN
+   }
+  ]
+ }
+}

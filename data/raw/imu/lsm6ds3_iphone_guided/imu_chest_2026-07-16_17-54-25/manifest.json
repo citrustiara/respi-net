@@ -1,0 +1,474 @@
+{
+  "experiment": "Simultaneous LSM6DS3 UART and iPhone BLE chest IMU comparison",
+  "created_at": "2026-07-16T15:54:25.869849+00:00",
+  "position": "supine; iPhone and LSM6DS3 adjacent on the upper chest, same orientation",
+  "trials": [
+    {
+      "number": 1,
+      "trial_id": "natural-hold-r1",
+      "label": "Oddech naturalny + wstrzymanie — 1/2",
+      "duration_s": 60.0,
+      "cues": [
+        {
+          "start_s": 0.0,
+          "end_s": 10.0,
+          "kind": "settle",
+          "title": "USPOKÓJ POZYCJĘ",
+          "detail": "Leż spokojnie, bez celowych ruchów."
+        },
+        {
+          "start_s": 10.0,
+          "end_s": 45.0,
+          "kind": "normal",
+          "title": "ODDYCHAJ SWOBODNIE",
+          "detail": "Oddychaj naturalnie, bez narzuconego rytmu."
+        },
+        {
+          "start_s": 45.0,
+          "end_s": 60.0,
+          "kind": "hold",
+          "title": "WSTRZYMAJ ODDECH",
+          "detail": "Zatrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę."
+        }
+      ]
+    },
+    {
+      "number": 2,
+      "trial_id": "natural-hold-r2",
+      "label": "Oddech naturalny + wstrzymanie — 2/2",
+      "duration_s": 60.0,
+      "cues": [
+        {
+          "start_s": 0.0,
+          "end_s": 10.0,
+          "kind": "settle",
+          "title": "USPOKÓJ POZYCJĘ",
+          "detail": "Leż spokojnie, bez celowych ruchów."
+        },
+        {
+          "start_s": 10.0,
+          "end_s": 45.0,
+          "kind": "normal",
+          "title": "ODDYCHAJ SWOBODNIE",
+          "detail": "Oddychaj naturalnie, bez narzuconego rytmu."
+        },
+        {
+          "start_s": 45.0,
+          "end_s": 60.0,
+          "kind": "hold",
+          "title": "WSTRZYMAJ ODDECH",
+          "detail": "Zatrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę."
+        }
+      ]
+    },
+    {
+      "number": 3,
+      "trial_id": "paced-r1",
+      "label": "Rytm 12/min + wstrzymanie — 1/2",
+      "duration_s": 90.0,
+      "cues": [
+        {
+          "start_s": 0.0,
+          "end_s": 10.0,
+          "kind": "normal",
+          "title": "ODDYCHAJ SWOBODNIE",
+          "detail": "Ustabilizuj pozycję."
+        },
+        {
+          "start_s": 10.0,
+          "end_s": 12.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 12.0,
+          "end_s": 15.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 15.0,
+          "end_s": 17.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 17.0,
+          "end_s": 20.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 20.0,
+          "end_s": 22.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 22.0,
+          "end_s": 25.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 25.0,
+          "end_s": 27.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 27.0,
+          "end_s": 30.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 30.0,
+          "end_s": 32.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 32.0,
+          "end_s": 35.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 35.0,
+          "end_s": 37.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 37.0,
+          "end_s": 40.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 40.0,
+          "end_s": 42.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 42.0,
+          "end_s": 45.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 45.0,
+          "end_s": 60.0,
+          "kind": "hold",
+          "title": "WSTRZYMAJ ODDECH",
+          "detail": "Wstrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę."
+        },
+        {
+          "start_s": 60.0,
+          "end_s": 62.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 62.0,
+          "end_s": 65.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 65.0,
+          "end_s": 67.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 67.0,
+          "end_s": 70.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 70.0,
+          "end_s": 72.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 72.0,
+          "end_s": 75.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 75.0,
+          "end_s": 77.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 77.0,
+          "end_s": 80.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 80.0,
+          "end_s": 82.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 82.0,
+          "end_s": 85.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 85.0,
+          "end_s": 87.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 87.0,
+          "end_s": 90.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        }
+      ]
+    },
+    {
+      "number": 4,
+      "trial_id": "paced-r2",
+      "label": "Rytm 12/min + wstrzymanie — 2/2",
+      "duration_s": 90.0,
+      "cues": [
+        {
+          "start_s": 0.0,
+          "end_s": 10.0,
+          "kind": "normal",
+          "title": "ODDYCHAJ SWOBODNIE",
+          "detail": "Ustabilizuj pozycję."
+        },
+        {
+          "start_s": 10.0,
+          "end_s": 12.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 12.0,
+          "end_s": 15.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 15.0,
+          "end_s": 17.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 17.0,
+          "end_s": 20.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 20.0,
+          "end_s": 22.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 22.0,
+          "end_s": 25.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 25.0,
+          "end_s": 27.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 27.0,
+          "end_s": 30.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 30.0,
+          "end_s": 32.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 32.0,
+          "end_s": 35.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 35.0,
+          "end_s": 37.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 37.0,
+          "end_s": 40.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 40.0,
+          "end_s": 42.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 42.0,
+          "end_s": 45.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 45.0,
+          "end_s": 60.0,
+          "kind": "hold",
+          "title": "WSTRZYMAJ ODDECH",
+          "detail": "Wstrzymaj oddech po wydechu; przy dyskomforcie przerwij próbę."
+        },
+        {
+          "start_s": 60.0,
+          "end_s": 62.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 62.0,
+          "end_s": 65.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 65.0,
+          "end_s": 67.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 67.0,
+          "end_s": 70.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 70.0,
+          "end_s": 72.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 72.0,
+          "end_s": 75.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 75.0,
+          "end_s": 77.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 77.0,
+          "end_s": 80.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 80.0,
+          "end_s": 82.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 82.0,
+          "end_s": 85.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        },
+        {
+          "start_s": 85.0,
+          "end_s": 87.0,
+          "kind": "inhale",
+          "title": "WDECH",
+          "detail": "Spokojny wdech przez 2 s."
+        },
+        {
+          "start_s": 87.0,
+          "end_s": 90.0,
+          "kind": "exhale",
+          "title": "WYDECH",
+          "detail": "Spokojny wydech przez 3 s."
+        }
+      ]
+    }
+  ],
+  "measurements": []
+}

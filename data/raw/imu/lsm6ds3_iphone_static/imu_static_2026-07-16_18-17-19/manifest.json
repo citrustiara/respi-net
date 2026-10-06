@@ -1,0 +1,53 @@
+{
+  "experiment": "Simultaneous static LSM6DS3 and iPhone IMU noise recording",
+  "created_at": "2026-07-16T16:17:19.271546+00:00",
+  "instruction": "Both IMUs fixed on the same rigid, motionless surface; do not touch them during capture.",
+  "duration_requested_s": 60.0,
+  "status": "accepted",
+  "measurement_start_utc": "2026-07-16T16:17:25.200833+00:00",
+  "measurement_start_wall_ms": 1784218645200.833,
+  "measurement_end_wall_ms": 1784218705200.774,
+  "actual_duration_s": 59.99994091796875,
+  "files": {
+    "lsm6ds3": "/Users/maciek/Documents/repos/respi-net/data/raw/imu/lsm6ds3_iphone_static/imu_static_2026-07-16_18-17-19/lsm6ds3_static.csv",
+    "iphone": "/Users/maciek/Documents/repos/respi-net/data/raw/imu/lsm6ds3_iphone_static/imu_static_2026-07-16_18-17-19/iphone_static.csv"
+  },
+  "lsm6ds3": {
+    "rows": 6079,
+    "format": "timestamped",
+    "new_format_rows": 6079,
+    "legacy_rows": 0,
+    "device_sample_rate_hz": 100.0,
+    "host_arrival_sample_rate_hz": 100.11243095273012,
+    "missing_samples": 0,
+    "missing_percent": 0.0,
+    "duplicate_samples": 0,
+    "counter_resets": 0,
+    "device_time_regressions": 0,
+    "malformed_lines": 0
+  },
+  "iphone": {
+    "rows": 6000,
+    "sample_rate_hz": 100.0,
+    "estimated_missing_samples": 0,
+    "estimated_missing_percent": 0.0,
+    "window_coverage": {
+      "rows": 6000,
+      "expected_rows": 6000,
+      "sample_coverage_percent": 100.0,
+      "time_coverage_s": 59.942,
+      "time_coverage_percent": 99.90333333333334,
+      "first_sample_offset_s": 0.095705810546875,
+      "last_sample_offset_s": 60.037705810546875,
+      "largest_gap_s": 0.01
+    },
+    "ble_batches": {
+      "received_batches": 500,
+      "dropped_batches": 0,
+      "invalid_batches": 0,
+      "missing_batches": 0,
+      "duplicate_batches": 0,
+      "sequence_resets": 0
+    }
+  }
+}
