@@ -1899,8 +1899,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if record is None:
             return
         try:
-            if record["source"] == "CSV":
-                self._open_csv(Path(record["data"]))
+            if isinstance(record["data"], Path):
+                self._open_csv(record["data"], title=record["label"] if record["source"] == "Demo" else None)
             else:
                 session = record["data"]
                 df = self.store.load_session(int(session["id"]), session["sensor"])
@@ -1916,10 +1916,10 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception as exc:
                 QtWidgets.QMessageBox.critical(self, "Open failed", str(exc))
 
-    def _open_csv(self, path: Path) -> None:
+    def _open_csv(self, path: Path, title: str | None = None) -> None:
         df = pd.read_csv(path)
         sensor = _detect_sensor(df)
-        self._plot_history_df(sensor, df, path.name, csv_path=path)
+        self._plot_history_df(sensor, df, title or path.name, csv_path=path)
 
     def _plot_history_df(self, sensor: str, df: pd.DataFrame, title: str, csv_path: Path | None = None) -> None:
         if df.empty:
