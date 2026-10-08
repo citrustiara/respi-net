@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
@@ -10,6 +10,7 @@ import pandas as pd
 from scipy.signal import butter, coherence, detrend, find_peaks, hilbert, sosfiltfilt, welch, lfilter
 
 from .a121 import parse_json_array
+from .chest_signal import A121_CHEST_SIGN, DEFAULT_LOW_PASS_HZ, PHASE_TO_MM
 
 RESP_BAND_HZ = (0.10, 0.50)
 # Narrowed for resting vitals: 6-30 breaths/minute (0.10-0.50 Hz).
@@ -108,6 +109,10 @@ class A121LiveTraceResult:
     raw_q: np.ndarray
     resp_signal: np.ndarray
     heart_signal: np.ndarray
+    # Chest motion as the phase network sees it: causal 2 Hz low-pass only, mm, inhale up.
+    chest_mm: np.ndarray = field(default_factory=lambda: np.asarray([], dtype=float))
+    # Echo strength of the same bins, 20*log10 of the weighted amplitude (network input channel).
+    echo_db: np.ndarray = field(default_factory=lambda: np.asarray([], dtype=float))
 
 
 class A121LiveTraceProcessor:
@@ -154,6 +159,10 @@ class A121LiveTraceProcessor:
         self.a_heart: np.ndarray | None = None
         self.heart_x: np.ndarray | None = None
         self.heart_y: np.ndarray | None = None
+        self.b_chest: np.ndarray | None = None
+        self.a_chest: np.ndarray | None = None
+        self.chest_x: np.ndarray | None = None
+        self.chest_y: np.ndarray | None = None
         self.prev_angle: np.ndarray | None = None
         self.angle_unwrapped: np.ndarray | None = None
         self.lp_filt_ampl: np.ndarray | None = None
@@ -166,10 +175,12 @@ class A121LiveTraceProcessor:
         self.raw_q: deque[float] = deque(maxlen=maxlen)
         self.resp_signal: deque[float] = deque(maxlen=maxlen)
         self.heart_signal: deque[float] = deque(maxlen=maxlen)
+        self.chest_mm: deque[float] = deque(maxlen=maxlen)
+        self.echo_db: deque[float] = deque(maxlen=maxlen)
 
     def _resize_history(self) -> None:
         maxlen = max(32, int(round(self.max_history_s * max(self.fs, 1.0) * 1.2)))
-        for name in ("times", "raw_phase", "raw_i", "raw_q", "resp_signal", "heart_signal"):
+        for name in ("times", "raw_phase", "raw_i", "raw_q", "resp_signal", "heart_signal", "chest_mm", "echo_db"):
             old = getattr(self, name)
             setattr(self, name, deque(old, maxlen=maxlen))
 
@@ -212,6 +223,13 @@ class A121LiveTraceProcessor:
             self.heart_y = np.zeros((len(self.a_heart) - 1, self.m), dtype=float)
         else:
             self.b_heart = self.a_heart = self.heart_x = self.heart_y = None
+
+        # The network-input path (chest_signal.light_filter, causal): low-pass only, so a held
+        # breath stays flat instead of being pulled back to zero by the 0.1 Hz band edge.
+        chest_cutoff = min(DEFAULT_LOW_PASS_HZ, 0.45 * self.fs)
+        self.b_chest, self.a_chest = butter(2, chest_cutoff, btype="lowpass", fs=self.fs)
+        self.chest_x = np.zeros((len(self.b_chest), self.m), dtype=float)
+        self.chest_y = np.zeros((len(self.a_chest) - 1, self.m), dtype=float)
 
         self.prev_angle = None
         self.angle_unwrapped = np.zeros(self.m, dtype=float)
@@ -371,6 +389,8 @@ class A121LiveTraceProcessor:
                 heart_all = self._iir_step(phase_ac, self.b_heart, self.a_heart, self.heart_x, self.heart_y)
             else:
                 heart_all = np.zeros_like(self.angle_unwrapped)
+            # The low-pass has unit DC gain, so it follows the undetrended cumulative phase.
+            chest_all = self._iir_step(self.angle_unwrapped, self.b_chest, self.a_chest, self.chest_x, self.chest_y)
 
             if self.first_timestamp_ms is None:
                 self.first_timestamp_ms = timestamp_ms
@@ -390,9 +410,15 @@ class A121LiveTraceProcessor:
             if len(candidate_idx):
                 self.resp_signal.append(float(np.sum(resp_all[candidate_idx] * weights)))
                 self.heart_signal.append(float(np.sum(heart_all[candidate_idx] * weights)))
+                chest_phase = float(np.sum(chest_all[candidate_idx] * weights))
+                echo_amp = float(np.sum(amp[candidate_idx] * weights))
             else:
                 self.resp_signal.append(float(resp_all[selected_idx]))
                 self.heart_signal.append(float(heart_all[selected_idx]))
+                chest_phase = float(chest_all[selected_idx])
+                echo_amp = float(amp[selected_idx])
+            self.chest_mm.append(A121_CHEST_SIGN * PHASE_TO_MM * chest_phase)
+            self.echo_db.append(20.0 * float(np.log10(max(echo_amp, 1e-9))))
 
         return self.result()
 
@@ -409,6 +435,8 @@ class A121LiveTraceProcessor:
             raw_q=np.asarray(self.raw_q, dtype=float),
             resp_signal=np.asarray(self.resp_signal, dtype=float),
             heart_signal=np.asarray(self.heart_signal, dtype=float),
+            chest_mm=np.asarray(self.chest_mm, dtype=float),
+            echo_db=np.asarray(self.echo_db, dtype=float),
         )
 
 

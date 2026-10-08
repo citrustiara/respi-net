@@ -1,0 +1,14 @@
+{
+  "description": "Recordings listed first in the app's Recordings tab, for demos. Paths are relative to the repo root; missing files are skipped.",
+  "recordings": [
+    {"path": "data/raw/nn/a121_iphone/phase1_halfside_02/run_01_nn_self_3min_a121.csv", "label": "2026-10-01  3 min  półbokiem 0,45 m  bez komend, dwie pauzy po wdechu"},
+    {"path": "data/raw/nn/a121_iphone/sit_nophone_01/run_01_phone_site_1m_a121.csv", "label": "2026-10-04  1 min  siedząc 0,5 m  pauza po wdechu i po wydechu"},
+    {"path": "data/raw/nn/a121_iphone/sit_phone_mid_01/run_01_phone_site_1m_a121.csv", "label": "2026-10-04  1 min  siedząc 0,5 m  telefon na mostku w wiązce (porównanie)"},
+    {"path": "data/raw/nn/a121_iphone/pilot_coach_1m/run_01_paced_12_hold_a121.csv", "label": "2026-09-30  1,5 min  leżąc 1 m  coach 12/min + pauza 15 s"},
+    {"path": "data/raw/nn/a121_iphone/self_lying_3min_01/run_01_nn_self_3min_a121.csv", "label": "2026-10-01  3 min  leżąc 0,45 m  oddech naturalny"},
+    {"path": "data/raw/nn/a121_iphone/self_lying_sideangle_d45_01/run_01_nn_self_12min_a121.csv", "label": "2026-10-01  12 min  leżąc, radar z boku  słaby sygnał (trudny przypadek)"},
+    {"path": "data/raw/a121/guided/guided_foil2m_2026-07-15_16-26-15/condition_01_n0_repeat_03_run_12_unglued_natural_200p0cm_hyperbolic.csv", "label": "2026-07-15  1,5 min  2 m  soczewka hiperboliczna, coach + pauza"},
+    {"path": "data/raw/a121/guided/guided_2026-07-14_17-58-54/condition_10_repeat_01_run_28_unglued_100p0cm_hyperbolic.csv", "label": "2026-07-14  1 min  1 m  soczewka hiperboliczna"},
+    {"path": "data/raw/a121/guided/guided_2026-07-14_17-58-54/condition_12_repeat_01_run_34_unglued_100p0cm_flat_cover.csv", "label": "2026-07-14  1 min  1 m  osłona płaska (porównanie soczewek)"}
+  ]
+}

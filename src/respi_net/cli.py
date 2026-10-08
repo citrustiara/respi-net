@@ -50,11 +50,19 @@ def ports() -> None:
     type=click.IntRange(9600, 2_000_000),
     help="Serial rate override; defaults to 230400 for HB100 and 115200 for the ESP32 IMU.",
 )
-def app(sensor: str, port: str | None, baud: int | None) -> None:
+@click.option(
+    "--open",
+    "open_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Recording CSV to show in the Recordings tab on start (no hardware needed).",
+)
+def app(sensor: str, port: str | None, baud: int | None, open_path: Path | None) -> None:
     """Open the unified radar/IMU desktop app."""
     from .app import launch_app
 
-    raise SystemExit(launch_app(default_sensor=sensor.lower().replace("-", "_"), default_port=port, default_baud=baud))
+    raise SystemExit(
+        launch_app(default_sensor=sensor.lower().replace("-", "_"), default_port=port, default_baud=baud, open_path=open_path)
+    )
 
 
 @cli.command("coach")

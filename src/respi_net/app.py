@@ -17,6 +17,7 @@ from scipy.signal import find_peaks, welch
 
 from .a121 import A121_CAPTURE_COLUMNS, A121_COLUMNS, A121Config, A121Capture, parse_json_array
 from .a121_breaths import default_breath_annotations_path, generate_a121_breath_annotations
+from .chest_signal import A121_CHEST_SIGN, PHASE_TO_MM, a121_chest_signal
 from .a121_vitals import (
     A121_RATE_WINDOW_S,
     A121_RESP_BAND_HZ,
@@ -33,6 +34,7 @@ from .imu import DEFAULT_IMU_BAUD, IMU_COLUMNS, LSM6DS3_CAPTURE_COLUMNS, BreathC
 from .iphone_imu import IPhoneIMUBluetoothCapture
 from .paths import (
     DATA_DIR,
+    PROJECT_ROOT,
     RAW_A121_DIR,
     RAW_IMU_DIR,
     RAW_RADAR_DIR,
@@ -493,10 +495,17 @@ class MainWindow(QtWidgets.QMainWindow):
             """
             QMainWindow, QWidget { background: #0b1220; color: #e5e7eb; }
             QFrame { background: #111827; border: 1px solid #263244; border-radius: 10px; }
-            QLabel { color: #e5e7eb; }
+            QLabel { color: #e5e7eb; border: 0; background: transparent; }
+            QCheckBox { background: transparent; }
+            QScrollArea#sidePanelScroll { border: 0; background: transparent; }
+            QScrollBar:vertical { background: #0b1220; width: 10px; margin: 0; border: 0; }
+            QScrollBar::handle:vertical { background: #334155; border-radius: 5px; min-height: 30px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
             QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QTextEdit, QTableWidget {
                 background: #0f172a; color: #e5e7eb; border: 1px solid #334155; border-radius: 6px; padding: 4px;
             }
+            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { min-height: 22px; }
             QPushButton { background: #1d4ed8; color: white; border: 0; border-radius: 7px; padding: 8px; font-weight: 600; }
             QPushButton:hover { background: #2563eb; }
             QPushButton:disabled { background: #374151; color: #9ca3af; }
@@ -554,7 +563,6 @@ class MainWindow(QtWidgets.QMainWindow):
         root_layout.setContentsMargins(10, 10, 10, 10)
 
         side = QtWidgets.QFrame()
-        side.setFixedWidth(520)
         side.setMinimumWidth(520)
         side.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
         side_layout = QtWidgets.QVBoxLayout(side)
@@ -567,6 +575,7 @@ class MainWindow(QtWidgets.QMainWindow):
         form.setFieldGrowthPolicy(QtWidgets.QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         form.setRowWrapPolicy(QtWidgets.QFormLayout.RowWrapPolicy.DontWrapRows)
         form.setHorizontalSpacing(14)
+        form.setLabelAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter)
         self.sensor_combo = QtWidgets.QComboBox()
         self.sensor_combo.addItems(["HB100 Radar", "A121 Radar", "IMU", "iPhone IMU (BLE)"])
         self.sensor_combo.currentTextChanged.connect(self._sensor_changed)
@@ -594,7 +603,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.window_spin = QtWidgets.QSpinBox()
         self.window_spin.setRange(2, 120)
-        self.window_spin.setValue(10)
+        self.window_spin.setValue(30)
         self.window_spin.setSuffix(" s")
         self.window_spin.setMinimumWidth(220)
         self.window_spin.valueChanged.connect(lambda _value: self._invalidate_a121_analysis())
@@ -628,7 +637,7 @@ class MainWindow(QtWidgets.QMainWindow):
         form.addRow("A121 analyzer refresh", self.a121_analysis_refresh_spin)
 
         self.view_combo = QtWidgets.QComboBox()
-        self.view_combo.addItems(["Vitals (filtered)", "Rate FFT", "Raw signal"])
+        self.view_combo.addItems(["Network input (chest)", "Rate FFT", "Raw signal"])
         self.view_combo.currentTextChanged.connect(self._configure_live_plots)
         form.addRow("View", self.view_combo)
 
@@ -641,13 +650,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.a121_show_gate_check.setChecked(False)
         form.addRow("A121 gate display", self.a121_show_gate_check)
 
-        self.a121_auto_breath_check = QtWidgets.QCheckBox("auto classify inhale/exhale")
-        self.a121_auto_breath_check.setChecked(True)
+        # Off by default and kept out of the side panel (View menu): the simple peak/trough rule
+        # mislabels holds, which is what the phase network is for.
+        self.a121_auto_breath_check = QtWidgets.QCheckBox("auto classify inhale/exhale", self)
+        self.a121_auto_breath_check.hide()
+        self.a121_auto_breath_check.setChecked(self._menu_checked("a121_breath_shading_action"))
         self.a121_auto_breath_check.setToolTip(
             "Automatically mark inhale/exhale phases on A121 respiration plots and save a "
             "*_breath_annotations.csv sidecar for CSV recordings."
         )
-        form.addRow("A121 breath phases", self.a121_auto_breath_check)
 
         self.a121_auto_gate_check = QtWidgets.QCheckBox("Acconeer app-state reacquisition")
         self.a121_auto_gate_check.setChecked(True)
@@ -745,6 +756,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.live_plot_a = self.live_graph.addPlot(row=0, col=0)
         self.live_plot_b = self.live_graph.addPlot(row=1, col=0)
         self.live_plot_c = self.live_graph.addPlot(row=2, col=0)
+        # The breathing traces get more height than the range profile.
+        for row, stretch in ((0, 2), (1, 3), (2, 3)):
+            self.live_graph.ci.layout.setRowStretchFactor(row, stretch)
         live_layout.addWidget(self.live_graph)
         self.tabs.addTab(self.live_tab, "Live")
 
@@ -758,6 +772,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.recording_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.recording_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.recording_table.doubleClicked.connect(self._open_selected_recording)
+        # The path is in each row's tooltip; hiding the column leaves room for the label.
+        self.recording_table.setColumnHidden(4, True)
         left_hist.addWidget(self.recording_table)
         btn_row = QtWidgets.QHBoxLayout()
         self.open_btn = QtWidgets.QPushButton("Open")
@@ -770,7 +786,7 @@ class MainWindow(QtWidgets.QMainWindow):
         btn_row.addWidget(self.refresh_recordings_btn)
         btn_row.addWidget(self.open_file_btn)
         left_hist.addLayout(btn_row)
-        hist_layout.addLayout(left_hist, 1)
+        hist_layout.addLayout(left_hist, 2)
 
         right_hist = QtWidgets.QVBoxLayout()
         self.history_graph = pg.GraphicsLayoutWidget()
@@ -782,10 +798,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.history_stats.setReadOnly(True)
         self.history_stats.setMaximumHeight(150)
         right_hist.addWidget(self.history_stats)
-        hist_layout.addLayout(right_hist, 2)
+        hist_layout.addLayout(right_hist, 3)
         self.tabs.addTab(self.history_tab, "Recordings")
 
-        root_layout.addWidget(side)
+        # A short window scrolls the controls instead of squeezing every row until its text is cut.
+        side_scroll = QtWidgets.QScrollArea()
+        side_scroll.setObjectName("sidePanelScroll")
+        side_scroll.setWidget(side)
+        side_scroll.setWidgetResizable(True)
+        side_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        side_scroll.setFixedWidth(540)
+        root_layout.addWidget(side_scroll)
         root_layout.addWidget(self.tabs, 1)
         self.setCentralWidget(root)
         self._configure_live_plots()
@@ -816,6 +839,20 @@ class MainWindow(QtWidgets.QMainWindow):
         refresh_recordings = QtGui.QAction("Refresh recordings", self)
         refresh_recordings.triggered.connect(self._refresh_recordings)
         view_menu.addAction(refresh_recordings)
+        view_menu.addSeparator()
+        # Tucked away on purpose: the default A121 view is the phase network's input.
+        self.a121_classic_vitals_action = QtGui.QAction("A121: classic breathing + heart bands", self)
+        self.a121_classic_vitals_action.setCheckable(True)
+        self.a121_classic_vitals_action.toggled.connect(self._configure_live_plots)
+        view_menu.addAction(self.a121_classic_vitals_action)
+        self.a121_velocity_action = QtGui.QAction("A121: show chest velocity", self)
+        self.a121_velocity_action.setCheckable(True)
+        self.a121_velocity_action.toggled.connect(self._configure_live_plots)
+        view_menu.addAction(self.a121_velocity_action)
+        self.a121_breath_shading_action = QtGui.QAction("A121: inhale/exhale shading (simple detector)", self)
+        self.a121_breath_shading_action.setCheckable(True)
+        self.a121_breath_shading_action.toggled.connect(self._a121_breath_shading_toggled)
+        view_menu.addAction(self.a121_breath_shading_action)
 
     def _show_a121_signal_test_window(self) -> None:
         if self.a121_signal_window is None:
@@ -995,6 +1032,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 continue
             color = QtGui.QColor(59, 130, 246, 36) if phase == "inhale" else QtGui.QColor(249, 115, 22, 36)
             item = pg.LinearRegionItem(values=(start_s, end_s), brush=color, pen=None, movable=False)
+            for edge in item.lines:
+                edge.setPen(pg.mkPen(None))
             item.setZValue(-10)
             plot.addItem(item)
             items.append(item)
@@ -1031,8 +1070,22 @@ class MainWindow(QtWidgets.QMainWindow):
                     spans.append((start_s, elapsed_s, "exhale"))
         return spans
 
+    def _menu_checked(self, name: str) -> bool:
+        action = getattr(self, name, None)
+        return bool(action is not None and action.isChecked())
+
+    def _a121_breath_shading_toggled(self, checked: bool) -> None:
+        if hasattr(self, "a121_auto_breath_check"):
+            self.a121_auto_breath_check.setChecked(bool(checked))
+        self._configure_live_plots()
+
+    def _a121_classic_vitals(self) -> bool:
+        action = getattr(self, "a121_classic_vitals_action", None)
+        return bool(action is not None and action.isChecked())
+
     def _configure_live_plots(self, *_: Any) -> None:
         self._clear_plot_items(self.live_plot_b, self.a121_live_breath_items)
+        self.live_plot_c.show()
         view_text = self.view_combo.currentText().lower() if hasattr(self, "view_combo") else ""
         raw_view = view_text.startswith("raw")
         fft_view = view_text.startswith("rate")
@@ -1081,14 +1134,28 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Restore default time-domain axes (in case FFT view was previously active)
                 self.live_plot_b.setAxisItems({"bottom": pg.AxisItem(orientation="bottom")})
                 self.live_plot_c.setAxisItems({"bottom": pg.AxisItem(orientation="bottom")})
-                self._configure_plot(self.live_plot_b, "Respiration from A121 phase (0.10-0.50 Hz)", "Phase displacement [rad]")
-                self._configure_plot(self.live_plot_c, "Heart motion from A121 phase (0.70-2.00 Hz)", "Phase displacement [rad]")
+                if self._a121_classic_vitals():
+                    self._configure_plot(self.live_plot_b, "Respiration band 0.10-0.50 Hz (rate path, inhale up)", "Chest motion [mm]")
+                    self._configure_plot(self.live_plot_c, "Heart band 0.70-2.00 Hz", "Chest motion [um]")
+                else:
+                    self._configure_plot(
+                        self.live_plot_b,
+                        "Chest motion - phase-network input (low-pass 2 Hz only, inhale up)",
+                        "Chest motion [mm]",
+                    )
+                    self._configure_plot(self.live_plot_c, "Chest velocity - phase-network input", "Velocity [mm/s]")
+                    if not self._menu_checked("a121_velocity_action"):
+                        self.live_plot_c.hide()
                 self.live_curves = {
                     "amplitude": self.live_plot_a.plot(pen=pg.mkPen("#22d3ee", width=1.5), name="Amplitude"),
                     "target": self.live_plot_a.plot(pen=None, symbol="o", symbolBrush="#facc15", symbolSize=10, name="Target"),
                     "gate": self.live_plot_a.plot(pen=pg.mkPen("#facc15", width=2), name="Gate"),
-                    "resp": self.live_plot_b.plot(pen=pg.mkPen("#34d399", width=1.6), name="Respiration"),
-                    "heart": self.live_plot_c.plot(pen=pg.mkPen("#fb7185", width=1.3), name="Heart"),
+                    "resp": self.live_plot_b.plot(
+                        pen=pg.mkPen("#34d399", width=1.6), name="Respiration" if self._a121_classic_vitals() else "Chest"
+                    ),
+                    "heart": self.live_plot_c.plot(
+                        pen=pg.mkPen("#fb7185", width=1.3), name="Heart" if self._a121_classic_vitals() else "Velocity"
+                    ),
                 }
         else:
             source_name = "iPhone IMU" if self.active_sensor == "iphone_imu" else "IMU"
@@ -1657,8 +1724,16 @@ class MainWindow(QtWidgets.QMainWindow):
             self.live_plot_b.setYRange(0.0, max(float(np.max(resp_power)) * 1.15 if len(resp_power) else 1.0, 1e-12), padding=0.0)
             self.live_plot_c.setYRange(0.0, max(float(np.max(heart_power)) * 1.15 if len(heart_power) else 1.0, 1e-12), padding=0.0)
         elif not fft_view and live_result is not None and len(trace_plot_times):
-            plot_resp = live_result.resp_signal[trace_mask]
-            plot_heart = live_result.heart_signal[trace_mask]
+            classic = self._a121_classic_vitals()
+            if classic:
+                # Band-passed phase in physical units: breathing in mm (inhale up), heart in um.
+                plot_resp = A121_CHEST_SIGN * PHASE_TO_MM * live_result.resp_signal[trace_mask]
+                plot_heart = A121_CHEST_SIGN * PHASE_TO_MM * 1000.0 * live_result.heart_signal[trace_mask]
+            else:
+                # Same light filtering as the phase network's input: holds stay flat, breath
+                # corners stay sharp, ~0.1 s lag instead of the band-pass's ~1.2-1.5 s.
+                plot_resp = live_result.chest_mm[trace_mask]
+                plot_heart = np.diff(plot_resp, prepend=plot_resp[0]) * max(live_result.sample_rate_hz, 1e-9)
             self.live_curves["resp"].setData(trace_plot_times, plot_resp)
             self.live_curves["heart"].setData(trace_plot_times, plot_heart)
             if self.a121_auto_breath_check.isChecked():
@@ -1668,12 +1743,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._add_breath_phase_spans(
                     self.live_plot_b,
                     self.a121_live_breath_items,
-                    self._breath_phase_spans(trace_plot_times, plot_resp, resp_bpm_for_phases),
+                    # The span finder expects the raw-phase sign (inhale down); the chest trace has inhale up.
+                    self._breath_phase_spans(trace_plot_times, -plot_resp, resp_bpm_for_phases),
                 )
             else:
                 self._clear_plot_items(self.live_plot_b, self.a121_live_breath_items)
-            self._set_time_plot_range(self.live_plot_b, trace_plot_times, plot_resp, min_y_span=0.50)
-            self._set_time_plot_range(self.live_plot_c, trace_plot_times, plot_heart, min_y_span=0.03)
+            self._set_time_plot_range(self.live_plot_b, trace_plot_times, plot_resp, min_y_span=0.20 if classic else 1.0)
+            self._set_time_plot_range(self.live_plot_c, trace_plot_times, plot_heart, min_y_span=10.0 if classic else 1.0)
 
         if analysis is None:
             target_text = f"{profile_target:.3f} m" if profile_target is not None and np.isfinite(profile_target) else "acquiring"
@@ -1696,6 +1772,11 @@ class MainWindow(QtWidgets.QMainWindow):
             else "fallback auto" if self.a121_gate_center_m is None else "fallback gated"
         )
         resp_text = f"{displayed_resp_hz * 60.0:.1f} BPM ({displayed_resp_hz:.2f} Hz)" if displayed_resp_hz > 0 else "acquiring"
+        echo_text = (
+            f"Echo (network input): {float(live_result.echo_db[-1]):.1f} dB\n"
+            if live_result is not None and len(live_result.echo_db)
+            else ""
+        )
         tracked_text = f"{tracked_heart_hz * 60.0:.1f} BPM ({tracked_heart_hz:.2f} Hz)" if tracked_heart_hz > 0 else "acquiring"
         self.stats_box.setText(
             f"Frames: {storage_count}\n"
@@ -1704,6 +1785,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Target: {gate_mode} center {analysis.target_distance_m:.3f} m  range {analysis.gate_min_m:.2f}-{analysis.gate_max_m:.2f} m\n"
             f"Latest peak: {analysis.peak_distance_m:.3f} m  amp {analysis.peak_amplitude:.1f}\n"
             f"Range bins: {analysis.candidate_bins}  SQI: {analysis.signal_quality:.2f}\n"
+            f"{echo_text}"
             f"Respiration: {resp_text}  conf {analysis.resp_confidence:.1f}\n"
             f"Heart: {tracked_text}  candidate conf {analysis.heart_confidence:.1f}\n"
             f"Analyzer: HR window {heart_analysis_window_s:.0f} s, refresh every {self._a121_analysis_refresh_interval_s():.1f} s\n"
@@ -1750,11 +1832,31 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_recordings(self) -> None:
         records: list[dict[str, Any]] = []
-        for path in sorted(RAW_RADAR_DIR.glob("radar_raw_*.csv"), reverse=True):
-            records.append({"source": "CSV", "sensor": "radar", "label": path.name, "samples": "", "path": str(path), "data": path})
+        listed: set[Path] = set()
+        demo_file = PROJECT_ROOT / "configs" / "demo_recordings.json"
+        if demo_file.exists():
+            try:
+                demo = json.loads(demo_file.read_text(encoding="utf-8")).get("recordings", [])
+            except (OSError, ValueError):
+                demo = []
+            for entry in demo:
+                path = PROJECT_ROOT / str(entry.get("path", ""))
+                if path.is_file():
+                    listed.add(path.resolve())
+                    label = str(entry.get("label") or path.name)
+                    records.append({"source": "Demo", "sensor": "a121", "label": label, "samples": "", "path": str(path), "data": path})
+        # Newer A121 sessions (phase-network recordings and guided experiments), newest first.
+        session_paths = [*RAW_A121_DIR.parent.glob("nn/a121_iphone/*/run_*_a121.csv"), *RAW_A121_DIR.glob("guided/*/*.csv")]
+        for path in sorted(session_paths, key=lambda p: p.stat().st_mtime, reverse=True):
+            if path.resolve() in listed or "analysis" in path.name:
+                continue
+            stamp = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d")
+            records.append({"source": "CSV", "sensor": "a121", "label": f"{stamp}  {path.parent.name}/{path.name}", "samples": "", "path": str(path), "data": path})
         a121_paths = sorted({*RAW_A121_DIR.glob("a121_sparse_iq_*.csv"), *RAW_A121_DIR.glob("a121_test_*.csv")}, reverse=True)
         for path in a121_paths:
             records.append({"source": "CSV", "sensor": "a121", "label": path.name, "samples": "", "path": str(path), "data": path})
+        for path in sorted(RAW_RADAR_DIR.glob("radar_raw_*.csv"), reverse=True):
+            records.append({"source": "CSV", "sensor": "radar", "label": path.name, "samples": "", "path": str(path), "data": path})
         for path in sorted(RAW_IMU_DIR.glob("respiratory_6axis_raw_*.csv"), reverse=True):
             records.append({"source": "CSV", "sensor": "imu", "label": path.name, "samples": "", "path": str(path), "data": path})
         for session in self.store.list_sessions():
@@ -1775,7 +1877,9 @@ class MainWindow(QtWidgets.QMainWindow):
             first_item.setData(QtCore.Qt.ItemDataRole.UserRole, record)
             self.recording_table.setItem(row, 0, first_item)
             self.recording_table.setItem(row, 1, QtWidgets.QTableWidgetItem(record["sensor"]))
-            self.recording_table.setItem(row, 2, QtWidgets.QTableWidgetItem(record["label"]))
+            label_item = QtWidgets.QTableWidgetItem(record["label"])
+            label_item.setToolTip(record["path"])
+            self.recording_table.setItem(row, 2, label_item)
             self.recording_table.setItem(row, 3, QtWidgets.QTableWidgetItem(record["samples"]))
             self.recording_table.setItem(row, 4, QtWidgets.QTableWidgetItem(record["path"]))
 
@@ -1858,15 +1962,33 @@ class MainWindow(QtWidgets.QMainWindow):
                 target_amp = float(analysis.latest_amplitude[min(analysis.selected_index, len(analysis.latest_amplitude) - 1)])
                 self.history_plot_a.plot([analysis.target_distance_m], [target_amp], pen=None, symbol="o", symbolBrush="#facc15", symbolSize=10, name="Target")
                 self.history_plot_a.plot([analysis.gate_min_m, analysis.gate_min_m, analysis.gate_max_m, analysis.gate_max_m], [0, target_amp, target_amp, 0], pen=pg.mkPen("#facc15", width=2), name="Gate")
-            self._configure_plot(self.history_plot_b, "A121 respiration phase band", "Phase displacement [rad]", "Time [s]")
-            self._configure_plot(self.history_plot_c, "A121 heart phase band", "Phase displacement [rad]", "Time [s]")
-            self.history_plot_b.plot(analysis.times_s, analysis.resp_signal, pen=pg.mkPen("#34d399", width=1.3), name="Respiration")
-            self.history_plot_c.plot(analysis.times_s, analysis.heart_signal, pen=pg.mkPen("#fb7185", width=1.2), name="Heart")
+            chest = None
+            if not self._a121_classic_vitals():
+                try:
+                    # Exactly the recording the phase network would get (whole run, zero-phase 2 Hz).
+                    chest = a121_chest_signal(df)
+                except Exception:
+                    chest = None
+            if chest is not None:
+                self._configure_plot(self.history_plot_b, "Chest motion - phase-network input (low-pass 2 Hz, inhale up)", "Chest motion [mm]", "Time [s]")
+                self._configure_plot(self.history_plot_c, "Chest velocity - phase-network input", "Velocity [mm/s]", "Time [s]")
+                trace_t, trace_resp = chest.time_s, chest.chest
+                self.history_plot_b.plot(trace_t, trace_resp, pen=pg.mkPen("#e2e8f0", width=1.4), name="Chest")
+                self.history_plot_c.plot(trace_t, chest.velocity(), pen=pg.mkPen("#38bdf8", width=1.1), name="Velocity")
+                span_signal = -trace_resp
+            else:
+                self._configure_plot(self.history_plot_b, "A121 respiration band 0.10-0.50 Hz (inhale up)", "Chest motion [mm]", "Time [s]")
+                self._configure_plot(self.history_plot_c, "A121 heart band 0.70-2.00 Hz", "Chest motion [um]", "Time [s]")
+                trace_t = analysis.times_s
+                trace_resp = A121_CHEST_SIGN * PHASE_TO_MM * analysis.resp_signal
+                self.history_plot_b.plot(trace_t, trace_resp, pen=pg.mkPen("#34d399", width=1.3), name="Respiration")
+                self.history_plot_c.plot(trace_t, A121_CHEST_SIGN * PHASE_TO_MM * 1000.0 * analysis.heart_signal, pen=pg.mkPen("#fb7185", width=1.2), name="Heart")
+                span_signal = -trace_resp
             breath_spans: list[tuple[float, float, str]] = []
             if self.a121_auto_breath_check.isChecked():
                 breath_spans = self._load_breath_annotation_spans(csv_path) if csv_path is not None else []
                 if not breath_spans:
-                    breath_spans = self._breath_phase_spans(analysis.times_s, analysis.resp_signal, float(analysis.resp_bpm))
+                    breath_spans = self._breath_phase_spans(trace_t, span_signal, float(analysis.resp_bpm))
                 self._add_breath_phase_spans(self.history_plot_b, self.a121_history_breath_items, breath_spans)
             presence = "YES" if analysis.present else "no"
             breath_text = f"\nBreath phases: {len(breath_spans)} spans" if breath_spans else ""
@@ -1924,11 +2046,15 @@ def launch_app(
     default_sensor: str = "radar",
     default_port: str | None = None,
     default_baud: int | None = None,
+    open_path: Path | None = None,
 ) -> int:
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
     app.setApplicationName("RespiNet Sensor Studio")
     window = MainWindow(default_sensor=default_sensor, default_port=default_port, default_baud=default_baud)
     window.show()
+    if open_path is not None:
+        window.tabs.setCurrentWidget(window.history_tab)
+        window._open_csv(Path(open_path))
     return int(app.exec())
 
 
