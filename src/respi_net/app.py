@@ -756,8 +756,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.live_plot_a = self.live_graph.addPlot(row=0, col=0)
         self.live_plot_b = self.live_graph.addPlot(row=1, col=0)
         self.live_plot_c = self.live_graph.addPlot(row=2, col=0)
-        # The breathing traces get more height than the range profile.
-        for row, stretch in ((0, 2), (1, 3), (2, 3)):
+        # Chest motion gets the most height; the range profile and the velocity strip less.
+        for row, stretch in ((0, 3), (1, 5), (2, 2)):
             self.live_graph.ci.layout.setRowStretchFactor(row, stretch)
         live_layout.addWidget(self.live_graph)
         self.tabs.addTab(self.live_tab, "Live")
@@ -847,6 +847,7 @@ class MainWindow(QtWidgets.QMainWindow):
         view_menu.addAction(self.a121_classic_vitals_action)
         self.a121_velocity_action = QtGui.QAction("A121: show chest velocity", self)
         self.a121_velocity_action.setCheckable(True)
+        self.a121_velocity_action.setChecked(True)
         self.a121_velocity_action.toggled.connect(self._configure_live_plots)
         view_menu.addAction(self.a121_velocity_action)
         self.a121_breath_shading_action = QtGui.QAction("A121: inhale/exhale shading (simple detector)", self)
@@ -1086,6 +1087,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _configure_live_plots(self, *_: Any) -> None:
         self._clear_plot_items(self.live_plot_b, self.a121_live_breath_items)
         self.live_plot_c.show()
+        self.live_plot_c.setMaximumHeight(16777215)
         view_text = self.view_combo.currentText().lower() if hasattr(self, "view_combo") else ""
         raw_view = view_text.startswith("raw")
         fft_view = view_text.startswith("rate")
@@ -1144,6 +1146,8 @@ class MainWindow(QtWidgets.QMainWindow):
                         "Chest motion [mm]",
                     )
                     self._configure_plot(self.live_plot_c, "Chest velocity - phase-network input", "Velocity [mm/s]")
+                    # A small strip under the chest trace.
+                    self.live_plot_c.setMaximumHeight(190)
                     if not self._menu_checked("a121_velocity_action"):
                         self.live_plot_c.hide()
                 self.live_curves = {

@@ -12,10 +12,10 @@ current work is A121-only.
 - **A121 signal chain** (`src/respi_net/chest_signal.py`): Sparse IQ → presence and chest range gates (Acconeer's
   breathing reference app) → unwrapped phase per gate → echo-weighted average → chest motion in mm (inhale up) →
   driver clock drift correction (0.17 %) → a 2 Hz low-pass as the only filter, so breath holds stay flat.
-- **Desktop app** (`respi app`): live A121 view of the signal the network gets (range profile and chest motion,
-  echo strength in the stats; ~0.2–0.3 s lag), CSV/SQLite recording, and a Recordings tab with curated demo recordings
-  (`configs/demo_recordings.json`). Chest velocity, inhale/exhale shading and the older band-pass breathing/heart
-  view are optional, under the *View* menu. Also supports HB100, the ESP32 IMU and the iPhone app.
+- **Desktop app** (`respi app`): live A121 view of the signal the network gets (range profile, chest motion and a
+  small velocity strip, echo strength in the stats; ~0.2–0.3 s lag), CSV/SQLite recording, and a Recordings tab with curated demo recordings
+  (`configs/demo_recordings.json`). Inhale/exhale shading and the older band-pass breathing/heart view are optional,
+  under the *View* menu. Also supports HB100, the ESP32 IMU and the iPhone app.
 - **iPhone app** (`ios/RespiPhoneIMU/`): streams CoreMotion accelerometer/gyro over BLE, saves every trial on the
   phone as well, remote start/stop from the desktop. Used as a timing helper for labels, never as a network input.
 - **Breathing coach** (`respi coach`): the whole session drawn as the breath itself, countdown and next cue; JSON
