@@ -1,191 +1,81 @@
-# Neural Networks for Respiratory Analysis
+# respi-net
 
-This repository contains the source code for my Bachelor's Thesis (Praca Inżynierska). The project focuses on non-contact respiratory sensing with an HB100 microwave radar module, using an ESP32-based acquisition pipeline and Python tools for recording, visualization, and signal analysis.
+Contactless breathing measurement with a 60 GHz Acconeer A121 radar, and the groundwork for a causal neural network
+that recognises breathing phases (inhale, exhale, hold, noise) from the radar alone. Bachelor's thesis project
+(praca inżynierska).
 
-## Project Overview
+The project started with an HB100 Doppler module and IMUs (ESP32 + LSM6DS3). Those were a proof of concept; the
+current work is A121-only.
 
-The main objective is to evaluate how effectively low-cost Doppler radar can capture breathing-related motion and produce clean respiratory signals for later machine-learning experiments. The current work is centered on reliable radar data acquisition, analog signal conditioning, repeatable CSV recordings, and fast chart generation for inspection.
+## What is here
 
-The IMU path is still present as a secondary comparison channel, but the main experimental direction is now the radar pipeline.
+- **A121 signal chain** (`src/respi_net/chest_signal.py`): Sparse IQ → presence and chest range gates (Acconeer's
+  breathing reference app) → unwrapped phase per gate → echo-weighted average → chest motion in mm (inhale up) →
+  driver clock drift correction (0.17 %) → a 2 Hz low-pass as the only filter, so breath holds stay flat.
+- **Desktop app** (`respi app`): live A121 view of the signal the network gets (range profile and chest motion,
+  echo strength in the stats; ~0.2–0.3 s lag), CSV/SQLite recording, and a Recordings tab with curated demo recordings
+  (`configs/demo_recordings.json`). Chest velocity, inhale/exhale shading and the older band-pass breathing/heart
+  view are optional, under the *View* menu. Also supports HB100, the ESP32 IMU and the iPhone app.
+- **iPhone app** (`ios/RespiPhoneIMU/`): streams CoreMotion accelerometer/gyro over BLE, saves every trial on the
+  phone as well, remote start/stop from the desktop. Used as a timing helper for labels, never as a network input.
+- **Breathing coach** (`respi coach`): the whole session drawn as the breath itself, countdown and next cue; JSON
+  patterns in `configs/breathing_patterns/`. Guided recorders log cue times next to the radar and phone data.
+- **Breathing-phase data**: classes after Szymański et al. (Sci Data 2025): 0 exhale, 1 hold after exhale,
+  2 inhale, 3 hold after inhale, 4 noise, −1 ignored. Per-breath label correction, hand-annotation viewer, a loader
+  for the Szymański respiratory-belt dataset (with its 0.2 s label offset corrected), augmented copies and a
+  synthetic breathing generator passed through an A121 radar model.
+- **Phase models** (`src/respi_net/phase_model.py`): causal TCN (~44k parameters, 25.5 s receptive field) and
+  causal GRU (~38k), Viterbi / streaming decoding with phase-transition rules, and a deterministic baseline.
+  Nothing has been trained yet; the target recordings are still being collected.
+- **Earlier experiments**: lens comparison (hyperbolic, Fresnel zone plate, flat cover; aluminium foil gives no
+  gain), sleep nights against a Garmin watch, heart rate from cardiac motion, HB100 vs A121.
 
-Current Progress:
-- **HB100 10.525 GHz analog radar integrated** with custom amplification and filtering.
-- A guided simultaneous HB100/A121 comparison records common breathing cues,
-  empty-scene interference controls, and paired 30/60/100 cm runs; the
-  reproducible offline analysis is in `tools/analyze_hb100_a121_comparison.py`.
-- ESP32 ADC firmware captures raw radar voltage at high serial throughput.
-- Click CLI supports serial capture, batch processing, and chart generation.
-- Unified Qt desktop app (`respi app`) combines HB100 radar, Acconeer A121 radar, ESP32 IMU, and iPhone BLE IMU live viewing, controls, history browsing, CSV recording, and SQLite recording.
-- Radar CSV recordings are organized under `data/raw/radar/` and A121 Sparse IQ recordings under `data/raw/a121/`.
-- Radar plots are generated under `outputs/plots/radar/`.
-- IMU capture and analysis remain available for comparison experiments.
-- A native iPhone companion app in `ios/RespiPhoneIMU/` streams batched CoreMotion IMU samples over BLE into the same Python IMU analysis path.
-- Calibrated HB100 analog frontend schematic is documented and rendered in [`hardware/hb100_calibrated_schematic.svg`](hardware/hb100_calibrated_schematic.svg).
+## Quick start
 
-## Hardware Setup
-
-- Microcontroller: ESP32 (LilyGO T-Display)
-- Main sensor: **HB100 10.525 GHz Microwave Motion Sensor**
-- Optional 60 GHz range radar: **Waveshare / Acconeer A121 Range Sensor** over USB-UART CH342 Interface A
-- Signal conditioning: custom active filter and amplifier stage
-- ADC input: ESP32 GPIO 33 / ADC1_CH5, using the conditioned radar IF signal
-- Optional comparison sensor: LSM6DS3 accelerometer + gyroscope
-
-Radar connections:
-- VCC -> 5V
-- GND -> GND
-- IF (Signal) -> calibrated two-stage MCP6002 amplifier/filter -> ESP32 GPIO 33 (ADC1_CH5)
-
-### Calibrated HB100 Analog Frontend
-
-![Rendered HB100 calibrated schematic](hardware/hb100_calibrated_schematic.svg)
-
-The current radar frontend uses two symmetrical non-inverting MCP6002 stages. Each stage has `Rf = 100 kΩ`, `Rg = 10 kΩ`, and a `22 nF` (`"223"`) capacitor across the feedback loop, giving about `11×` per stage (`~121×`, `41.7 dB` total) only in the mid-band. The `1 µF + 1 MΩ` input/inter-stage coupling and `100 µF + 10 kΩ` gain legs each have a nominal `0.159 Hz` high-pass corner; `100 kΩ + 22 nF` gives a `72.3 Hz` upper gain corner per stage. The ideal two-stage transfer is approximately `-3 dB` over `0.36–47.3 Hz` relative to its maximum, and its gain at `0.20 Hz` is about `45.6×` rather than `121×`. The AC-coupled inputs are restored to the `1.65 V` virtual ground through `1 MΩ` bias resistors, and the output is protected by `1 kΩ` before ESP32 GPIO 33.
-
-Optional IMU connections:
-- 3V3 -> 3V
-- GND -> GND
-- GPIO 22 -> SCL
-- GPIO 21 -> SDA
-
-## Signal Processing Pipeline
-
-### Radar Pipeline (HB100)
-
-- High-speed acquisition: captures raw ADC and voltage samples from the ESP32.
-- Live visualization: the desktop app plots recent voltage samples and a live FFT during recording with interactive pan/zoom via pyqtgraph.
-- Offline analysis: generates time-domain and Welch PSD charts from saved CSV files.
-- Doppler helper axis: maps frequency to estimated speed for quick movement interpretation.
-- Batch processing: regenerates plots for all radar recordings in one command.
-
-### Acconeer A121 Pipeline
-
-- Uses `acconeer-exptool` Low-Level Client API over the CH342 Interface A serial port.
-- Captures Sparse IQ frames, storing per-frame distance bins, amplitude, phase, real, and imaginary arrays.
-- UI controls distance focus (`start_m`, `end_m`), profile, HWAAS, sweeps/frame, and frame rate.
-- Defaults follow Acconeer's breathing reference app for stable live operation (profile 3, HWAAS 32, 16 sweeps/frame, 20 Hz) and auto-clamp sweeps/frame to the A121 4095-sample buffer/serial limits for wide ranges.
-- Live visualization plots latest amplitude vs distance, Acconeer-selected target range, respiration band, heart band, rate FFTs, and raw IQ. Live time-domain traces are append-only causal filters so old samples do not change shape while the plot scrolls.
-- A121 target acquisition follows Acconeer's breathing reference app state machine/presence-distance selection. New CSV/SQLite recordings persist Acconeer's selected target/range and breathing rate per frame, so offline/history analysis reuses that gate; heart-rate display remains experimental and conservatively gated.
-
-### IMU Pipeline (Secondary)
-
-- Orientation-independent analysis with PCA over accelerometer axes.
-- Butterworth filtering for respiratory and cardiac bands.
-- Plot generation for comparison with radar recordings.
-- Optional iPhone capture uses Bluetooth LE batches and writes the same `Time_ms,ax,ay,az,gx,gy,gz` CSV schema as the ESP32 IMU stream.
-
-## Usage
-
-Full app/CLI documentation is in [`docs/APP_AND_CLI.md`](docs/APP_AND_CLI.md).
-
-This project uses `uv` for Python dependency and command management.
-
-```powershell
+```bash
 uv sync
-uv run respi --help
+uv run respi app --sensor a121                      # live radar (serial port is auto-detected)
+uv run respi app --sensor a121 --open data/raw/...csv   # open a recording, no hardware needed
+uv run respi coach paced_12_hold                    # breathing coach
+uv run respi --help                                 # all commands
+uv run pytest -q
 ```
 
-Open the unified desktop app:
+On macOS the Waveshare A121 board shows up as two ports, `/dev/cu.usbmodem…1` (interface A, the one to use) and
+`…3`. Suggested app settings at 0.5–1.5 m: start 0.30 m, end 1.50 m, profile 3, HWAAS 32, 16 sweeps, 20 Hz,
+live window 30 s.
 
-```powershell
-uv run respi app --sensor radar --port COM6   # HB100/ESP32 ADC
-uv run respi app --sensor a121 --port COM3    # Acconeer A121/Waveshare CH342 Interface A
-uv run respi app --sensor iphone-imu          # iPhone CoreMotion over BLE
+Other useful commands:
+
+```bash
+uv run respi record-a121-test -p /dev/cu.usbmodemXXXX1 --label my-run    # record A121 until Ctrl+C
+uv run respi record-a121-sleep -p /dev/cu.usbmodemXXXX1 --label night-1  # overnight recording + sleep analysis
+uv run respi capture-iphone-imu --seconds 60        # iPhone IMU over BLE
+uv run python tools/a121_iphone_guided_recording.py # A121 + iPhone with the coach
+uv run python tools/annotate_phone_phases.py --session self_lying_3min_01 --run run_01_nn_self_3min --start 40 --length 60
+uv run python tools/build_artificial_data.py        # augmented + synthetic training sets
+uv run python tools/train_breath_phase_model.py --help
 ```
 
-The app has HB100 Radar/A121 Radar/IMU sensor selection, serial port controls, Start/Stop buttons, live stats, interactive graphs (drag to pan, mouse wheel to zoom, right-click plot menu), and a Recordings tab for opening saved CSV files or SQLite sessions. Live sessions can be recorded to CSV, SQLite, or both. On Windows, the app uses `E:/respi_recordings.sqlite3` when that file exists; otherwise it falls back to the project-local `data/respi_recordings.sqlite3` path, which is also the default on macOS/Linux. Set `RESPI_RECORDINGS_DB_PATH` to override this location.
+Full app and CLI reference: [`docs/APP_AND_CLI.md`](docs/APP_AND_CLI.md).
 
-Generate a chart from one file:
+## Hardware
 
-```powershell
-uv run respi plot-radar data\raw\radar\radar_raw_2026-03-13_18-30-09.csv
-```
+- Waveshare Acconeer A121 module (60 GHz pulsed coherent radar, USB), with a hyperbolic lens.
+- iPhone with the RespiPhoneIMU app (labelling helper).
+- Legacy: HB100 10.525 GHz module with a two-stage MCP6002 front end on an ESP32
+  ([schematic](hardware/hb100_calibrated_schematic.svg)), LSM6DS3 IMU, AD8232 ECG for future heart-rate labels.
 
-Batch-generate radar charts:
+## Layout
 
-```powershell
-uv run respi batch-radar
-```
+- `src/respi_net/` – capture, signal processing, app, coach, datasets, models.
+- `tools/` – guided recorders, analyses, dataset builders, training and figure scripts.
+- `configs/` – breathing patterns, experiment configs, demo recordings list.
+- `annotations/` – reviewed radar labels and small generated example datasets.
+- `docs/thesis/` – thesis source (`praca_inzynierska.tex`) and figures; `docs/datasets/` – dataset notes.
+- `ios/RespiPhoneIMU/` – iPhone app; `firmware/` – ESP32 firmware for the legacy sensors; `hardware/` – schematics.
+- `data/` – recordings (large CSVs and third-party datasets are not committed).
 
-Capture or view radar data from serial:
+## License
 
-```powershell
-uv run respi ports
-uv run respi app --sensor radar --port COM6
-uv run respi app --sensor a121 --port COM3
-uv run respi test-a121 --port COM3 --frames 20 --start-m 0.2 --end-m 1.5
-uv run respi record-a121-test --port COM3 --label foil-chest  # Ctrl+C to stop; optional --seconds has no upper cap
-uv run respi record-a121-test --port COM3 --seconds 80 --label auto --auto-breaths  # automatic inhale/exhale sidecar
-uv run respi annotate-a121-breaths data\raw\a121\a121_test_80s_auto_YYYY-MM-DD_HH-MM-SS.csv
-uv run respi record-a121-sleep --port COM3 --label sleep-night-1  # Ctrl+C when you wake up; optional --hours 8
-uv run respi capture-radar --port COM6
-uv run respi live-radar --port COM6  # compatibility alias for the unified app
-```
-
-Run the short guided HB100 range protocol (optional simultaneous A121
-comparison, two 90 s repeats at 30/60/100 cm, then farther in 50 cm steps):
-
-```powershell
-uv run python tools/hb100_a121_guided_experiment.py
-uv run python tools/hb100_a121_guided_experiment.py --probe-hb100  # connection/ADC check only
-uv run python tools/hb100_a121_guided_experiment.py --hb100-only   # A121 not connected
-```
-
-The guided runner records host timestamps and breathing-cue sidecars, supports
-Esc-to-discard, reports the 0.20 Hz peak/SNR and breath-hold attenuation, and
-uses strict 230400-baud ASCII at a stable 250 Hz with the current ESP32
-firmware. The audited serial compatibility repair remains only as a fallback
-for the older 921600-baud image and is recorded in the session manifest if it
-is ever used.
-
-Every guided run shows the same breathing coach: a colour-coded timeline of the
-whole trial, the time left in the current phase and the next cue. The breathing
-protocols are JSON pattern files in `configs/breathing_patterns/`, and the coach
-also runs on its own for any pattern:
-
-```powershell
-uv run respi coach                  # pick a pattern and follow it
-uv run respi coach --print paced_12_hold  # validate/expand a pattern file
-```
-
-IMU comparison commands are still available when needed:
-
-```powershell
-uv run respi plot-imu data\raw\imu\respiratory_6axis_raw_2026-03-08_02-37-19.csv
-uv run respi batch-imu
-uv run respi capture-imu --port COM6
-uv run respi iphone-imu-devices
-uv run respi capture-iphone-imu --seconds 60
-uv run python tools/imu_lsm6ds3_iphone_guided_experiment.py --lsm-port /dev/cu.usbserial-XXXX
-```
-
-The last command runs the four planned supine comparison trials with the
-LSM6DS3 and iPhone fixed side by side on the upper chest.  It requires the
-timestamped LSM6DS3 firmware, writes the device clock/counter into its CSV,
-records shared breathing cues and discards an interrupted trial on Esc.
-
-## Repository Structure
-
-- `src/respi_net/` - Python package for capture, analysis, plotting, and CLI commands.
-- `data/raw/radar/` - HB100 radar CSV recordings.
-- `data/raw/a121/` - Acconeer A121 Sparse IQ CSV recordings.
-- `outputs/plots/radar/` - Generated radar charts.
-- `firmware/esp32_radar_adc/` - ESP32 firmware for high-speed radar data acquisition.
-- `hardware/` - Hardware design files, including the calibrated HB100 amplifier schematic source and rendered SVG.
-- `data/raw/imu/` - Optional IMU comparison recordings.
-- `outputs/plots/imu/` - Generated IMU comparison charts.
-- `firmware/esp32_imu_stream/` - Optional ESP32 firmware for IMU streaming.
-- `ios/RespiPhoneIMU/` - iPhone SwiftUI BLE peripheral app for streaming phone IMU batches.
-- `docs/` - Reports, notes, and logs.
-- `tools/docx_generator/` - Legacy Node-based report generator.
-
-## Future Plans
-
-1. Validate the calibrated low-gain radar amplifier across distances, body positions, and movement intensity.
-2. Collect a broader radar dataset across distances, body positions, and breathing patterns.
-3. Compare selected radar recordings against IMU reference measurements.
-4. Design and train neural network models to classify respiratory patterns and detect anomalies.
-5. Explore edge inference on ESP32 after the radar signal pipeline is stable.
-
-License
-This project is created as part of a Bachelor's Thesis. All rights reserved.
+MIT, see [LICENSE](LICENSE). The Szymański et al. dataset is CC BY-NC-ND and is not redistributed here.

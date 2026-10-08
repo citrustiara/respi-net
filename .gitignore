@@ -53,3 +53,18 @@ runs/
 # Small reviewed radar examples are committed with their labels, not checkpoints.
 !annotations/radar_close_v1/generated/runs/
 !annotations/radar_close_v1/generated/runs/*.npz
+
+# Personal / private: usage logs, IDE project, seminar slides, old drafts, LaTeX by-products
+ccusage.json
+*.iml
+docs/reports/prezentacja.tex
+docs/reports/seminarium-*.pdf
+docs/reports/*.docx
+docs/reports/*.aux
+docs/reports/*.out
+docs/thesis/draft_*.pdf
+tools/docx_generator/
+# Raw smartwatch exports (personal health data)
+*.fit
+# Notes for the presenter only
+showcase/notatki/
