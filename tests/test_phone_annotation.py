@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 
 import numpy as np
+import pytest
 
 from respi_net.breath_phases import EXHALE, HOLD, IGNORE, INHALE, NOISE
 from respi_net.phone_annotation import (
@@ -170,3 +171,27 @@ def test_the_raw_click_time_is_saved_as_an_extra_column(tmp_path: Path) -> None:
     text = (tmp_path / "x.csv").read_text(encoding="utf-8").splitlines()
     assert text[0] == "start_s,end_s,class,clicked_start_s" and text[1].endswith(",1.200") and text[2].endswith(",")
     assert load_segments(tmp_path / "x.csv") == [Segment(1.0, 2.0, INHALE), Segment(2.0, 3.0, EXHALE)]
+
+
+def test_click_snaps_to_the_nearest_turn_and_takes_its_class() -> None:
+    from annotate_phone_phases import make_snapper
+
+    grid = np.arange(0.0, 30.0, 0.05)
+    trace = -np.cos(2 * np.pi * grid / 5.0)  # troughs at 0, 5, 10 ...; crests at 2.5, 7.5 ...
+    session = AnnotationSession(0.0, 30.0, make_snapper(grid, trace))
+    assert session.resolve(7.3) == (pytest.approx(7.5), EXHALE)  # a crest on the first click: an exhale, not an inhale
+    session.click(7.3)
+    assert session.resolve(9.8) == (pytest.approx(10.0), INHALE)
+    assert session.resolve(6.25)[0] == 6.25  # mid-slope: no turn within reach, the mark stays put
+    session.key("e")
+    assert session.resolve(9.8)[1] == EXHALE  # a pressed key wins: only crests are looked for
+
+
+def test_a_second_click_on_the_same_spot_replaces_the_mark() -> None:
+    session = AnnotationSession(0.0, 60.0)
+    session.click(5.0)  # inhale
+    session.click(8.0)  # exhale
+    session.click(10.0)  # inhale by default ...
+    session.key("h")
+    session.click(10.1)  # ... corrected to a hold on the same spot: no 0.1 s inhale left behind
+    assert [(round(s.start_s, 1), s.label) for s in session.segments()] == [(5.0, INHALE), (8.0, EXHALE), (10.1, HOLD)]

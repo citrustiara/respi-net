@@ -24,7 +24,15 @@ start of the first segment.  Use the toolbar to zoom; clicks do not count while 
 
     uv run python tools/annotate_phone_phases.py --session self_lying_3min_01 --run run_01_nn_self_3min --start 40 --length 60
 
-Saves ``annotations/<session>__<run>__<annotator>__<start>-<end>__pass<N>.csv``.  Label the same stretch again a
+With ``--belt <file>`` the trace is the strain belt instead (a ``run_XX_*_belt.csv`` of a guided session or a
+``data/raw/strain_belt`` coach file), on the time axis of ``tools/label_strain_belt_runs.py``, so the hand labels can
+be scored against the belt labels (``score_phone_annotations.py belt``).  The belt shows a stop clearly: a hold is a
+stillness of at least 2 s there, as in the belt labeller.  You see the belt trace only, never its labels::
+
+    uv run python tools/annotate_phone_phases.py --belt data/raw/nn/a121_belt/<session>/run_01_nn_holds_belt.csv --start 0 --length 75
+
+Saves ``annotations/<session>__<run>__<annotator>__<start>-<end>__pass<N>.csv`` (with ``--belt``, ``<session>__<run>``
+is the belt labeller's run name).  Label the same stretch again a
 day later with ``--pass 2``: the difference between the two passes is the uncertainty of the reference.
 ``--demo out.png`` draws a scripted example on synthetic data instead of opening a window.
 """
@@ -50,6 +58,7 @@ from respi_net.phone_annotation import KEY_TO_CLASS, Segment, marks_to_segments,
 SESSIONS = ROOT / "data" / "raw" / "nn" / "a121_iphone"
 ANNOTATIONS = ROOT / "annotations"
 UNDO_KEYS = {"backspace", "u", "ctrl+z", "cmd+z", "super+z", "meta+z"}
+MIN_SEGMENT_S = 0.3  # marks closer than this are one mark: the later click replaces the earlier
 NAMES_PL = {EXHALE: "wydech", HOLD: "pauza", INHALE: "wdech", NOISE: "szum"}
 
 
@@ -81,20 +90,38 @@ class AnnotationSession:
             self.end_s = time_s
             self.setting_end = False
             return
-        label = self.next_class()
-        self.marks.append((self.landing(time_s, label), label))
+        landing, label = self.resolve(time_s)
+        near = [i for i, (at, _) in enumerate(self.marks) if abs(at - landing) < MIN_SEGMENT_S]
+        if near:  # a second click on (almost) the same spot corrects that mark instead of adding a sliver of a phase
+            self.marks.pop(near[0])
+            self.clicks.pop(near[0])
+            if self.pending is None and self.snapper is not None:
+                landing, label = self.resolve(time_s)
+        self.marks.append((landing, label))
         self.clicks.append(time_s)
         self.pending = None
 
-    def landing(self, time_s: float, label: int | None = None) -> float:
-        """Where a click at ``time_s`` lands: at the nearest turning point for a boundary that starts the other breath."""
+    def resolve(self, time_s: float) -> tuple[float, int]:
+        """Where a click at ``time_s`` lands and what it starts.
 
-        label = self.next_class() if label is None else label
+        Between breaths (no key pressed) the click goes to the nearest real turning point, a trough or a crest, and the
+        class follows from it: a trough starts an inhale, a crest an exhale.  A pressed ``i``/``e`` looks only for its
+        own kind.  With no turning point within reach, or next to a hold or noise, the mark stays where you click.
+        """
+
+        label = self.next_class()
         previous = self.marks[-1][1] if self.marks else None
-        opposite = {INHALE: EXHALE, EXHALE: INHALE}.get(label)
-        if self.snapper is not None and label in (INHALE, EXHALE) and (previous is None or previous == opposite):
-            return float(self.snapper(time_s, label))
-        return time_s
+        if self.snapper is None or label not in (INHALE, EXHALE) or previous not in (None, INHALE, EXHALE):
+            return time_s, label
+        kinds = (label,) if self.pending is not None else (INHALE, EXHALE)
+        found = [(abs(at - time_s), at, kind) for kind in kinds if (at := self.snapper(time_s, kind)) is not None]
+        if not found:
+            return time_s, label
+        _, at, kind = min(found)
+        return float(at), kind
+
+    def landing(self, time_s: float) -> float:
+        return self.resolve(time_s)[0]
 
     def remove_near(self, time_s: float, reach_s: float = 1.5) -> None:
         """Remove the mark closest to ``time_s`` (a wrong click anywhere in the stretch), if one is within ``reach_s``."""
@@ -146,6 +173,7 @@ def draw(
     session: AnnotationSession,
     xlim: tuple[float, float] | None = None,
     orientation: np.ndarray | None = None,
+    ylabel: str = "ruch telefonu (rośnie na wdechu)",
 ) -> None:
     ax.clear()
     left, right = xlim if xlim is not None else (session.window_start_s, session.window_end_s)
@@ -159,7 +187,7 @@ def draw(
     ax.plot(grid[inside], trace[inside], color="#ea580c", lw=1.3)
     ax.set_xlim(left, right)
     ax.set_xlabel("czas od startu nagrania [s]")
-    ax.set_ylabel("ruch telefonu (rośnie na wdechu)")
+    ax.set_ylabel(ylabel)
     ax.set_title(session.status(), loc="left", fontsize=10)
     ax.grid(alpha=0.25)
 
@@ -168,11 +196,38 @@ def output_path(session_name: str, run: str, annotator: str, start_s: float, end
     return ANNOTATIONS / f"{session_name}__{run}__{annotator}__{start_s:.0f}-{end_s:.0f}__pass{pass_number}.csv"
 
 
-def make_snapper(grid: np.ndarray, trace: np.ndarray):
-    """``(time, label) -> time of the nearest turning point`` on the trace smoothed to 1 Hz, the system's boundary convention."""
+def belt_run_name(recording: Path) -> str:
+    """The belt labeller's name for a recording: session files share run names, so they carry their session's."""
+    return f"{recording.parent.name}__{recording.stem}" if recording.stem.startswith("run_") else recording.stem
+
+
+def belt_trace(recording: Path, grid_hz: float = 20.0) -> tuple[np.ndarray, np.ndarray]:
+    """``(grid, belt chest trace)`` on the time axis of ``tools/label_strain_belt_runs.py`` (from the pattern start when cued)."""
+
+    from respi_net.chest_signal import strain_belt_chest_signal
+    from respi_net.strain_belt import cue_origin_ms, cue_sidecar_path, load_coach_cues
+
+    cued = cue_sidecar_path(recording).exists() or recording.stem.startswith("strain_belt_coach_")
+    cues = load_coach_cues(recording) if cued else None
+    signal = strain_belt_chest_signal(recording, origin_ms=cue_origin_ms(cues) if cues else None)
+    grid = np.arange(float(signal.time_s[0]), float(signal.time_s[-1]), 1.0 / grid_hz)
+    return grid, np.interp(grid, signal.time_s, signal.chest)
+
+
+def make_snapper(grid: np.ndarray, trace: np.ndarray, reach_s: float = 0.8):
+    """``(time, label) -> time of the nearest turning point`` on the trace smoothed to 1 Hz, the system's boundary convention.
+
+    ``None`` when the extreme within reach sits at the edge of the reach: that is a slope, not a turn.
+    """
 
     smooth = light_filter(np.asarray(trace, dtype=float), 1.0 / float(np.median(np.diff(grid))), 1.0)
-    return lambda time_s, label: turning_point(grid, smooth, time_s, label)
+    step = float(np.median(np.diff(grid)))
+
+    def snap(time_s: float, label: int) -> float | None:
+        at = turning_point(grid, smooth, time_s, label, reach_s=reach_s)
+        return None if abs(at - time_s) >= reach_s - 1.5 * step else at
+
+    return snap
 
 
 def run_viewer(args: argparse.Namespace) -> int:
@@ -183,12 +238,19 @@ def run_viewer(args: argparse.Namespace) -> int:
     for name in list(plt.rcParams):
         if name.startswith("keymap."):
             plt.rcParams[name] = []
-    prefix = SESSIONS / args.session / args.run
-    grid, trace, sign = oriented_phone(prefix)
-    orientation = None if args.no_orientation else scaled_to(run_orientation_distance(prefix, grid, trace), trace)
-    start, end = float(args.start), min(float(args.start) + float(args.length), float(grid[-1]))
+    if args.belt is not None:
+        grid, trace = belt_trace(args.belt)
+        orientation, sign, ylabel = None, 1.0, "pas tensometryczny (rośnie na wdechu)"
+        name = belt_run_name(args.belt)
+    else:
+        prefix = SESSIONS / args.session / args.run
+        grid, trace, sign = oriented_phone(prefix)
+        orientation = None if args.no_orientation else scaled_to(run_orientation_distance(prefix, grid, trace), trace)
+        ylabel = "ruch telefonu (rośnie na wdechu)"
+        name = f"{args.session}__{args.run}"
+    start, end = max(float(args.start), float(grid[0])), min(float(args.start) + float(args.length), float(grid[-1]))
     session = AnnotationSession(start, end, None if args.no_snap else make_snapper(grid, trace))
-    path = output_path(args.session, args.run, args.annotator, start, end, args.pass_number)
+    path = ANNOTATIONS / f"{name}__{args.annotator}__{start:.0f}-{end:.0f}__pass{args.pass_number}.csv"
     fig, ax = plt.subplots(figsize=(14, 5.5))
     fig.subplots_adjust(left=0.07, right=0.98, bottom=0.14, top=0.9)
     view = [start, end]
@@ -200,7 +262,7 @@ def run_viewer(args: argparse.Namespace) -> int:
 
     def redraw() -> None:
         hover.clear()
-        draw(ax, grid, trace, session, (view[0], view[1]), orientation)
+        draw(ax, grid, trace, session, (view[0], view[1]), orientation, ylabel)
         fig.canvas.draw_idle()
 
     def zoom(factor: float, centre: float | None) -> None:
@@ -232,9 +294,11 @@ def run_viewer(args: argparse.Namespace) -> int:
         if event.inaxes is not ax or event.xdata is None or (toolbar is not None and getattr(toolbar, "mode", "")):
             fig.canvas.draw_idle()
             return
-        landing = session.landing(float(event.xdata))
-        hover.append(ax.axvline(landing, color="#2563eb", lw=1.2))
-        hover.append(ax.scatter([landing], [float(np.interp(landing, grid, trace))], s=60, facecolor="white", edgecolor="#2563eb", zorder=5))
+        landing, label = session.resolve(float(event.xdata))
+        colour = CLASS_COLOURS[label]
+        hover.append(ax.axvline(landing, color=colour, lw=1.4))
+        hover.append(ax.text(landing, ax.get_ylim()[1], f" {NAMES_PL[label]}", color=colour, va="top", fontsize=9))
+        hover.append(ax.scatter([landing], [float(np.interp(landing, grid, trace))], s=60, facecolor="white", edgecolor=colour, zorder=5))
         fig.canvas.draw_idle()
 
     def on_click(event) -> None:
@@ -254,8 +318,11 @@ def run_viewer(args: argparse.Namespace) -> int:
     fig.canvas.mpl_connect("motion_notify_event", on_move)
     fig.canvas.mpl_connect("close_event", lambda _event: save() if session.marks else None)
     redraw()
-    print(f"Faza telefonu: {args.session}/{args.run}, {start:.0f}-{end:.0f} s (znak osi {sign:+.0f}). Zapis: {path}")
-    print("Granice wdech/wydech przyciągają się do zwrotu przebiegu; niebieska linia i kółko pokazują, gdzie wyląduje znacznik."
+    if args.belt is not None:
+        print(f"Pas: {name}, {start:.0f}-{end:.0f} s. Pauza = bezruch od 2 s. Zapis: {path}")
+    else:
+        print(f"Faza telefonu: {args.session}/{args.run}, {start:.0f}-{end:.0f} s (znak osi {sign:+.0f}). Zapis: {path}")
+    print("Granice wdech/wydech przyciągają się do zwrotu przebiegu; linia i kółko w kolorze klasy pokazują, gdzie i jaki znacznik wyląduje."
           if not args.no_snap else "Bez przyciągania do zwrotów (--no-snap).")
     plt.show()
     return 0
@@ -292,12 +359,13 @@ def main() -> int:
     parser.add_argument("--pass", dest="pass_number", type=int, default=1, help="1 for the first labelling, 2 for the repeat")
     parser.add_argument("--no-snap", action="store_true", help="place every mark exactly where you click (no pull to the turning point)")
     parser.add_argument("--no-orientation", action="store_true", help="hide the orientation line (teal)")
+    parser.add_argument("--belt", type=Path, default=None, help="label a strain-belt recording (..._belt.csv or a coach file) instead of a phone run")
     parser.add_argument("--demo", type=Path, default=None, help="draw a scripted example to this png and exit")
     args = parser.parse_args()
     if args.demo is not None:
         return run_demo(args.demo)
-    if not args.session or not args.run:
-        parser.error("--session and --run are required")
+    if args.belt is None and (not args.session or not args.run):
+        parser.error("--session and --run (or --belt) are required")
     return run_viewer(args)
 
 
