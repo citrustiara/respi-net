@@ -281,3 +281,183 @@ def imu_chest_signal(
         echo_db=np.full(len(time_s), np.nan),
         meta={"samples": int(len(time_s)), "low_pass_hz": float(low_pass_hz)},
     )
+
+
+# The strain belt's HX711 count rises as the chest expands.
+STRAIN_BELT_CHEST_SIGN = 1.0
+STRAIN_BELT_ERROR_VALUE = -1.0
+
+
+def _regular_belt_times(host_s: np.ndarray, smooth_samples: int = 21) -> tuple[np.ndarray, float]:
+    """Even sample times for belt packets stamped on arrival.
+
+    The belt sends no clock of its own, and BLE delivers its 10 Hz packets in
+    bursts (arrival gaps of 2-210 ms).  The firmware's rate is steady, so the
+    time of sample ``k`` is ``k / fs`` plus an offset that only moves when a
+    packet is lost; a running median of that offset drops the burst jitter and
+    still follows a gap.
+    """
+
+    host_s = np.asarray(host_s, dtype=float)
+    k = np.arange(len(host_s), dtype=float)
+    fs = float((len(host_s) - 1) / (host_s[-1] - host_s[0]))
+    offset = pd.Series(host_s - k / fs).rolling(smooth_samples, center=True, min_periods=1).median().to_numpy()
+    return k / fs + offset, fs
+
+
+def despike(x: np.ndarray, window: int = 7, n_sigmas: float = 6.0) -> tuple[np.ndarray, np.ndarray]:
+    """Hampel filter: replace samples far from their neighbours' median by interpolation."""
+
+    x = np.asarray(x, dtype=float)
+    series = pd.Series(x)
+    median = series.rolling(window, center=True, min_periods=1).median()
+    mad = (series - median).abs().rolling(window, center=True, min_periods=1).median()
+    # A floor from the whole trace, so a flat hold (MAD ~ 0) does not flag its own noise.
+    floor = float(np.median(np.abs(np.diff(x)))) or 1.0
+    spikes = ((series - median).abs() > n_sigmas * 1.4826 * np.maximum(mad, floor)).to_numpy()
+    if spikes.any():
+        good = ~spikes
+        x = x.copy()
+        x[spikes] = np.interp(np.flatnonzero(spikes), np.flatnonzero(good), x[good])
+    return x, spikes
+
+
+def _local_robust_level(times: np.ndarray, levels: np.ndarray, at: float, half_window: float) -> float:
+    from scipy.stats import theilslopes
+
+    distance = np.abs(times - at)
+    near = distance <= half_window
+    if near.sum() < 3:
+        # Too few troughs in the window (an edge, or slow breathing): use the three nearest.
+        near = np.zeros(len(times), dtype=bool)
+        near[np.argsort(distance)[:3]] = True
+    if near.sum() < 3:
+        return float(np.median(levels[near]))
+    slope, intercept, _, _ = theilslopes(levels[near], times[near])
+    return float(intercept + slope * at)
+
+
+def end_expiratory_baseline(
+    chest: np.ndarray,
+    time_s: np.ndarray,
+    fs: float,
+    *,
+    min_depth_fraction: float = 0.3,
+    window_s: float = 30.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Slow drift of the belt, followed through the bottom of each breath.
+
+    The end of a relaxed exhale is the most repeatable level of the chest, so
+    the troughs (and holds after exhale, which are long flat troughs) trace
+    the belt's creep.  The baseline at each trough is a robust (Theil-Sen)
+    line through the troughs within ``window_s`` -- several breaths -- so it
+    follows the drift without flattening one deliberately deep or shallow
+    exhale, and, unlike a running median, is not pulled inward at the ends of
+    the recording where the window is one-sided.  Returns the baseline
+    and the trough sample indices.
+    """
+
+    from scipy.signal import find_peaks
+
+    chest = np.asarray(chest, dtype=float)
+    straight = detrend(chest, type="linear")
+    depth = float(np.subtract(*np.percentile(straight, [95, 5])))
+    troughs, _ = find_peaks(-chest, prominence=max(depth * min_depth_fraction, 1e-9), distance=max(1, int(1.0 * fs)))
+    if len(troughs) < 2:
+        trend = chest - straight
+        return trend, troughs
+    levels = chest[troughs]
+    times = time_s[troughs]
+    smoothed = np.array([_local_robust_level(times, levels, t, window_s / 2) for t in times])
+    baseline = np.interp(time_s, times, smoothed)
+    # Beyond the first and last trough, carry the drift on at its fitted slope.
+    slope = np.polyfit(times, smoothed, 1)[0] if len(times) >= 3 else 0.0
+    before, after = time_s < times[0], time_s > times[-1]
+    baseline[before] = smoothed[0] + slope * (time_s[before] - times[0])
+    baseline[after] = smoothed[-1] + slope * (time_s[after] - times[-1])
+    return light_filter(baseline, fs, 0.1), troughs
+
+
+def strain_belt_chest_signal(
+    source: Path | str | pd.DataFrame,
+    *,
+    low_pass_hz: float = DEFAULT_LOW_PASS_HZ,
+    drift: str = "troughs",
+    origin_ms: float | None = None,
+    name: str = "strain_belt",
+) -> ChestSignal:
+    """Chest expansion from the ESP32/HX711 strain belt, rising on inhale.
+
+    Drops the firmware's failed-read value (-1) and isolated spikes, puts the
+    samples on an even 10 Hz grid, low-passes, and removes drift:
+    ``troughs`` (default) follows the end-expiratory level, ``linear`` takes
+    one straight line off, ``none`` keeps it.  Time runs from ``origin_ms``
+    (host epoch) when given, else from the coach's ``elapsed_s``, else from
+    the first sample.  ``chest`` is in HX711 counts
+    above the end-expiratory level; ``meta['breath_depth']`` is a typical
+    breath in the same counts, for scaling.
+    """
+
+    df = pd.read_csv(source) if not isinstance(source, pd.DataFrame) else source
+    missing = {"host_time_ms", "raw"}.difference(df.columns)
+    if missing:
+        raise ValueError(f"Strain-belt recording is missing {', '.join(sorted(missing))}")
+    host_s = pd.to_numeric(df["host_time_ms"], errors="coerce").to_numpy(dtype=float) / 1000.0
+    raw = pd.to_numeric(df["raw"], errors="coerce").to_numpy(dtype=float)
+    keep = np.isfinite(host_s) & np.isfinite(raw) & (raw != STRAIN_BELT_ERROR_VALUE)
+    errors = int((raw == STRAIN_BELT_ERROR_VALUE).sum())
+    host_s, raw = host_s[keep], raw[keep]
+    if len(raw) < 20:
+        raise ValueError("Strain-belt recording is too short.")
+    if origin_ms is not None:
+        origin = float(origin_ms) / 1000.0
+    elif "elapsed_s" in df.columns:
+        # Coached runs: keep the coach's time axis so cues line up.
+        elapsed = pd.to_numeric(df["elapsed_s"], errors="coerce").to_numpy(dtype=float)[keep]
+        origin = float(host_s[0] - elapsed[0])
+    else:
+        origin = float(host_s[0])
+    stamp_s, fs_nominal = _regular_belt_times(host_s)
+    clean, spikes = despike(raw)
+
+    # Resample onto an exact grid so ``fs`` is the true spacing for filters.
+    time_s = np.arange(np.ceil((stamp_s[0] - origin) * fs_nominal), np.floor((stamp_s[-1] - origin) * fs_nominal) + 1) / fs_nominal
+    values = STRAIN_BELT_CHEST_SIGN * np.interp(time_s, stamp_s - origin, clean)
+    fs = fs_nominal
+    chest = light_filter(values, fs, low_pass_hz)
+    troughs = np.array([], dtype=int)
+    if drift == "troughs":
+        baseline, troughs = end_expiratory_baseline(chest, time_s, fs)
+    elif drift == "linear":
+        baseline = chest - detrend(chest, type="linear")
+    elif drift == "none":
+        baseline = np.full_like(chest, float(np.median(chest)))
+    else:
+        raise ValueError(f"Unknown drift mode {drift!r}; use troughs, linear or none.")
+    chest = chest - baseline
+    depth = float(np.subtract(*np.percentile(chest, [95, 5])))
+    # Sensor noise: what a 2.5 Hz low-pass takes off the raw counts.  Even fast breathing
+    # (60/min = 1 Hz) and its first harmonic stay below that.
+    residual = values - light_filter(values, fs, 2.5)
+    noise = float(1.4826 * np.median(np.abs(residual - np.median(residual)))) or 1.0
+    return ChestSignal(
+        source=name,
+        time_s=time_s,
+        fs=fs,
+        chest=chest,
+        units="counts",
+        raw=values - baseline,
+        echo_db=np.full(len(time_s), np.nan),
+        meta={
+            "samples": int(len(time_s)),
+            "low_pass_hz": float(low_pass_hz),
+            "drift": drift,
+            "hx711_errors": errors,
+            "spikes": int(spikes.sum()),
+            "troughs": int(len(troughs)),
+            "breath_depth": depth,
+            "noise": noise,
+            "depth_to_noise": depth / noise,
+            "drift_counts": float(baseline[-1] - baseline[0]),
+        },
+    )

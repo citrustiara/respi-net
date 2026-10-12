@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Guided A121 radar + iPhone IMU recordings for the breathing-phase network.
+"""Guided A121 radar + body-sensor recordings for the breathing-phase network.
 
-The Acconeer A121 is the network's input; the iPhone running RespiPhoneIMU lies
-on the body and records chest/abdomen motion over BLE as the phase reference
-(labels are derived from it later).  Each trial is one breathing-pattern file
+The Acconeer A121 is the network's input; a sensor on the body records the
+phase reference over BLE (labels are derived from it later): the iPhone running
+RespiPhoneIMU, the ESP32/HX711 strain belt (``Pas_Tensometryczny``), or both --
+``--reference iphone|belt|both``, iPhone by default.  Each trial is one breathing-pattern file
 from ``configs/breathing_patterns`` and lasts exactly as long as the pattern;
 the shared breathing coach shows it as a timeline, the cue, the time left and
 what comes next, and beeps at every new phase.
@@ -13,15 +14,17 @@ breathing first (before any paced exercise can alter it), then varied rates,
 holds after inhaling and after exhaling, shallow/deep breathing and an
 irregular rhythm.
 
-Every accepted trial leaves three files beside the session's ``manifest.json``::
+Every accepted trial leaves these files beside the session's ``manifest.json``::
 
     run_XX_<pattern-id>_a121.csv    A121 Sparse IQ frames (A121_CAPTURE_COLUMNS)
-    run_XX_<pattern-id>_iphone.csv  iPhone IMU samples (IMU_COLUMNS)
+    run_XX_<pattern-id>_iphone.csv  iPhone IMU samples (IMU_COLUMNS), with --reference iphone/both
+    run_XX_<pattern-id>_belt.csv    strain-belt samples (STRAIN_BELT_COLUMNS), with --reference belt/both
     run_XX_<pattern-id>_cues.csv    one row per pattern phase, with host wall times
 
 A trial is rejected automatically when the iPhone stream is incomplete (the
-same coverage/gap gate as the LSM6DS3 + iPhone study) or the A121 delivered too
-few frames.  Esc, or ``Przerwij i odrzuć``, discards the running trial and
+same coverage/gap gate as the LSM6DS3 + iPhone study), the belt stream has
+holes or shows no breathing above its noise (belt loose or not worn), or the
+A121 delivered too few frames.  Esc, or ``Przerwij i odrzuć``, discards the running trial and
 deletes its files; after a completed recording choose ``Zachowaj próbę`` or
 ``Odrzuć i powtórz``.
 
@@ -32,6 +35,10 @@ Run from the repository root::
 Print the plan without touching hardware or opening the window::
 
     uv run python tools/a121_iphone_guided_recording.py --dry-run
+
+Radar + strain belt (no phone), e.g. the hold protocol at 80 cm::
+
+    uv run python tools/a121_iphone_guided_recording.py --reference belt --patterns nn_holds --distance-cm 80
 
 Choose patterns (ids or paths) and resume an interrupted session::
 
@@ -91,6 +98,7 @@ from respi_net.imu_guided_protocol import (
     stream_coverage_summary,
 )
 from respi_net.iphone_imu import IPHONE_IMU_DEVICE_NAME, IPhoneIMUBluetoothCapture
+from respi_net.strain_belt import STRAIN_BELT_COLUMNS, STRAIN_BELT_DEVICE_NAME, StrainBeltCapture
 
 # The iPhone completeness gate is the one of the LSM6DS3 + iPhone study, reused
 # as is so both datasets reject incomplete phone streams by the same rule.
@@ -109,6 +117,7 @@ TOOL_DESCRIPTION = (
     "one breathing-pattern file per trial, the iPhone IMU is the phase reference."
 )
 DEFAULT_OUTPUT_DIR = ROOT / "data" / "raw" / "nn" / "a121_iphone"
+REFERENCE_CHOICES = {"iphone": ("iphone",), "belt": ("belt",), "both": ("iphone", "belt")}
 DEFAULT_PATTERN_IDS = ("nn_free", "nn_varied_rates", "nn_holds", "nn_shallow_deep", "nn_irregular")
 
 # Radar settings of configs/a121_foil_2m_retest.json, i.e. breathing at up to ~2 m.
@@ -135,6 +144,15 @@ A121_MAX_GAP_S = 0.5
 
 IPHONE_FIRST_SAMPLES = 12
 IPHONE_FIRST_SAMPLES_TIMEOUT_S = 3.0
+
+# The belt notifies ~10 Hz; BLE delivers it in bursts (arrival gaps up to ~0.2 s).
+BELT_EXPECTED_SAMPLE_RATE_HZ = 10.0
+BELT_FIRST_SAMPLES = 5
+BELT_FIRST_SAMPLES_TIMEOUT_S = 3.0
+BELT_MIN_COVERAGE_PERCENT = 90.0
+BELT_MAX_GAP_S = 1.0
+# Typical breath over sensor noise (respi_net.chest_signal): worn belt ~500, belt lying loose ~13.
+BELT_MIN_DEPTH_TO_NOISE = 50.0
 # Both streams keep running this long after the pattern ends, so samples still
 # in flight (BLE batching, A121 processing queue) at the end are not lost.
 POST_ROLL_S = 1.0
@@ -153,6 +171,14 @@ PHONE_PLACEMENT_PL = (
     "Telefonu NIE kładź w miejscu, na które celuje radar — to silny reflektor, który zdominowałby echo; "
     "trzymaj go co najmniej 10 cm od tego miejsca."
 )
+BELT_PLACEMENT_NOTE = (
+    "Strain belt (Pas_Tensometryczny) around the chest at the lower ribs, snug; its ESP32 box at the side, out of "
+    "the A121 beam, which is aimed at the upper chest."
+)
+BELT_PLACEMENT_PL = (
+    "Pas tensometryczny załóż na klatkę na wysokości dolnych żeber, dopięty. Pudełko z ESP32 przesuń na bok — "
+    "poza miejsce, na które celuje radar (górna część klatki)."
+)
 TIME_ALIGNMENT_NOTE = (
     "All times are host epoch milliseconds (time.time()). A121 Timestamp_ms follows the sensor tick clock, "
     "anchored to the host clock when the A121 session started. iPhone Time_ms follows the phone's sample clock, "
@@ -164,7 +190,9 @@ TIME_ALIGNMENT_NOTE = (
     "before the start); crop them with the cue wall times. The A121 stamps run about 0.17 percent fast (50/51 ms "
     "steps for frames that are 50 ms apart: 1.3 s too long over 12 minutes); use "
     "respi_net.chest_signal.regular_frame_times_ms, which a121_chest_signal applies, before comparing the radar "
-    "with any other sensor."
+    "with any other sensor. Strain-belt host_time_ms is the host arrival time of each BLE notification (the belt "
+    "sends no clock): bursty by up to ~0.2 s and late by the BLE latency; "
+    "respi_net.chest_signal.strain_belt_chest_signal evens it out."
 )
 
 POSTURE_LABELS_PL = {
@@ -261,12 +289,12 @@ def build_trials(pattern_refs: Sequence[str | Path] = DEFAULT_PATTERN_IDS) -> li
     return trials
 
 
-def output_paths(session_dir: Path, trial: Trial) -> dict[str, Path]:
-    return {
-        "a121": session_dir / f"{trial.stem}_a121.csv",
-        "iphone": session_dir / f"{trial.stem}_iphone.csv",
-        "cues": session_dir / f"{trial.stem}_cues.csv",
-    }
+def output_paths(session_dir: Path, trial: Trial, references: Sequence[str] = ("iphone",)) -> dict[str, Path]:
+    paths = {"a121": session_dir / f"{trial.stem}_a121.csv"}
+    for reference in references:
+        paths[reference] = session_dir / f"{trial.stem}_{reference}.csv"
+    paths["cues"] = session_dir / f"{trial.stem}_cues.csv"
+    return paths
 
 
 def cue_rows(pattern: BreathingPattern, start_wall_ms: float) -> list[dict[str, Any]]:
@@ -347,15 +375,34 @@ class SessionSettings:
     iphone_expected_sample_rate_hz: float = IPHONE_EXPECTED_SAMPLE_RATE_HZ
     prep_seconds: float = 5.0
     post_roll_s: float = POST_ROLL_S
+    references: tuple[str, ...] = ("iphone",)
+    belt_device: str | None = None
+    belt_scan_timeout_s: float = 10.0
+
+    @property
+    def use_iphone(self) -> bool:
+        return "iphone" in self.references
+
+    @property
+    def use_belt(self) -> bool:
+        return "belt" in self.references
 
     def setup_dict(self) -> dict[str, Any]:
-        return {
+        setup: dict[str, Any] = {
             "posture": self.posture,
             "distance_cm": self.distance_cm,
-            "phone_placement": PHONE_PLACEMENT_NOTE,
+            "references": list(self.references),
             "prep_seconds": self.prep_seconds,
             "post_roll_s": self.post_roll_s,
         }
+        if self.use_iphone:
+            setup["phone_placement"] = PHONE_PLACEMENT_NOTE
+        if self.use_belt:
+            setup["belt_placement"] = BELT_PLACEMENT_NOTE
+        return setup
+
+    def sensors_label(self) -> str:
+        return " + ".join(["A121", *({"iphone": "iPhone", "belt": "pas"}[name] for name in self.references)])
 
 
 def describe_a121_config(config: A121Config) -> str:
@@ -372,7 +419,7 @@ def plan_lines(trials: Sequence[Trial], settings: SessionSettings, *, start_tria
     recording_s = sum(trial.duration_s for trial in selected)
     with_prep_s = recording_s + settings.prep_seconds * len(selected)
     width = max(len(trial.pattern_id) for trial in trials)
-    lines = ["Plan nagrań A121 + iPhone (sieć faz oddechu):"]
+    lines = [f"Plan nagrań {settings.sensors_label()} (sieć faz oddechu):"]
     for trial in trials:
         skipped = "  (pominięta: --start-trial)" if trial.number < start_trial else ""
         lines.append(
@@ -387,13 +434,17 @@ def plan_lines(trials: Sequence[Trial], settings: SessionSettings, *, start_tria
         + (f"{settings.distance_cm:g} cm." if settings.distance_cm is not None else "nie podano."),
         f"A121: {describe_a121_config(settings.a121_config)}; port: "
         + (settings.a121_port or "auto-detekcja przy starcie próby") + ".",
-        f"iPhone: {settings.iphone_device or IPHONE_IMU_DEVICE_NAME} przez BLE, oczekiwane "
-        f"{settings.iphone_expected_sample_rate_hz:g} Hz, "
-        + ("START/STOP wysyłane przez BLE." if settings.iphone_autostart else "strumieniem steruje aplikacja."),
-        f"Katalog sesji: {settings.session_dir}",
-        "Pliki próby: run_XX_<wzorzec>_a121.csv, run_XX_<wzorzec>_iphone.csv, run_XX_<wzorzec>_cues.csv; "
-        "plus manifest.json.",
     ]
+    if settings.use_iphone:
+        lines.append(
+            f"iPhone: {settings.iphone_device or IPHONE_IMU_DEVICE_NAME} przez BLE, oczekiwane "
+            f"{settings.iphone_expected_sample_rate_hz:g} Hz, "
+            + ("START/STOP wysyłane przez BLE." if settings.iphone_autostart else "strumieniem steruje aplikacja.")
+        )
+    if settings.use_belt:
+        lines.append(f"Pas: {settings.belt_device or STRAIN_BELT_DEVICE_NAME} przez BLE, ok. {BELT_EXPECTED_SAMPLE_RATE_HZ:g} Hz.")
+    files = ", ".join(f"run_XX_<wzorzec>_{key}.csv" for key in ("a121", *settings.references, "cues"))
+    lines += [f"Katalog sesji: {settings.session_dir}", f"Pliki próby: {files}; plus manifest.json."]
     return lines
 
 
@@ -424,6 +475,49 @@ def iphone_time_axis_error(rows: Sequence[Sequence[float]], ble_batches: dict[st
     if backwards:
         return f"znaczniki czasu iPhone cofają się ({backwards}×) — strumień był restartowany."
     return None
+
+
+def belt_quality_error(coverage: dict[str, Any], *, duration_s: float, depth_to_noise: float | None) -> str | None:
+    """Holes in the belt stream, a missing start or end, or no breathing above the sensor noise."""
+
+    sample_coverage = float(coverage.get("sample_coverage_percent") or 0.0)
+    time_coverage = float(coverage.get("time_coverage_percent") or 0.0)
+    if sample_coverage < BELT_MIN_COVERAGE_PERCENT or time_coverage < BELT_MIN_COVERAGE_PERCENT:
+        return (
+            f"pas pokrył tylko {sample_coverage:.1f}% próbek i {time_coverage:.1f}% czasu próby {duration_s:.0f} s "
+            f"(wymagane co najmniej {BELT_MIN_COVERAGE_PERCENT:.0f}%)."
+        )
+    largest_gap_s = float(coverage.get("largest_gap_s") or 0.0)
+    if largest_gap_s > BELT_MAX_GAP_S:
+        return f"pas ma lukę {largest_gap_s:.2f} s między próbkami (dopuszczalne {BELT_MAX_GAP_S:.2f} s)."
+    first_offset_s = coverage.get("first_sample_offset_s")
+    last_offset_s = coverage.get("last_sample_offset_s")
+    edge_tolerance_s = max(0.5, 0.02 * float(duration_s))
+    if (
+        first_offset_s is None
+        or last_offset_s is None
+        or float(first_offset_s) > edge_tolerance_s
+        or float(last_offset_s) < float(duration_s) - edge_tolerance_s
+    ):
+        return "próbki pasa nie obejmują początku albo końca próby."
+    if depth_to_noise is not None and depth_to_noise < BELT_MIN_DEPTH_TO_NOISE:
+        return (
+            f"pas nie rejestruje oddechu (głębokość oddechu {depth_to_noise:.0f}× szum, wymagane "
+            f"{BELT_MIN_DEPTH_TO_NOISE:.0f}×) — czy jest założony i dopięty?"
+        )
+    return None
+
+
+def belt_depth_to_noise(rows: Sequence[Sequence[Any]]) -> float | None:
+    """Typical breath depth over sensor noise of a belt capture; ``None`` when too short to judge."""
+
+    from respi_net.chest_signal import strain_belt_chest_signal
+
+    try:
+        signal = strain_belt_chest_signal(pd.DataFrame([list(row) for row in rows], columns=STRAIN_BELT_COLUMNS))
+    except ValueError:
+        return None
+    return float(signal.meta["depth_to_noise"])
 
 
 def _median_column(frame: pd.DataFrame, column: str) -> float | None:
@@ -553,6 +647,20 @@ def format_summary(summary: dict[str, Any]) -> str:
         f"A121: mediana odległości maksimum echa {_value(a121.get('median_peak_distance_m'), 2, ' m')}, "
         f"cel Acconeer {_value(a121.get('median_target_distance_m'), 2, ' m')}, "
         f"obecność {_value(a121.get('presence_percent'), 0, '%')}.",
+    ]
+    belt = summary.get("belt")
+    if belt:
+        belt_coverage = belt.get("window_coverage", {}) or {}
+        lines.append(
+            f"Pas: {belt.get('rows', 0)} próbek, fs {_value(belt.get('sample_rate_hz'), 1, ' Hz')}, pokrycie okna "
+            f"{_value(belt_coverage.get('sample_coverage_percent'))}% próbek, największa luka "
+            f"{_value(belt_coverage.get('largest_gap_s'), 3, ' s')}; oddech/szum {_value(belt.get('depth_to_noise'), 0, '×')}; "
+            f"błędy HX711 {belt.get('hx711_errors', 0)}."
+        )
+    if not iphone:
+        lines.extend(f"{name}: {path}" for name, path in summary.get("files", {}).items())
+        return "\n".join(lines)
+    lines += [
         f"iPhone: {iphone.get('rows', 0)} próbek, fs {_value(iphone.get('sample_rate_hz'), 1, ' Hz')}, "
         f"szacowane luki czasowe {iphone.get('estimated_missing_samples', 0)} "
         f"({_value(iphone.get('estimated_missing_percent'), 3, '%')}).",
@@ -600,16 +708,37 @@ def new_manifest(trials: Sequence[Trial], settings: SessionSettings) -> dict[str
         "session_dir": str(settings.session_dir),
         "posture": settings.posture,
         "distance_cm": settings.distance_cm,
-        "phone_placement": PHONE_PLACEMENT_NOTE,
+        "references": list(settings.references),
+        **({"phone_placement": PHONE_PLACEMENT_NOTE} if settings.use_iphone else {}),
+        **({"belt_placement": BELT_PLACEMENT_NOTE} if settings.use_belt else {}),
         "a121_port": settings.a121_port,
         "a121_config": asdict(settings.a121_config),
-        "iphone": {
-            "device": settings.iphone_device or IPHONE_IMU_DEVICE_NAME,
-            "expected_sample_rate_hz": settings.iphone_expected_sample_rate_hz,
-            "autostart": settings.iphone_autostart,
-            "min_coverage_percent": IPHONE_MIN_COVERAGE_PERCENT,
-            "max_gap_s": IPHONE_MAX_GAP_S,
-        },
+        **(
+            {
+                "iphone": {
+                    "device": settings.iphone_device or IPHONE_IMU_DEVICE_NAME,
+                    "expected_sample_rate_hz": settings.iphone_expected_sample_rate_hz,
+                    "autostart": settings.iphone_autostart,
+                    "min_coverage_percent": IPHONE_MIN_COVERAGE_PERCENT,
+                    "max_gap_s": IPHONE_MAX_GAP_S,
+                }
+            }
+            if settings.use_iphone
+            else {}
+        ),
+        **(
+            {
+                "belt": {
+                    "device": settings.belt_device or STRAIN_BELT_DEVICE_NAME,
+                    "expected_sample_rate_hz": BELT_EXPECTED_SAMPLE_RATE_HZ,
+                    "min_coverage_percent": BELT_MIN_COVERAGE_PERCENT,
+                    "max_gap_s": BELT_MAX_GAP_S,
+                    "min_depth_to_noise": BELT_MIN_DEPTH_TO_NOISE,
+                }
+            }
+            if settings.use_belt
+            else {}
+        ),
         "prep_seconds": settings.prep_seconds,
         "post_roll_s": settings.post_roll_s,
         "time_alignment": TIME_ALIGNMENT_NOTE,
@@ -737,10 +866,11 @@ class MeasurementWorker(QObject):
         self.settings = settings
         self.a121_settle_s = max(0.0, float(a121_settle_s))
         self.session_dir = settings.session_dir
-        self.paths = output_paths(settings.session_dir, trial)
+        self.paths = output_paths(settings.session_dir, trial, settings.references)
         self.abort_event = threading.Event()
         self.a121: Any | None = None
         self.iphone: Any | None = None
+        self.belt: Any | None = None
         self.resolved_a121_port: str | None = None
         self.a121_geometry: dict[str, Any] = {}
 
@@ -751,7 +881,7 @@ class MeasurementWorker(QObject):
         delete_trial_outputs(self.paths)
 
     def _stop(self) -> None:
-        for capture in (self.a121, self.iphone):
+        for capture in (self.a121, self.iphone, self.belt):
             if capture is not None:
                 try:
                     capture.stop()
@@ -779,6 +909,8 @@ class MeasurementWorker(QObject):
             raise RuntimeError("Transmisja A121 zatrzymała się przed końcem próby.")
         if self.iphone is not None and not self.iphone.running:
             raise RuntimeError("Transmisja iPhone BLE zatrzymała się przed końcem próby.")
+        if self.belt is not None and not self.belt.running:
+            raise RuntimeError("Transmisja pasa BLE zatrzymała się przed końcem próby.")
 
     def _wait(self, seconds: float) -> bool:
         """Wait while watching both streams; ``True`` when the trial was aborted."""
@@ -865,6 +997,17 @@ class MeasurementWorker(QObject):
                 "Czy aplikacja jest na pierwszym planie, a strumień uruchomiony?"
             )
 
+    def _connect_belt(self) -> None:
+        self.status_changed.emit("Łączenie z pasem tensometrycznym przez BLE…")
+        self.belt = StrainBeltCapture(output_dir=self.session_dir, scan_timeout_s=self.settings.belt_scan_timeout_s)
+        if not self.belt.connect(self.settings.belt_device):
+            detail = str(getattr(self.belt, "status", "") or "")
+            raise RuntimeError("Nie połączono z pasem tensometrycznym przez BLE." + (f" ({detail})" if detail else ""))
+        if not self._wait_for_rows(self.belt, BELT_FIRST_SAMPLES, BELT_FIRST_SAMPLES_TIMEOUT_S):
+            if self.abort_event.is_set():
+                return
+            raise RuntimeError("Pas połączył się, ale nie wysyła próbek. Czy jest włączony?")
+
     def _arrival_count(self) -> int:
         counter = getattr(self.iphone, "arrival_count", None)
         return int(counter()) if callable(counter) else 0
@@ -882,16 +1025,19 @@ class MeasurementWorker(QObject):
             if self.abort_event.is_set():
                 self._abort()
                 return
-            self._connect_iphone()
-            if self.abort_event.is_set():
-                self._abort()
-                return
-            assert self.a121 is not None and self.iphone is not None
             settings = self.settings
+            for use, connect in ((settings.use_iphone, self._connect_iphone), (settings.use_belt, self._connect_belt)):
+                if use:
+                    connect()
+                    if self.abort_event.is_set():
+                        self._abort()
+                        return
+            assert self.a121 is not None
             rate_hz = settings.iphone_expected_sample_rate_hz
-            self.status_changed.emit("Radar i telefon przesyłają dane. Pozostań nieruchomo i przygotuj się.")
+            self.status_changed.emit(f"{settings.sensors_label()}: dane płyną. Pozostań nieruchomo i przygotuj się.")
 
-            iphone_preflight_start = self.iphone.data_count()
+            iphone_preflight_start = self.iphone.data_count() if self.iphone is not None else 0
+            belt_preflight_start = self.belt.data_count() if self.belt is not None else 0
             preflight_start_wall_ms = time.time() * 1000.0
             remaining = float(settings.prep_seconds)
             while remaining > 1e-9:
@@ -901,7 +1047,15 @@ class MeasurementWorker(QObject):
                     self._abort()
                     return
                 remaining -= step
-            if settings.prep_seconds >= 3:
+            if settings.prep_seconds >= 3 and self.belt is not None:
+                belt_preflight = self.belt.data_count() - belt_preflight_start
+                expected = settings.prep_seconds * BELT_EXPECTED_SAMPLE_RATE_HZ
+                if belt_preflight < 0.5 * expected:
+                    raise RuntimeError(
+                        f"Nieudana kontrola transmisji pasa przed próbą: {belt_preflight} próbek w "
+                        f"{settings.prep_seconds:g} s (oczekiwano ok. {expected:.0f}). Przybliż pas do komputera."
+                    )
+            if settings.prep_seconds >= 3 and self.iphone is not None:
                 preflight_coverage = stream_coverage_summary(
                     self.iphone.snapshot_data_since(iphone_preflight_start),
                     window_start_ms=preflight_start_wall_ms,
@@ -919,9 +1073,10 @@ class MeasurementWorker(QObject):
             duration_s = self.trial.duration_s
             a121_start = self.a121.data_count()
             a121_dropped_before = int(getattr(self.a121, "dropped_results", 0))
-            iphone_start = self.iphone.data_count()
-            iphone_counters_before = self.iphone.counter_snapshot()
+            iphone_start = self.iphone.data_count() if self.iphone is not None else 0
+            iphone_counters_before = self.iphone.counter_snapshot() if self.iphone is not None else {}
             arrivals_start = self._arrival_count()
+            belt_start = self.belt.data_count() if self.belt is not None else 0
             start_wall_ms = time.time() * 1000.0
             started = time.monotonic()
             self.status_changed.emit("Nagrywanie — wykonuj komendy trenera oddechu.")
@@ -944,7 +1099,7 @@ class MeasurementWorker(QObject):
                     self._abort()
                     return
             a121_dropped_after = int(getattr(self.a121, "dropped_results", 0))
-            iphone_counters_after = self.iphone.counter_snapshot()
+            iphone_counters_after = self.iphone.counter_snapshot() if self.iphone is not None else {}
             stop_wall_ms = time.time() * 1000.0
             self.status_changed.emit("Zatrzymywanie czujników i sprawdzanie zapisu…")
             self._stop()
@@ -954,7 +1109,8 @@ class MeasurementWorker(QObject):
 
             end_wall_ms = start_wall_ms + duration_s * 1000.0
             a121_rows = self.a121.snapshot_data_since(a121_start)
-            iphone_rows = self.iphone.snapshot_data_since(iphone_start)
+            iphone_rows = self.iphone.snapshot_data_since(iphone_start) if self.iphone is not None else []
+            belt_rows = self.belt.snapshot_rows(belt_start) if self.belt is not None else []
             a121_summary = summarize_a121_rows(
                 a121_rows,
                 window_start_ms=start_wall_ms,
@@ -965,40 +1121,66 @@ class MeasurementWorker(QObject):
             if a121_error is not None:
                 raise RuntimeError("Nie zaakceptowano zapisu A121: " + a121_error + " Bieżące pliki zostaną usunięte.")
 
-            # The gate judges the trial window; samples of the post-roll only pad the file.
-            window_rows = [row for row in iphone_rows if row[0] <= end_wall_ms]
-            iphone_coverage = stream_coverage_summary(
-                window_rows,
-                window_start_ms=start_wall_ms,
-                expected_duration_s=duration_s,
-                expected_sample_rate_hz=rate_hz,
-            )
-            ble_batches = counter_delta(iphone_counters_after, iphone_counters_before)
-            iphone_error = iphone_quality_error(iphone_coverage, duration_s=duration_s) or iphone_time_axis_error(
-                iphone_rows, ble_batches
-            )
-            if iphone_error is not None:
-                raise RuntimeError(
-                    "Nie zaakceptowano niepełnego zapisu iPhone: " + iphone_error + " Bieżące pliki zostaną usunięte."
+            # The gates judge the trial window; samples of the post-roll only pad the files.
+            iphone_summary: dict[str, Any] | None = None
+            if self.iphone is not None:
+                window_rows = [row for row in iphone_rows if row[0] <= end_wall_ms]
+                iphone_coverage = stream_coverage_summary(
+                    window_rows,
+                    window_start_ms=start_wall_ms,
+                    expected_duration_s=duration_s,
+                    expected_sample_rate_hz=rate_hz,
                 )
+                ble_batches = counter_delta(iphone_counters_after, iphone_counters_before)
+                iphone_error = iphone_quality_error(iphone_coverage, duration_s=duration_s) or iphone_time_axis_error(
+                    iphone_rows, ble_batches
+                )
+                if iphone_error is not None:
+                    raise RuntimeError(
+                        "Nie zaakceptowano niepełnego zapisu iPhone: " + iphone_error + " Bieżące pliki zostaną usunięte."
+                    )
+                iphone_summary = dict(sample_timing_summary(iphone_rows))
+                iphone_summary.update(
+                    {
+                        "device": settings.iphone_device or IPHONE_IMU_DEVICE_NAME,
+                        "expected_sample_rate_hz": rate_hz,
+                        "window_coverage": iphone_coverage,
+                        "ble_batches": ble_batches,
+                        "ble_arrival": arrival_lag_summary(self._arrival_lags_since(arrivals_start)),
+                    }
+                )
+            belt_summary: dict[str, Any] | None = None
+            if self.belt is not None:
+                window_rows = [row for row in belt_rows if start_wall_ms <= row[0] <= end_wall_ms]
+                belt_coverage = stream_coverage_summary(
+                    [[row[0]] for row in window_rows],
+                    window_start_ms=start_wall_ms,
+                    expected_duration_s=duration_s,
+                    expected_sample_rate_hz=BELT_EXPECTED_SAMPLE_RATE_HZ,
+                )
+                depth_to_noise = belt_depth_to_noise(window_rows)
+                belt_error = belt_quality_error(belt_coverage, duration_s=duration_s, depth_to_noise=depth_to_noise)
+                if belt_error is not None:
+                    raise RuntimeError("Nie zaakceptowano zapisu pasa: " + belt_error + " Bieżące pliki zostaną usunięte.")
+                belt_summary = {
+                    **sample_timing_summary([[row[0]] for row in belt_rows]),
+                    "device": settings.belt_device or STRAIN_BELT_DEVICE_NAME,
+                    "expected_sample_rate_hz": BELT_EXPECTED_SAMPLE_RATE_HZ,
+                    "window_coverage": belt_coverage,
+                    "depth_to_noise": depth_to_noise,
+                    "hx711_errors": int(getattr(self.belt, "glitches", 0)),
+                    "unparsed_packets": int(getattr(self.belt, "invalid", 0)),
+                }
 
             pd.DataFrame([list(row) for row in a121_rows], columns=A121_CAPTURE_COLUMNS).to_csv(
                 self.paths["a121"], index=False
             )
-            pd.DataFrame(iphone_rows, columns=IMU_COLUMNS).to_csv(self.paths["iphone"], index=False)
+            if self.iphone is not None:
+                pd.DataFrame(iphone_rows, columns=IMU_COLUMNS).to_csv(self.paths["iphone"], index=False)
+            if self.belt is not None:
+                pd.DataFrame(belt_rows, columns=STRAIN_BELT_COLUMNS).to_csv(self.paths["belt"], index=False)
             pd.DataFrame(cue_rows(self.trial.pattern, start_wall_ms), columns=CUE_COLUMNS).to_csv(
                 self.paths["cues"], index=False
-            )
-
-            iphone_summary: dict[str, Any] = dict(sample_timing_summary(iphone_rows))
-            iphone_summary.update(
-                {
-                    "device": settings.iphone_device or IPHONE_IMU_DEVICE_NAME,
-                    "expected_sample_rate_hz": rate_hz,
-                    "window_coverage": iphone_coverage,
-                    "ble_batches": ble_batches,
-                    "ble_arrival": arrival_lag_summary(self._arrival_lags_since(arrivals_start)),
-                }
             )
             summary = {
                 "trial": self.trial.as_dict(),
@@ -1018,8 +1200,11 @@ class MeasurementWorker(QObject):
                     "dropped_results": max(0, a121_dropped_after - a121_dropped_before),
                     "dropped_results_since_connect": a121_dropped_after,
                 },
-                "iphone": iphone_summary,
             }
+            if iphone_summary is not None:
+                summary["iphone"] = iphone_summary
+            if belt_summary is not None:
+                summary["belt"] = belt_summary
             self.finished.emit(summary)
         except Exception as exc:
             self._stop()
@@ -1051,7 +1236,7 @@ class GuidedRecordingWindow(QWidget):
         self.manifest_path = self.session_dir / "manifest.json"
         self.manifest = load_or_create_manifest(self.manifest_path, new_manifest(self.trials, settings))
 
-        self.setWindowTitle("A121 + iPhone — nagrania do sieci faz oddechu")
+        self.setWindowTitle(f"{settings.sensors_label()} — nagrania do sieci faz oddechu")
         self.resize(960, 900)
         self._build_ui()
         self.show_trial()
@@ -1131,10 +1316,16 @@ class GuidedRecordingWindow(QWidget):
             f"Wzorzec {trial.pattern_id}: {format_clock(trial.duration_s)} ({trial.duration_s:.0f} s).{description}\n\n"
             f"Pozycja: {posture_label(settings.posture)}; odległość radaru od klatki: {distance}; "
             f"zakres A121 {config.start_m:.2f}–{config.end_m:.2f} m.\n"
-            f"{PHONE_PLACEMENT_PL}\n\n"
-            "W trakcie próby pozostań nieruchomo i wykonuj komendy trenera oddechu. "
-            f"iPhone: {settings.iphone_expected_sample_rate_hz:g} Hz, aplikacja na pierwszym planie, ekran odblokowany. "
-            "Niepełny strumień iPhone albo zbyt mało ramek A121 powoduje automatyczne odrzucenie próby."
+            + (f"{PHONE_PLACEMENT_PL}\n" if settings.use_iphone else "")
+            + (f"{BELT_PLACEMENT_PL}\n" if settings.use_belt else "")
+            + "\nW trakcie próby pozostań nieruchomo i wykonuj komendy trenera oddechu. "
+            + (
+                f"iPhone: {settings.iphone_expected_sample_rate_hz:g} Hz, aplikacja na pierwszym planie, ekran odblokowany. "
+                if settings.use_iphone
+                else ""
+            )
+            + "Niepełny strumień czujnika, pas bez widocznego oddechu albo zbyt mało ramek A121 powoduje "
+            "automatyczne odrzucenie próby."
         )
 
     def show_trial(self, message: str | None = None) -> None:
@@ -1160,7 +1351,12 @@ class GuidedRecordingWindow(QWidget):
         if message is None and self._accepted_entry(trial) is not None:
             message = "Ta próba jest już zachowana w manifeście; Start próby usunie ją i nagra od nowa."
         self.status.setText(
-            message or "Sprawdź ułożenie telefonu i radaru, uruchom aplikację RespiPhoneIMU i wybierz Start próby."
+            message
+            or (
+                "Sprawdź ułożenie telefonu i radaru, uruchom aplikację RespiPhoneIMU i wybierz Start próby."
+                if self.settings.use_iphone
+                else "Sprawdź ułożenie pasa i radaru, włącz pas i wybierz Start próby."
+            )
         )
         self.start_button.setEnabled(True)
 
@@ -1220,7 +1416,7 @@ class GuidedRecordingWindow(QWidget):
         self.coach.show_countdown(
             remaining,
             self.settings.prep_seconds,
-            detail="Nie ruszaj się; telefon i radar pozostają na swoich miejscach.",
+            detail="Nie ruszaj się; czujniki i radar pozostają na swoich miejscach.",
         )
         self.status.setText(f"Przygotowanie: {remaining} s.")
 
@@ -1334,6 +1530,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Wzorce oddechu po przecinku: id z configs/breathing_patterns albo ścieżki; jedna próba na wzorzec "
         f"(domyślnie {','.join(DEFAULT_PATTERN_IDS)}).",
     )
+    parser.add_argument(
+        "--reference",
+        choices=sorted(REFERENCE_CHOICES),
+        default="iphone",
+        help="Czujnik odniesienia na ciele: iphone (domyślnie), belt (pas tensometryczny) albo both.",
+    )
+    parser.add_argument("--belt-device", help="Nazwa lub adres BLE pasa; domyślnie Pas_Tensometryczny.")
+    parser.add_argument("--belt-scan-timeout", type=float, default=10.0, help="Czas skanowania BLE pasa [s].")
     parser.add_argument("--a121-port", help="Port A121 Interface A; bez niego wykrywany automatycznie.")
     parser.add_argument("--iphone-device", help="Nazwa lub adres BLE iPhone'a; domyślnie RespiPhoneIMU.")
     parser.add_argument("--iphone-scan-timeout", type=float, default=10.0, help="Czas skanowania BLE [s].")
@@ -1364,12 +1568,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--a121-end-m", type=float, help="Koniec zakresu A121 [m] (nadpisuje zakres domyślny).")
     parser.add_argument("--a121-profile", type=int, help="Profil A121 1-5 (domyślnie 3; wyższy = dłuższy impuls, większy zasięg, gorsza rozdzielczość).")
     parser.add_argument("--a121-hwaas", type=int, help="HWAAS A121 (domyślnie 32; więcej = mniej szumu, wolniejsze przemiatanie).")
-    parser.add_argument("--session-name", help="Nazwa katalogu sesji; domyślnie a121_iphone_<data_godzina>.")
+    parser.add_argument("--session-name", help="Nazwa katalogu sesji; domyślnie a121_<czujniki>_<data_godzina>.")
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=DEFAULT_OUTPUT_DIR,
-        help="Katalog, w którym powstaje katalog sesji (domyślnie data/raw/nn/a121_iphone).",
+        help="Katalog, w którym powstaje katalog sesji (domyślnie data/raw/nn/a121_<czujniki>, np. a121_iphone).",
     )
     parser.add_argument(
         "--autostart",
@@ -1414,9 +1617,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    session_name = safe_name(args.session_name or f"a121_iphone_{datetime.now():%Y-%m-%d_%H-%M-%S}", "a121_iphone")
+    references = REFERENCE_CHOICES[args.reference]
+    kind = "a121_" + "_".join(references)
+    output_dir = args.output_dir if args.output_dir is not None else DEFAULT_OUTPUT_DIR.parent / kind
+    session_name = safe_name(args.session_name or f"{kind}_{datetime.now():%Y-%m-%d_%H-%M-%S}", kind)
     settings = SessionSettings(
-        session_dir=(Path(args.output_dir).expanduser() / session_name).resolve(),
+        session_dir=(Path(output_dir).expanduser() / session_name).resolve(),
         posture=normalize_posture(args.posture),
         distance_cm=args.distance_cm,
         a121_port=args.a121_port,
@@ -1426,6 +1632,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         iphone_autostart=not args.iphone_no_autostart,
         iphone_expected_sample_rate_hz=float(args.iphone_expected_sample_rate_hz),
         prep_seconds=float(args.prep_seconds),
+        references=references,
+        belt_device=args.belt_device,
+        belt_scan_timeout_s=float(args.belt_scan_timeout),
     )
     if args.dry_run:
         print("\n".join(plan_lines(trials, settings, start_trial=args.start_trial)))

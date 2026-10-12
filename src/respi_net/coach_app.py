@@ -3,7 +3,9 @@
 The recording tools drive the same :class:`~respi_net.breathing_coach.BreathingCoach`
 from their measurement clock; here the clock is the window's own, so any
 pattern file can be rehearsed, shown to a subject before a session, or used
-on its own.  Edit a pattern in any text editor and press "Wczytaj ponownie"
+on its own.  With a strain belt attached (``respi coach --belt``) the window also
+plots the belt live and saves every completed run as a CSV with the coached
+phase on each sample.  Edit a pattern in any text editor and press "Wczytaj ponownie"
 to see the change without restarting.
 """
 
@@ -12,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 import time
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -35,6 +37,9 @@ from .breathing import BreathingPattern, PatternError, discover_patterns, format
 from .breathing_coach import BreathingCoach
 from .paths import BREATHING_PATTERNS_DIR, PROJECT_ROOT
 
+if TYPE_CHECKING:
+    from .strain_belt import StrainBeltCapture
+
 
 def _display_path(path: Path | None) -> str:
     if path is None:
@@ -47,6 +52,8 @@ def _display_path(path: Path | None) -> str:
 
 class CoachWindow(QWidget):
     TICK_MS = 40
+    BELT_PLOT_MS = 100
+    BELT_WINDOW_S = 30.0
 
     def __init__(
         self,
@@ -56,6 +63,7 @@ class CoachWindow(QWidget):
         lead_in_s: int = 3,
         sound: bool = True,
         clock: Callable[[], float] = time.monotonic,
+        belt: StrainBeltCapture | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle("RespiNet — trener oddechu")
@@ -68,6 +76,11 @@ class CoachWindow(QWidget):
         self._run_start = 0.0
         self._paused_at = 0.0
         self._paused_total = 0.0
+        self.belt = belt
+        self.last_belt_path: Path | None = None
+        # Belt samples carry wall-clock stamps; the coach runs on ``clock``.
+        self._wall_offset = time.time() - clock()
+        self._pauses_wall: list[tuple[float, float]] = []
         self._timer = QTimer(self)
         self._timer.setInterval(self.TICK_MS)
         self._timer.timeout.connect(self._tick)
@@ -94,6 +107,8 @@ class CoachWindow(QWidget):
         self.coach = BreathingCoach()
         self.coach.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         layout.addWidget(self.coach, 1)
+        if belt is not None:
+            self._build_belt_plot(layout)
 
         controls = QHBoxLayout()
         self.start_button = QPushButton("Start (spacja)")
@@ -261,6 +276,7 @@ class CoachWindow(QWidget):
     def _begin(self, at: float) -> None:
         self.state = "running"
         self._run_start = at
+        self._pauses_wall = []
         self.status.setText("Podążaj za komendą. Spacja wstrzymuje.")
         self._update_controls()
 
@@ -277,7 +293,9 @@ class CoachWindow(QWidget):
     def resume(self) -> None:
         if self.state != "paused":
             return
-        self._paused_total += self._clock() - self._paused_at
+        now = self._clock()
+        self._paused_total += now - self._paused_at
+        self._pauses_wall.append((self._paused_at + self._wall_offset, now + self._wall_offset))
         self.state = "running"
         self.status.setText("Podążaj za komendą. Spacja wstrzymuje.")
         self._update_controls()
@@ -319,17 +337,87 @@ class CoachWindow(QWidget):
         self._timer.stop()
         self.coach.show_message("KONIEC", "Oddychaj swobodnie.", finished=True)
         self.status.setText(f"Ukończono: {self.pattern.name if self.pattern else ''}.")
+        if self.belt is not None:
+            self._save_belt_run()
         if self.sound_check.isChecked():
             QApplication.beep()
         self._update_controls()
 
+    # -- strain belt ------------------------------------------------------------------
 
-def launch_coach(pattern: str | Path | None = None, *, lead_in_s: int = 3, sound: bool = True) -> int:
+    def _build_belt_plot(self, layout: QVBoxLayout) -> None:
+        import pyqtgraph as pg
+
+        self.belt_plot = pg.PlotWidget()
+        self.belt_plot.setMinimumHeight(170)
+        self.belt_plot.setMaximumHeight(240)
+        self.belt_plot.setLabel("bottom", "czas [s]")
+        self.belt_plot.setLabel("left", "pas (HX711, bez trendu)")
+        self.belt_plot.setXRange(-self.BELT_WINDOW_S, 0, padding=0)
+        self.belt_plot.showGrid(x=True, y=True, alpha=0.2)
+        self.belt_curve = self.belt_plot.plot(pen=pg.mkPen("#2f80ed", width=2))
+        layout.addWidget(self.belt_plot)
+        self.belt_status = QLabel()
+        layout.addWidget(self.belt_status)
+        self._belt_timer = QTimer(self)
+        self._belt_timer.setInterval(self.BELT_PLOT_MS)
+        self._belt_timer.timeout.connect(self._update_belt_plot)
+        self._belt_timer.start()
+
+    @Slot()
+    def _update_belt_plot(self) -> None:
+        belt = self.belt
+        if belt is None:
+            return
+        now = time.time()
+        rows = [row for row in belt.snapshot_rows(max(0, belt.data_count() - 600)) if row[0] / 1000.0 >= now - self.BELT_WINDOW_S]
+        if len(rows) >= 2:
+            import numpy as np
+
+            times = np.array([row[0] / 1000.0 - now for row in rows])
+            values = np.array([float(row[3]) for row in rows])
+            # A straight line over the visible window takes the belt's slow creep out of the view.
+            trend = np.polyval(np.polyfit(times, values, 1), times)
+            self.belt_curve.setData(times, values - trend)
+        else:
+            self.belt_curve.setData([], [])
+        rate = len([row for row in rows if row[0] / 1000.0 >= now - 5.0]) / 5.0
+        link = "połączony" if belt.connected else f"ROZŁĄCZONY ({belt.status})"
+        saved = f" · ostatni zapis: {_display_path(self.last_belt_path)}" if self.last_belt_path else ""
+        self.belt_status.setText(f"Pas: {link} · {rate:.1f} Hz · próbek {belt.data_count()}{saved}")
+
+    def _save_belt_run(self) -> None:
+        from .strain_belt import label_coach_rows, save_coach_recording
+
+        if self.belt is None or self.pattern is None:
+            return
+        start_wall = self._run_start + self._wall_offset
+        end_wall = self._clock() + self._wall_offset
+        rows = label_coach_rows(self.belt.snapshot_rows(), self.pattern, start_wall, end_wall, self._pauses_wall)
+        if len(rows) < 10:
+            self.status.setText(f"{self.status.text()} Za mało próbek z pasa ({len(rows)}) — nic nie zapisano.")
+            return
+        self.last_belt_path = save_coach_recording(rows, self.pattern.pattern_id or "pattern", phases=self.pattern.phases)
+        self.status.setText(f"{self.status.text()} Zapisano pas: {_display_path(self.last_belt_path)} ({len(rows)} próbek).")
+
+    def closeEvent(self, event: object) -> None:  # noqa: N802 - Qt API
+        if self.belt is not None:
+            self.belt.stop()
+        super().closeEvent(event)
+
+
+def launch_coach(
+    pattern: str | Path | None = None,
+    *,
+    lead_in_s: int = 3,
+    sound: bool = True,
+    belt: StrainBeltCapture | None = None,
+) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("RespiNet Breathing Coach")
     patterns, problems = discover_patterns()
     initial = load_pattern(pattern) if pattern is not None else None
-    window = CoachWindow(patterns=patterns, initial=initial, lead_in_s=lead_in_s, sound=sound)
+    window = CoachWindow(patterns=patterns, initial=initial, lead_in_s=lead_in_s, sound=sound, belt=belt)
     if problems:
         window.status.setText(
             "Pominięto nieprawidłowe pliki: " + "; ".join(message for _, message in problems)

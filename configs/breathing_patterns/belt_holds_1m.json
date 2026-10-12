@@ -1,0 +1,31 @@
+{
+  "name": "Pas — 1 min z pauzami na górze i na dole",
+  "description": "60 s do testu pasa tensometrycznego: swobodny oddech, rytm 2/3 s, dwa cykle z 4 s pauzą po wdechu i po wydechu, rytm 3/3 s. Przy dyskomforcie przerwij klawiszem Esc.",
+  "blocks": [
+    {
+      "kind": "normal",
+      "duration_seconds": 10,
+      "detail": "Ustabilizuj pozycję i oddychaj swobodnie."
+    },
+    {
+      "kind": "paced",
+      "cycles": 2,
+      "inhale_seconds": 2,
+      "exhale_seconds": 3
+    },
+    {
+      "kind": "paced",
+      "cycles": 2,
+      "inhale_seconds": 3,
+      "hold_after_inhale_seconds": 4,
+      "exhale_seconds": 3,
+      "hold_after_exhale_seconds": 4
+    },
+    {
+      "kind": "paced",
+      "cycles": 2,
+      "inhale_seconds": 3,
+      "exhale_seconds": 3
+    }
+  ]
+}

@@ -718,3 +718,129 @@ def test_a121_profile_and_hwaas_can_be_overridden_for_long_distances() -> None:
     assert (far.start_m, far.end_m) == (6.5, 7.5)  # the chest distance +- 0.5 m
     with pytest.raises(ValueError):
         tool.a121_config_for(profile=6)
+
+
+# -- strain belt as the reference -------------------------------------------------------
+
+
+class FakeBeltCapture:
+    rate_hz = 10.0
+    depth = 6000.0  # counts of a breath; 0 = belt lying loose
+
+    def __init__(self, output_dir: Any = None, device: Any = None, scan_timeout_s: float = 10.0, **_: Any) -> None:
+        self.running = False
+        self.status = "idle"
+        self.glitches = 0
+        self.invalid = 0
+        self.rows: list[list[Any]] = []
+        self._t0: float | None = None
+        self._stopped_at: float | None = None
+        self._n = 0
+        self._rng = np.random.default_rng(1)
+
+    def connect(self, selector: str | None = None) -> bool:
+        self.running = True
+        self._t0 = _now_ms() - 500.0
+        return True
+
+    def _sync(self) -> None:
+        if self._t0 is None:
+            return
+        limit = self._stopped_at if self._stopped_at is not None else _now_ms()
+        period = 1000.0 / self.rate_hz
+        while self._t0 + self._n * period <= limit:
+            t_s = self._n / self.rate_hz
+            raw = -5.3e6 + self.depth / 2 * (1 - np.cos(2 * np.pi * t_s / 1.5)) + self._rng.normal(0, 40)
+            self.rows.append([self._t0 + self._n * period, "", "", float(raw), "", str(int(raw))])
+            self._n += 1
+
+    def data_count(self) -> int:
+        self._sync()
+        return len(self.rows)
+
+    def snapshot_rows(self, start: int = 0) -> list[list[Any]]:
+        self._sync()
+        return [list(row) for row in self.rows[start:]]
+
+    def stop(self) -> None:
+        if self._t0 is not None and self._stopped_at is None:
+            self._sync()
+            self._stopped_at = _now_ms()
+        self.running = False
+
+
+class LooseBeltCapture(FakeBeltCapture):
+    depth = 0.0
+
+
+def _belt_trial(seconds: float) -> "tool.Trial":
+    pattern = pattern_from_dict(
+        {"name": "Pas", "blocks": [{"kind": "paced", "cycles": 1, "inhale_seconds": seconds / 2, "exhale_seconds": seconds / 2}]},
+        pattern_id="belt",
+    )
+    return tool.Trial(1, pattern)
+
+
+def _run_belt_worker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, references: tuple[str, ...], belt: type, seconds: float):
+    monkeypatch.setattr(tool, "A121Capture", FakeA121Capture)
+    monkeypatch.setattr(tool, "ArrivalLoggingIPhoneCapture", FakeIPhoneCapture)
+    monkeypatch.setattr(tool, "StrainBeltCapture", belt)
+    settings = tool.SessionSettings(
+        session_dir=tmp_path, a121_port="TEST", prep_seconds=0.1, post_roll_s=0.1, references=references
+    )
+    worker = tool.MeasurementWorker(trial=_belt_trial(seconds), settings=settings)
+    events: dict[str, list[Any]] = {"finished": [], "failed": []}
+    worker.finished.connect(events["finished"].append)
+    worker.failed.connect(events["failed"].append)
+    worker.run()
+    return worker, events
+
+
+def test_belt_session_records_radar_belt_and_cues(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, qapp: QApplication) -> None:
+    from respi_net.strain_belt import STRAIN_BELT_COLUMNS
+
+    worker, events = _run_belt_worker(tmp_path, monkeypatch, references=("belt",), belt=FakeBeltCapture, seconds=3.0)
+
+    assert events["failed"] == [] and len(events["finished"]) == 1
+    summary = events["finished"][0]
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "run_01_belt_a121.csv",
+        "run_01_belt_belt.csv",
+        "run_01_belt_cues.csv",
+    ]
+    belt = pd.read_csv(worker.paths["belt"])
+    assert list(belt.columns) == STRAIN_BELT_COLUMNS
+    start_ms = summary["measurement_start_wall_ms"]
+    assert belt["host_time_ms"].min() <= start_ms + 100.0 and belt["host_time_ms"].max() >= start_ms + 2900.0
+    assert "iphone" not in summary
+    assert summary["belt"]["window_coverage"]["sample_coverage_percent"] >= 90.0
+    assert summary["belt"]["depth_to_noise"] > tool.BELT_MIN_DEPTH_TO_NOISE
+    assert summary["setup"]["references"] == ["belt"] and "belt_placement" in summary["setup"]
+    text = tool.format_summary(summary)
+    assert "Pas:" in text and "iPhone" not in text.split("run_01")[0]
+    json.dumps(summary)
+
+
+def test_both_references_record_four_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, qapp: QApplication) -> None:
+    worker, events = _run_belt_worker(tmp_path, monkeypatch, references=("iphone", "belt"), belt=FakeBeltCapture, seconds=1.0)
+
+    assert events["failed"] == []
+    assert sorted(worker.paths) == ["a121", "belt", "cues", "iphone"]
+    assert all(path.exists() for path in worker.paths.values())
+    assert {"iphone", "belt"} <= set(events["finished"][0])
+
+
+def test_loose_belt_is_rejected_and_files_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, qapp: QApplication) -> None:
+    _, events = _run_belt_worker(tmp_path, monkeypatch, references=("belt",), belt=LooseBeltCapture, seconds=3.0)
+
+    assert events["finished"] == [] and len(events["failed"]) == 1
+    assert "nie rejestruje oddechu" in events["failed"][0]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_reference_option_picks_the_session_folder(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    assert tool.main(["--reference", "both", "--patterns", "nn_holds", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "A121 + iPhone + pas" in out
+    assert "data/raw/nn/a121_iphone_belt/a121_iphone_belt_" in out
+    assert "run_XX_<wzorzec>_iphone.csv, run_XX_<wzorzec>_belt.csv" in out

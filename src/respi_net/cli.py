@@ -18,6 +18,7 @@ from .iphone_imu import IPhoneIMUBluetoothCapture, discover_iphone_imu_devices, 
 from .paths import DATA_DIR, IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR, SLEEP_PLOTS_DIR
 from .radar import DEFAULT_RADAR_BAUD, RadarCapture, analyze_radar_csv
 from .serial_utils import list_serial_ports
+from .strain_belt import RAW_STRAIN_BELT_DIR, StrainBeltCapture, discover_strain_belt_devices, probe_strain_belt
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -71,11 +72,16 @@ def app(sensor: str, port: str | None, baud: int | None, open_path: Path | None)
 @click.option("--print", "print_only", is_flag=True, help="Print the expanded schedule of PATTERN and exit.")
 @click.option("--lead-in", default=3, show_default=True, type=click.IntRange(0, 60), help="Countdown before the first phase [s].")
 @click.option("--sound/--no-sound", default=True, show_default=True, help="Beep at every phase change.")
-def coach(pattern: str | None, list_only: bool, print_only: bool, lead_in: int, sound: bool) -> None:
+@click.option("--belt", is_flag=True, help="Connect the strain belt: live plot, and save each completed run to CSV.")
+@click.option("--belt-device", help="Belt BLE name fragment or address (default: Pas_Tensometryczny).")
+def coach(
+    pattern: str | None, list_only: bool, print_only: bool, lead_in: int, sound: bool, belt: bool, belt_device: str | None
+) -> None:
     """Open the breathing coach, or check pattern files without the UI.
 
     PATTERN is a file name from configs/breathing_patterns (without .json) or a
-    path to any pattern file.
+    path to any pattern file.  With --belt, completed runs are saved to
+    data/raw/strain_belt/ with the coached phase on every sample.
     """
     from .breathing import PatternError, discover_patterns, format_clock, load_pattern
 
@@ -102,9 +108,22 @@ def coach(pattern: str | None, list_only: bool, print_only: bool, lead_in: int, 
                 click.echo(f"      {phase.start_s:7.2f}-{phase.end_s:7.2f} s  {phase.kind:<12} {phase.cue}")
         return
 
+    capture = None
+    if belt or belt_device:
+        click.echo("Connecting to the strain belt...")
+        capture = StrainBeltCapture()
+        if not capture.connect(belt_device):
+            raise click.ClickException("Could not connect to the strain belt.")
+        click.echo("Strain belt connected.")
+
     from .coach_app import launch_coach
 
-    raise SystemExit(launch_coach(pattern, lead_in_s=lead_in, sound=sound))
+    try:
+        code = launch_coach(pattern, lead_in_s=lead_in, sound=sound, belt=capture)
+    finally:
+        if capture is not None:
+            capture.stop()
+    raise SystemExit(code)
 
 
 @cli.command("plot-imu")
@@ -292,6 +311,71 @@ def capture_iphone_imu(device: str | None, seconds: int | None, scan_timeout: fl
     if plot:
         result = analyze_imu_csv(csv_path)
         click.echo(f"Plot: {result.plot_path}")
+
+
+@cli.command("strain-belt-devices")
+@click.option("--timeout", "timeout_s", default=6.0, show_default=True, type=click.FloatRange(min=0.1), help="BLE scan duration in seconds.")
+@click.option("--all", "include_all", is_flag=True, help="Show every BLE advertisement, not only likely belt matches.")
+def strain_belt_devices(timeout_s: float, include_all: bool) -> None:
+    """Scan for the ESP32/HX711 strain-gauge belt."""
+    try:
+        devices = asyncio.run(discover_strain_belt_devices(timeout_s=timeout_s, include_all=include_all))
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not devices:
+        click.echo("No strain belt found. Power it on, or rerun with --all.")
+        return
+    for device in devices:
+        rssi = f"  RSSI {device['rssi']}" if device.get("rssi") else ""
+        match = f"  match:{device['matches']}" if device.get("matches") != "no" else ""
+        click.echo(f"{device['name']}  {device['address']}{rssi}{match}")
+
+
+@cli.command("strain-belt-probe")
+@click.option("-d", "--device", help="BLE name fragment or address. Defaults to the belt service UUID.")
+@click.option("--scan-timeout", default=8.0, show_default=True, type=click.FloatRange(min=0.1))
+@click.option("--seconds", "listen_s", default=5.0, show_default=True, type=click.FloatRange(min=0.1), help="How long to print notifications.")
+def strain_belt_probe(device: str | None, scan_timeout: float, listen_s: float) -> None:
+    """Connect to the belt, print its GATT table and echo live notifications."""
+    try:
+        parsed = asyncio.run(probe_strain_belt(selector=device, scan_timeout_s=scan_timeout, listen_s=listen_s, echo=click.echo))
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Parsed data samples: {parsed}")
+
+
+@cli.command("capture-strain-belt")
+@click.option("-d", "--device", help="BLE name fragment or address. Defaults to the belt service UUID.")
+@click.option("-s", "--seconds", type=click.IntRange(1), help="Optional capture length. Omit to capture until Ctrl+C.")
+@click.option("--scan-timeout", default=10.0, show_default=True, type=click.FloatRange(min=0.1))
+@click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=RAW_STRAIN_BELT_DIR, show_default=True)
+def capture_strain_belt(device: str | None, seconds: int | None, scan_timeout: float, output_dir: Path) -> None:
+    """Record strain-belt samples over BLE to CSV."""
+    capture = StrainBeltCapture(output_dir=output_dir, scan_timeout_s=scan_timeout)
+    if not capture.connect(device):
+        raise click.ClickException("Could not connect to the strain belt.")
+    click.echo("Capturing strain belt over BLE. Press Ctrl+C to stop." if seconds is None else f"Capturing strain belt for {seconds}s.")
+    started = time.monotonic()
+    last_report = -1
+    try:
+        while capture.running:
+            elapsed = time.monotonic() - started
+            if seconds is not None and elapsed >= seconds:
+                break
+            if int(elapsed) != last_report:
+                last_report = int(elapsed)
+                click.echo(f"  {last_report:>4}s | samples={capture.data_count()} raw={capture.latest_raw()}")
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        capture.stop()
+    try:
+        csv_path = capture.save()
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Saved: {csv_path}")
+    click.echo(f"Packets: {capture.received} ok, {capture.missing} missing, {capture.bad_checksum} bad checksum, {capture.glitches} HX711 errors (-1), {capture.invalid} unparsed")
 
 
 def _safe_filename_part(value: str) -> str:

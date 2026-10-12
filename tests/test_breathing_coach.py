@@ -117,3 +117,51 @@ def test_coach_window_counts_in_pauses_and_finishes(qapp: QApplication) -> None:
     window.stop()
     assert window.state == "idle"
     window.close()
+
+
+class _FakeBelt:
+    connected = True
+    status = "connected"
+
+    def __init__(self) -> None:
+        self.rows: list[list[object]] = []
+        self.stopped = False
+
+    def data_count(self) -> int:
+        return len(self.rows)
+
+    def snapshot_rows(self, start: int = 0) -> list[list[object]]:
+        return [list(row) for row in self.rows[start:]]
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
+def test_coach_window_saves_belt_run_with_phases(qapp: QApplication, tmp_path, monkeypatch) -> None:
+    import csv
+
+    from respi_net import strain_belt
+
+    original_save = strain_belt.save_coach_recording
+    monkeypatch.setattr(strain_belt, "save_coach_recording", lambda rows, pid, phases=None: original_save(rows, pid, tmp_path, phases))
+    now = [1000.0]
+    belt = _FakeBelt()
+    window = CoachWindow(patterns=[], initial=load_pattern("belt_holds_1m"), lead_in_s=0, sound=False, clock=lambda: now[0], belt=belt)
+    offset = window._wall_offset
+    window.toggle()
+    assert window.state == "running"
+    # 10 Hz belt samples covering the whole minute.
+    belt.rows = [[(now[0] + k / 10 + offset) * 1000.0, "", "", float(k), "", str(k)] for k in range(605)]
+    window._update_belt_plot()
+    now[0] += 61.0
+    window._tick()
+    assert window.state == "finished"
+    assert window.last_belt_path is not None and window.last_belt_path.parent == tmp_path
+    with window.last_belt_path.open() as handle:
+        saved = list(csv.DictReader(handle))
+    assert len(saved) == 600
+    assert {row["phase"] for row in saved} == {"normal", "inhale", "exhale", "hold_in", "hold_out"}
+    assert len(strain_belt.load_coach_cues(window.last_belt_path)) == len(window.pattern.phases)
+    assert strain_belt.cue_sidecar_path(window.last_belt_path).exists()
+    window.close()
+    assert belt.stopped
