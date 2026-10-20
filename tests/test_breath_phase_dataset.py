@@ -136,3 +136,20 @@ def test_a_slow_shallow_breath_after_fast_deep_ones_is_motion_only_with_the_slow
     aware = detect_phases(trace, fs, min_hold_s=4.0, slow_motion_fraction=0.25)
     assert (plain[middle] == INHALE).mean() == 0.0  # the speed threshold set by the fast breaths calls it still
     assert (aware[middle] == INHALE).mean() > 0.9
+
+
+def test_an_inhale_starts_at_the_trough_after_a_slow_exhale_tail() -> None:
+    """A passive exhale fades out slowly, so the still moment at the bottom is lopsided: the inhale still starts at its trough."""
+    time_s = np.arange(0.0, 60.0, 1.0 / FS)
+    chest = np.zeros(len(time_s))
+    starts = np.arange(0.0, 60.0, 6.0)
+    for start in starts:
+        t = time_s - start
+        inhale, exhale = (t >= 0) & (t < 1.5), (t >= 1.5) & (t < 6.0)
+        chest[inhale] = 0.5 - 0.5 * np.cos(np.pi * t[inhale] / 1.5)
+        chest[exhale] = np.exp(-(t[exhale] - 1.5) / 0.6)
+    chest = 8.0 * chest + 0.01 * np.random.default_rng(5).standard_normal(len(chest))
+    labels = detect_phases(chest, FS)
+    onsets = time_s[1:][(labels[1:] == INHALE) & (labels[:-1] == EXHALE)]
+    assert len(onsets) >= 8
+    assert np.all(np.abs(onsets - np.round(onsets / 6.0) * 6.0) <= 0.3)  # the 1 Hz trough; the middle of the rest is 1.5 s early

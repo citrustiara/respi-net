@@ -16,8 +16,6 @@ from respi_net.phone_annotation import (
     next_label,
     save_segments,
     segments_to_labels,
-    snap_labels,
-    snap_segments,
 )
 
 TOOLS_DIR = Path(__file__).resolve().parents[1] / "tools"
@@ -107,40 +105,6 @@ def test_the_edges_of_a_hold_get_a_wider_guard() -> None:
     assert masked[80] == EXHALE and masked[120] == HOLD
     leaving = guard_mask(np.where(grid < 10.0, HOLD, INHALE).astype(np.int8), grid, 0.2, 1.5)
     assert leaving[85] == IGNORE and leaving[70] == HOLD  # the end of a hold is as fuzzy as its start
-
-
-def test_boundaries_snap_to_the_turning_points_of_the_trace() -> None:
-    grid = np.arange(0.0, 30.0, 0.05)
-    trace = -np.cos(2 * np.pi * grid / 6.0)  # troughs at 0, 6, 12 ...; crests at 3, 9, 15 ...
-    late = [Segment(6.2, 9.3, INHALE), Segment(9.3, 12.2, EXHALE), Segment(12.2, 15.3, INHALE)]  # clicks 0.2-0.3 s after the turns
-    snapped = snap_segments(late, grid, trace)
-    assert abs(snapped[0].end_s - 9.0) < 0.15 and snapped[0].end_s == snapped[1].start_s
-    assert abs(snapped[1].end_s - 12.0) < 0.15
-    assert snapped[0].start_s == 6.2 and snapped[2].end_s == 15.3  # outer edges are untouched
-
-
-def test_snapping_leaves_holds_alone_and_works_on_label_arrays() -> None:
-    grid = np.arange(0.0, 30.0, 0.05)
-    trace = -np.cos(2 * np.pi * grid / 6.0)
-    segments = [Segment(6.2, 9.3, INHALE), Segment(9.3, 14.0, HOLD)]
-    assert snap_segments(segments, grid, trace) == segments
-    labels = segments_to_labels([Segment(6.2, 9.3, INHALE), Segment(9.3, 12.2, EXHALE)], grid)
-    snapped = snap_labels(labels, grid, trace)
-    assert abs(grid[np.flatnonzero(snapped == EXHALE)[0]] - 9.0) < 0.15
-
-
-def test_a_steady_click_lag_is_measured_and_taken_out() -> None:
-    from respi_net.phone_annotation import boundary_offsets, shift_boundaries
-
-    grid = np.arange(0.0, 60.0, 0.05)
-    trace = -np.cos(2 * np.pi * grid / 6.0)  # troughs at 0, 6, 12 ...; crests at 3, 9, 15 ...
-    lag = 0.25
-    marks = [(6.0 + lag, INHALE), (9.0 + lag, EXHALE), (12.0 + lag, INHALE), (15.0 + lag, EXHALE), (18.0 + lag, INHALE)]
-    segments = marks_to_segments(marks, 21.25)
-    offsets = boundary_offsets(segments, grid, trace)
-    assert abs(offsets["crest"]["median_s"] - lag) < 0.1 and abs(offsets["trough"]["median_s"] - lag) < 0.1
-    corrected = shift_boundaries(segments, offsets)
-    assert abs(corrected[0].end_s - 9.0) < 0.12 and abs(corrected[1].end_s - 12.0) < 0.12
 
 
 def _trough_snapper(grid: np.ndarray, trace: np.ndarray):

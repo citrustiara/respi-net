@@ -3,7 +3,9 @@
 It reads the direction of chest motion.  Rising is an inhale, falling an
 exhale, and standing still for at least ``min_hold_s`` a hold -- after inhale
 if the last breath went in, after exhale otherwise.  Shorter still moments
-are turning points and are split between the breaths on either side.
+are turning points.  Offline, the next breath starts at the turn itself: an
+inhale at the trough, an exhale at the crest of the trace smoothed to 1 Hz,
+within 0.8 s of where its motion begins -- the place a hand label snaps to.
 
 A hold after a deep breath often begins with a quick settle the other way:
 with the glottis closed, volume shifts between chest and belly without air
@@ -117,11 +119,13 @@ def _absorb_settles(
     return direction
 
 
-def _offline(direction: np.ndarray, fs: float, min_hold_s: float) -> np.ndarray:
+def _offline(direction: np.ndarray, turn: np.ndarray, fs: float, min_hold_s: float, reach_s: float) -> np.ndarray:
     labels = np.full(len(direction), IGNORE, dtype=np.int8)
     runs = label_runs(direction)
     min_hold = int(round(min_hold_s * fs))
+    reach = int(round(reach_s * fs))
     motion_label = {1: INHALE, -1: EXHALE}
+    splits = []
     for index, (start, stop, value) in enumerate(runs):
         if value != 0:
             labels[start:stop] = motion_label[value]
@@ -131,12 +135,23 @@ def _offline(direction: np.ndarray, fs: float, min_hold_s: float) -> np.ndarray:
         if stop - start >= min_hold:
             labels[start:stop] = HOLD_AFTER_INHALE if before == 1 else HOLD_AFTER_EXHALE
             continue
-        # A short pause is the turning point itself: half to each side.
-        middle = (start + stop) // 2
         first = motion_label.get(before if before is not None else after, IGNORE)
         second = motion_label.get(after if after is not None else before, IGNORE)
+        middle = (start + stop) // 2
+        if before is not None and after is not None and before != after and 0 < index < len(runs) - 1:
+            # A short pause is the turning point itself.  The next breath is seen to begin where its motion starts;
+            # it starts at the turn within reach of that (the hand-labelling viewer snaps a click the same way).
+            # The motion threshold puts that onset a little off the turn (the smoothing, a slow exhale tail).
+            lo, hi = max(runs[index - 1][0] + 1, stop - reach), min(runs[index + 1][1] - 1, stop + reach + 1)
+            at = lo + int(np.argmin(turn[lo:hi]) if after == 1 else np.argmax(turn[lo:hi]))
+            if lo < at < hi - 1:  # an extreme at the edge of the reach is a slope, not a turn
+                splits.append((min(start, lo), at, max(stop, hi), first, second))
+                continue
         labels[start:middle] = first
         labels[middle:stop] = second
+    for lo, at, hi, first, second in splits:  # after every run is labelled, so a neighbour cannot overwrite them
+        labels[lo:at] = first
+        labels[at:hi] = second
     return labels
 
 
@@ -205,6 +220,10 @@ _DEFAULT: Any = object()
 # A hold is a stillness of at least 4 s (natural rests between breaths last 0.8-3.1 s); it was 2 s before 2026-10-02.
 OFFLINE_SETTINGS = {"low_pass_hz": 0.5, "still_fraction": 0.5, "min_hold_s": 4.0}
 REALTIME_SETTINGS = {"low_pass_hz": 1.0, "still_fraction": 0.4, "min_hold_s": 1.0}
+# Offline, a breath starts at the turn of the trace smoothed to 1 Hz within 0.8 s of where its motion begins
+# (the hand-labelling viewer snaps a click to the same turn).
+TURN_LOW_PASS_HZ = 1.0
+TURN_REACH_S = 0.8
 
 
 def detect_phases(
@@ -252,4 +271,5 @@ def detect_phases(
     if causal:
         return _causal(direction, smooth, fs, min_hold_s, min_phase_s, max_settle_s, max_settle_fraction)
     direction = _absorb_settles(direction, smooth, fs, min_hold_s, max_settle_s, max_settle_fraction)
-    return enforce_min_duration(_offline(direction, fs, min_hold_s), fs, min_phase_s)
+    turn = light_filter(chest, fs, TURN_LOW_PASS_HZ)
+    return enforce_min_duration(_offline(direction, turn, fs, min_hold_s, TURN_REACH_S), fs, min_phase_s)
