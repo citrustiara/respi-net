@@ -153,3 +153,23 @@ def test_an_inhale_starts_at_the_trough_after_a_slow_exhale_tail() -> None:
     onsets = time_s[1:][(labels[1:] == INHALE) & (labels[:-1] == EXHALE)]
     assert len(onsets) >= 8
     assert np.all(np.abs(onsets - np.round(onsets / 6.0) * 6.0) <= 0.3)  # the 1 Hz trough; the middle of the rest is 1.5 s early
+
+
+def test_a_hold_starts_where_the_slowing_inhale_reaches_its_crest() -> None:
+    """An inhale that eases into a hold reads as still before it ends: the hold still starts at the crest."""
+    time_s = np.arange(0.0, 60.0, 1.0 / FS)
+    chest = np.zeros(len(time_s))
+    for start in np.arange(0.0, 25.0, 5.0):
+        t = time_s - start
+        inhale, exhale = (t >= 0) & (t < 2.0), (t >= 2.0) & (t < 5.0)
+        chest[inhale] = 0.5 - 0.5 * np.cos(np.pi * t[inhale] / 2.0)
+        chest[exhale] = 0.5 + 0.5 * np.cos(np.pi * (t[exhale] - 2.0) / 3.0)
+    t = time_s - 25.0
+    rise, held, out = (t >= 0) & (t < 3.0), (t >= 3.0) & (t < 13.0), t >= 13.0
+    chest[rise] = np.sin(0.5 * np.pi * t[rise] / 3.0)  # fast at first, flat at the top
+    chest[held] = 1.0
+    chest[out] = 0.5 + 0.5 * np.cos(np.pi * np.clip(t[out] - 13.0, 0.0, 3.0) / 3.0)
+    chest = 8.0 * chest + 0.01 * np.random.default_rng(6).standard_normal(len(chest))
+    labels = detect_phases(chest, FS)
+    hold_start = time_s[np.flatnonzero(labels == HOLD_AFTER_INHALE)[0]]
+    assert abs(hold_start - 28.0) <= 0.3

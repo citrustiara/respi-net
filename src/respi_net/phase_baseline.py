@@ -6,6 +6,8 @@ if the last breath went in, after exhale otherwise.  Shorter still moments
 are turning points.  Offline, the next breath starts at the turn itself: an
 inhale at the trough, an exhale at the crest of the trace smoothed to 1 Hz,
 within 0.8 s of where its motion begins -- the place a hand label snaps to.
+A breath into a hold likewise lasts until its turn: its slow end reads as
+still, but the chest is still moving.
 
 A hold after a deep breath often begins with a quick settle the other way:
 with the glottis closed, volume shifts between chest and belly without air
@@ -133,7 +135,14 @@ def _offline(direction: np.ndarray, turn: np.ndarray, fs: float, min_hold_s: flo
         before = next((runs[j][2] for j in range(index - 1, -1, -1) if runs[j][2] != 0), None)
         after = next((runs[j][2] for j in range(index + 1, len(runs)) if runs[j][2] != 0), None)
         if stop - start >= min_hold:
-            labels[start:stop] = HOLD_AFTER_INHALE if before == 1 else HOLD_AFTER_EXHALE
+            hold = HOLD_AFTER_INHALE if before == 1 else HOLD_AFTER_EXHALE
+            labels[start:stop] = hold
+            # The breath into the hold lasts until its turn: its slow end reads as still but the chest still moves.
+            if index > 0 and runs[index - 1][2] != 0:
+                lo, hi = max(runs[index - 1][0] + 1, start - reach), min(stop - 1, start + reach + 1)
+                at = lo + int(np.argmax(turn[lo:hi]) if runs[index - 1][2] == 1 else np.argmin(turn[lo:hi]))
+                if lo < at < hi - 1:
+                    splits.append((lo, at, hi, motion_label[runs[index - 1][2]], hold))
             continue
         first = motion_label.get(before if before is not None else after, IGNORE)
         second = motion_label.get(after if after is not None else before, IGNORE)
