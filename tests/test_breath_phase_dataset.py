@@ -173,3 +173,33 @@ def test_a_hold_starts_where_the_slowing_inhale_reaches_its_crest() -> None:
     labels = detect_phases(chest, FS)
     hold_start = time_s[np.flatnonzero(labels == HOLD)[0]]
     assert abs(hold_start - 28.0) <= 0.3
+
+
+def _paced(rate_per_min: float, duration_s: float, depth: float = 8.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    time_s = np.arange(0.0, duration_s, 1.0 / FS)
+    phase = (time_s % (60.0 / rate_per_min)) / (60.0 / rate_per_min)
+    chest = np.where(phase < 0.4, 0.5 - 0.5 * np.cos(np.pi * phase / 0.4), 0.5 + 0.5 * np.cos(np.pi * (phase - 0.4) / 0.6))
+    labels = np.where(phase < 0.4, INHALE, EXHALE).astype(np.int8)
+    return time_s, depth * chest, labels
+
+
+def test_fast_breathing_is_labelled_breath_by_breath() -> None:
+    """80 breaths/min: the settings for normal breathing would smooth it away; the fast tier keeps every breath."""
+    _, chest, truth = _paced(80.0, 90.0)
+    chest = chest + 0.05 * np.random.default_rng(8).standard_normal(len(chest))
+    labels = detect_phases(chest, FS)
+    assert score_phases(truth[200:], labels[200:]).accuracy > 0.85
+    assert score_phases(truth[200:], detect_phases(chest, FS, adaptive=False)[200:]).accuracy < 0.7
+
+
+def test_the_heartbeat_in_a_hold_is_not_fast_breathing() -> None:
+    """A 15 s hold between calm breaths, with a 1.1 Hz ripple of a few % of a breath: no fast rhythm, the hold stays."""
+    from respi_net.phase_baseline import local_rate_hz
+
+    time_s, chest, _ = _paced(12.0, 90.0)
+    hold = (time_s >= 40.0) & (time_s < 55.0)
+    chest[hold] = chest[np.flatnonzero(hold)[0] - 1]
+    chest = chest + 0.25 * np.sin(2 * np.pi * 1.1 * time_s)  # the heart under it all, about 3 % of a breath
+    assert np.all(local_rate_hz(chest, FS)[hold] < 0.6)
+    labels = detect_phases(chest, FS)
+    assert np.mean(labels[(time_s >= 42.0) & (time_s < 53.0)] == HOLD) > 0.9

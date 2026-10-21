@@ -234,6 +234,55 @@ REALTIME_SETTINGS = {"low_pass_hz": 1.0, "still_fraction": 0.4, "min_hold_s": 1.
 TURN_LOW_PASS_HZ = 1.0
 TURN_REACH_S = 0.8
 
+# Offline settings for fast breathing.  The ones above are made for 6-30 breaths/min: smoothing to 0.5 Hz, the 1.5 s
+# slow-motion window and 0.4 s phases swallow breaths faster than about 45/min.  Where the trace has a clear rhythm
+# above a tier's rate (dominant frequency over a sliding window), that stretch takes the tier's lighter settings;
+# everywhere else the labels are exactly those of the settings above.
+FAST_TIERS: tuple[tuple[float, dict[str, Any]], ...] = (
+    (0.6, {"low_pass_hz": 1.2, "slow_motion_window_s": 0.75, "min_phase_s": 0.25, "turn_reach_s": 0.4, "turn_low_pass_hz": 1.5}),
+    (0.9, {"low_pass_hz": 2.0, "slow_motion_fraction": None, "min_phase_s": 0.15, "turn_reach_s": 0.25, "turn_low_pass_hz": 2.0}),
+)
+RATE_WINDOW_S = 20.0
+RATE_DOMINANCE = 0.4  # share of the 0.1-2.5 Hz power in the peak +-0.1 Hz: a rhythm, not noise or a hold
+# ... and as large as breathing: a hold shows the heartbeat (about 1 Hz, a few % of a breath) as a clear rhythm too.
+RATE_MIN_DEPTH = 0.2  # size of the window's rhythm (5th-95th percentile) over the recording's median
+
+
+def local_rate_hz(chest: np.ndarray, fs: float, window_s: float = RATE_WINDOW_S, step_s: float = 2.0) -> np.ndarray:
+    """Dominant breathing frequency around each sample, 0 where no single rhythm dominates (holds, noise, irregular)
+    or where that rhythm is much smaller than the recording's breathing (the heartbeat in a hold)."""
+
+    chest = np.asarray(chest, dtype=float)
+    n, width, step = len(chest), int(round(window_s * fs)), max(1, int(round(step_s * fs)))
+    rate = np.zeros(n)
+    if n < width or width < 8:
+        return rate
+    freqs = np.fft.rfftfreq(width, 1.0 / fs)
+    band = (freqs >= 0.1) & (freqs <= min(2.5, 0.45 * fs))
+    taper = np.hanning(width)
+    starts = list(range(0, n - width + 1, step))
+    found: list[tuple[int, float, float]] = []
+    for start in starts:
+        part = chest[start : start + width]
+        part = part - np.polyval(np.polyfit(np.arange(width), part, 1), np.arange(width))
+        power = np.abs(np.fft.rfft(part * taper)) ** 2
+        total = float(power[band].sum())
+        if total <= 0:
+            continue
+        peak = float(freqs[band][np.argmax(power[band])])
+        near = band & (np.abs(freqs - peak) <= 0.1)
+        share = float(power[near].sum()) / total
+        # Size of the rhythm itself: the window's component within 0.1 Hz of the peak.
+        rhythm = np.fft.irfft(np.where(near, np.fft.rfft(part), 0.0), width)
+        found.append((start, peak if share >= RATE_DOMINANCE else 0.0, float(np.subtract(*np.percentile(rhythm, [95, 5])))))
+    typical = float(np.median([spread for _, _, spread in found])) if found else 0.0
+    for start, peak, spread in found:
+        centre = slice(start + (width - step) // 2, start + (width + step) // 2)
+        rate[centre] = peak if spread >= RATE_MIN_DEPTH * typical else 0.0
+    first, last = (width - step) // 2, (n - width) // step * step + (width + step) // 2
+    rate[:first], rate[last:] = rate[first], rate[last - 1]
+    return rate
+
 
 def detect_phases(
     chest: np.ndarray,
@@ -250,6 +299,7 @@ def detect_phases(
     slow_motion_fraction: float | None = _DEFAULT,
     slow_motion_window_s: float = 1.5,
     detailed: bool = False,
+    adaptive: bool = True,
 ) -> np.ndarray:
     """Phase labels (exhale, hold, inhale; IGNORE before the first motion) for a chest signal rising on inhale.
 
@@ -260,7 +310,8 @@ def detect_phases(
     0.25 (see :func:`_slow_motion`).
 
     Settings left as ``None`` come from :data:`REALTIME_SETTINGS` or
-    :data:`OFFLINE_SETTINGS`.
+    :data:`OFFLINE_SETTINGS`.  Offline and with ``adaptive`` (the default), stretches of clearly fast breathing take
+    the lighter settings of :data:`FAST_TIERS`; the rest is unchanged.
     """
 
     defaults = REALTIME_SETTINGS if causal else OFFLINE_SETTINGS
@@ -270,6 +321,48 @@ def detect_phases(
     still_fraction = defaults["still_fraction"] if still_fraction is None else still_fraction
     min_hold_s = defaults["min_hold_s"] if min_hold_s is None else min_hold_s
     chest = np.asarray(chest, dtype=float)
+    settings = dict(low_pass_hz=low_pass_hz, still_fraction=still_fraction, min_hold_s=min_hold_s, min_phase_s=min_phase_s,
+                    scale_window_s=scale_window_s, max_settle_s=max_settle_s, max_settle_fraction=max_settle_fraction,
+                    slow_motion_fraction=slow_motion_fraction, slow_motion_window_s=slow_motion_window_s)
+    if causal:
+        return merge_holds(_detect(chest, fs, causal=True, **settings), detailed)
+    labels = _detect(chest, fs, **settings)
+    if adaptive:
+        rate = local_rate_hz(chest, fs)
+        for floor, tier in FAST_TIERS:
+            fast = rate >= floor
+            if not fast.any():
+                break
+            lighter = {
+                **settings,
+                "low_pass_hz": max(low_pass_hz, tier["low_pass_hz"]),
+                "min_phase_s": min(min_phase_s, tier["min_phase_s"]),
+                "slow_motion_window_s": min(slow_motion_window_s, tier.get("slow_motion_window_s", slow_motion_window_s)),
+                "slow_motion_fraction": tier.get("slow_motion_fraction", slow_motion_fraction),
+            }
+            labels = np.where(fast, _detect(chest, fs, turn_reach_s=tier["turn_reach_s"], turn_low_pass_hz=tier["turn_low_pass_hz"], **lighter), labels)
+    return merge_holds(labels.astype(np.int8), detailed)
+
+
+def _detect(
+    chest: np.ndarray,
+    fs: float,
+    *,
+    causal: bool = False,
+    low_pass_hz: float,
+    still_fraction: float,
+    min_hold_s: float,
+    min_phase_s: float,
+    scale_window_s: float,
+    max_settle_s: float,
+    max_settle_fraction: float,
+    slow_motion_fraction: float | None,
+    slow_motion_window_s: float,
+    turn_reach_s: float = TURN_REACH_S,
+    turn_low_pass_hz: float = TURN_LOW_PASS_HZ,
+) -> np.ndarray:
+    """One pass of the detector with fixed settings; detailed holds."""
+
     smooth = light_filter(chest, fs, low_pass_hz, causal=causal)
     if causal:
         velocity = np.diff(smooth, prepend=smooth[0]) * fs
@@ -281,7 +374,7 @@ def detect_phases(
     if slow_motion_fraction is not None and not causal:
         direction = np.where(direction == 0, _slow_motion(smooth, fs, slow_motion_fraction, slow_motion_window_s), direction).astype(np.int8)
     if causal:
-        return merge_holds(_causal(direction, smooth, fs, min_hold_s, min_phase_s, max_settle_s, max_settle_fraction), detailed)
+        return _causal(direction, smooth, fs, min_hold_s, min_phase_s, max_settle_s, max_settle_fraction)
     direction = _absorb_settles(direction, smooth, fs, min_hold_s, max_settle_s, max_settle_fraction)
-    turn = light_filter(chest, fs, TURN_LOW_PASS_HZ)
-    return merge_holds(enforce_min_duration(_offline(direction, turn, fs, min_hold_s, TURN_REACH_S), fs, min_phase_s), detailed)
+    turn = light_filter(chest, fs, turn_low_pass_hz)
+    return enforce_min_duration(_offline(direction, turn, fs, min_hold_s, turn_reach_s), fs, min_phase_s)

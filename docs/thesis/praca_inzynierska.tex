@@ -3183,7 +3183,7 @@ od \SI{-0.04}{s} do \SI{-0.95}{s}, rys.~\ref{fig:fazy-telefon-12min}, trzeci
 wykres), czyli spełnia przyjęte kryterium stałości (rozrzut poniżej \SI{0.15}{s}).
 Zgodność detektorów na telefonie i~na radarze wynosi 96\% w~spokojnym oddechu,
 93\% w~wolnym, 78\% w~płytkim, 78\% w~pauzach, 50\% w~nieregularnym,
-32\% w~szybkim i~46\% w~ruchu (razem 76\%); jest niska tam, gdzie radar prawie nie
+35\% w~szybkim i~46\% w~ruchu (razem 76\%); jest niska tam, gdzie radar prawie nie
 widzi oddechu --- w~szybkim oddechu telefon pokazuje wyraźne oscylacje co około
 \SI{2}{s}, a~radar linię prostą. Pauz dłuższych niż \SI{4}{s} telefon znalazł 6,
 radar 13, wspólnych jest 6.
@@ -3619,7 +3619,7 @@ do \SI{0.8}{s}, więc nie da się go usunąć jedną regułą.
 Na poprawionych etykietach sprawdzono detektor deterministyczny
 (podrozdz.~\ref{sec:sieci-baseline}) bez dostrajania do tego zbioru
 (tab.~\ref{tab:fazy-szymanski}). Z~dawnym progiem pauzy \SI{2}{s} zgodność z~pasem wynosi
-78,6\% (70,0\% na etykietach opublikowanych), wyraźnie mniej niż na nagraniach sterowanych.
+80,6\% (71,3\% na etykietach opublikowanych), wyraźnie mniej niż na nagraniach sterowanych.
 Główną przyczyną jest definicja pauzy. W~zbiorze \cite{szymanski2025} pauzą
 jest każde widoczne zatrzymanie: mediana trwania pauzy wynosi \SI{1.4}{s}
 po wydechu i~\SI{1.8}{s} po wdechu, a~co dziesiąta jest krótsza niż
@@ -3627,8 +3627,8 @@ po wydechu i~\SI{1.8}{s} po wdechu, a~co dziesiąta jest krótsza niż
 wydechu. W~tej pracy pauzą jest bezruch od \SI{4}{s}, a~krótszy spoczynek należy do oddechu
 (podrozdz.~\ref{sec:sieci-oznaczanie-reczne}). Etykiety zbioru sprowadzono więc do tej reguły,
 doliczając pauzy krótsze niż \SI{4}{s} do sąsiednich oddechów (\texttt{fold\_short\_holds}),
-i~detektor z~progiem \SI{4}{s} zgadza się z~nimi w~84,9\% na pasie (80,5\% na iNode); na etykietach
-w~postaci oryginalnej tylko w~69,9\%, bo nie widzi pauz trwających \SIrange{0.6}{4}{s}.
+i~detektor z~progiem \SI{4}{s} zgadza się z~nimi w~87,1\% na pasie (83,9\% na iNode); na etykietach
+w~postaci oryginalnej tylko w~72,2\%, bo nie widzi pauz trwających \SIrange{0.6}{4}{s}.
 Przed łączeniem zbiorów obowiązuje więc jedna definicja.
 
 \begin{table}[H]
@@ -3642,10 +3642,10 @@ sterowanych A121 (średnie po nagraniach).}
 \toprule
 Miara & pas & iNode & A121 \\
 \midrule
-Dokładność offline, pauza od \SI{4}{s}, etykiety sprowadzone do reguły \SI{4}{s} & 84,9\% & 80,5\% & 97,3\% \\
-Makro-F1 (wdech, wydech, pauza), jw. & 0,833 & 0,784 & 0,971 \\
-Dokładność offline, pauza od \SI{4}{s}, etykiety jak w zbiorze & 69,9\% & 66,9\% & 97,3\% \\
-Dokładność offline, dawny próg \SI{2}{s}, etykiety jak w zbiorze & 78,6\% & 74,9\% & 95,3\% \\
+Dokładność offline, pauza od \SI{4}{s}, etykiety sprowadzone do reguły \SI{4}{s} & 87,1\% & 83,9\% & 97,3\% \\
+Makro-F1 (wdech, wydech, pauza), jw. & 0,855 & 0,819 & 0,971 \\
+Dokładność offline, pauza od \SI{4}{s}, etykiety jak w zbiorze & 72,2\% & 70,3\% & 97,3\% \\
+Dokładność offline, dawny próg \SI{2}{s}, etykiety jak w zbiorze & 80,6\% & 77,7\% & 95,3\% \\
 Dokładność w~czasie rzeczywistym & 59,4\% & 48,9\% & 87,0\% \\
 \quad po usunięciu opóźnienia & 81,0\% & 68,6\% & 95,2\% \\
 Opóźnienie granic w~czasie rzeczywistym & \SI{0.40}{s} & \SI{0.32}{s} & \SI{0.37}{s} \\
@@ -3663,8 +3663,8 @@ a~więc strata wynika z~opóźnienia, a~nie z~błędnie rozpoznanych faz.
 Dlatego dla wariantów czasu rzeczywistego obok dokładności podaje się
 opóźnienie granic (podrozdz.~\ref{sec:sieci-uczenie}).
 
-Akcelerometr iNode na klatce daje detektorowi 74,9\% zgodności z~etykietami
-tego czujnika wobec 78,6\% dla pasa. Akcelerometr jest więc użytecznym, choć
+Akcelerometr iNode na klatce daje detektorowi 77,7\% zgodności z~etykietami
+tego czujnika wobec 80,6\% dla pasa. Akcelerometr jest więc użytecznym, choć
 nieco słabszym od pasa torem odniesienia faz, zgodnie z~wynikiem dla telefonu
 powyżej.
 
@@ -3816,7 +3816,19 @@ znacznik w~narzędziu do oznaczania (podrozdz.~\ref{sec:sieci-oznaczanie-reczne}
 Gdy w~tym zasięgu nie ma ekstremum (przebieg jest zboczem, a~nie zwrotem),
 bezruch dzieli się na pół. Pauza zaczyna się w~zwrocie oddechu, który ją
 poprzedza (w~tym samym zasięgu), bo powolny koniec tego oddechu próg ruchu
-bierze za bezruch. Krótki ruch w~przeciwną stronę tuż przed
+bierze za bezruch. Te ustawienia (wygładzanie do \SI{0.5}{Hz}, okno ruchu powolnego
+\SI{1.5}{s}, faza od \SI{0.4}{s}) pochłaniają oddech szybszy niż około 45 na minutę,
+dlatego tam, gdzie przebieg ma wyraźny rytm powyżej \SI{0.6}{Hz} (szczyt widma
+w~oknie \SI{20}{s} z~co najmniej 40\% mocy pasma \SIrange{0.1}{2.5}{Hz} i~amplitudą
+co najmniej 20\% typowego oddechu w~nagraniu), detektor używa lżejszych ustawień:
+wygładzania do \SIrange{1.2}{2}{Hz}, krótszego okna, faz od \SIrange{0.15}{0.25}{s}
+i~mniejszego zasięgu zwrotu. Warunek amplitudy odrzuca bicie serca widoczne w~pauzie
+(około \SI{1}{Hz}, kilka procent oddechu). Na sztucznym oddechu z~szumem detektor
+rozpoznaje w~ten sposób \numrange{40}{120} oddechów na minutę ze zgodnością
+87--99\% (bez tego 55--87\%, z~załamaniem od około 55 na minutę), także oddech
+o~30\% głębokości zwykłego; poniżej \SI{0.6}{Hz} etykiety są identyczne. W~trybie
+czasu rzeczywistego tempo jest liczone poprawnie do około 60 oddechów na minutę,
+ale fazy spóźniają się. Krótki ruch w~przeciwną stronę tuż przed
 pauzą (do \SI{0.8}{s}), po którym klatka zatrzymuje się w~odległości nie
 większej niż 40\% głębokości poprzedniego oddechu od miejsca, gdzie ten
 oddech się skończył, jest osiadaniem na początku pauzy
