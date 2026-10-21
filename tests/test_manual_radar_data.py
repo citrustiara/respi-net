@@ -61,7 +61,7 @@ def test_bundle_preserves_source_groups_and_reduced_power_model():
         assert set(data["run_id"][data["split"] == "val"]) == {"self_lying_3min_01"}
         assert set(data["run_id"][data["split"] == "test"]) == {"sit_nophone_01"}
         # Both retention classes occur in training; noise still needs new data.
-        assert {0, 1, 2, 3} <= set(np.unique(data["y"][data["split"] == "train"]))
+        assert {0, 1, 2} <= set(np.unique(data["y"][data["split"] == "train"])) and 3 not in data["y"]  # one hold
     for source in ("phase1_halfside_02", "pilot_coach_1m"):
         original = load_run(path / "runs" / f"{source}.npz")
         full = load_run(path / "runs" / f"{source}__iq_drop0.npz")
