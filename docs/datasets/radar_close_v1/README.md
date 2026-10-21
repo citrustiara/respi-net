@@ -9,7 +9,8 @@ sygnału**, do dalszego przeglądu i docelowo sprawdzenia z pasem.
 ## Zawartość
 
 Edytowalne przedziały: `annotations/radar_close_v1/*.json`. Klasy: 0 wydech,
-1 pauza po wydechu, 2 wdech, 3 pauza po wdechu, 4 szum; −1 pominięte.
+1 pauza po wydechu, 2 wdech, 3 pauza po wdechu, 4 szum; −1 pominięte. W~wygenerowanych
+etykietach obie pauzy są jedną klasą (1, pauza); rodzaj pauzy zostaje tylko w~plikach JSON.
 Początek przedziału jest włączony, koniec wyłączony, czas liczony od początku
 pomiaru. Poza zaznaczonymi przedziałami wszystko pozostaje bez etykiety.
 

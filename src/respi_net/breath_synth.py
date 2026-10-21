@@ -38,6 +38,7 @@ from .breath_phases import (
     INHALE,
     NOISE,
     label_runs,
+    merge_holds,
 )
 
 A121_WAVELENGTH_MM = 299_792_458.0 / 60.5e9 * 1e3  # c / 60.5 GHz ≈ 4.955 mm
@@ -128,8 +129,11 @@ def simulate_breathing(
     fs: float,
     rng: np.random.Generator,
     config: SynthConfig = SynthConfig(),
+    detailed: bool = False,
 ) -> SyntheticBreathing:
     """Simulate ``duration_s`` seconds of chest displacement at ``fs`` Hz with perfect labels.
+
+    The two holds are simulated apart (a hold after inhale stays high) and labelled as one unless ``detailed=True``.
 
     Breaths run inhale → [hold after inhale] → exhale → [hold after exhale], all
     steps of :data:`~respi_net.breath_phases.ALLOWED_TRANSITIONS`; motion bursts
@@ -144,6 +148,7 @@ def simulate_breathing(
     breathing, labels = _breathing_track(count, fs, rng, config)
     motion, moving = _motion_bursts(count, fs, rng, config)
     labels[moving] = NOISE
+    labels = merge_holds(labels, detailed)
     chest_mm = (
         breathing
         + motion

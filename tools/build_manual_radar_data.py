@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from respi_net.artificial_runs import enhanced_augment_run, noise_bank_from_holds, reduced_power_run
-from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES, IGNORE, label_runs
+from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES, IGNORE, label_runs, merge_holds
 from respi_net.chest_signal import ChestSignal, a121_chest_signal
 from respi_net.nn_dataset import LabelledRun, export_dataset, labelled_run, save_run
 
@@ -56,7 +56,7 @@ def reviewed_labels(time_s: np.ndarray, annotation: dict) -> np.ndarray:
     for edge, guard in guards.items():
         if guard > 0:
             labels[np.abs(time_s - edge) <= guard] = IGNORE
-    return labels
+    return merge_holds(labels)  # the reviewed files name both holds; the labels have one
 
 
 def load_source(annotation: dict) -> ChestSignal:

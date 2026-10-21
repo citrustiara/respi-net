@@ -55,8 +55,8 @@ from respi_net.breath_phases import (
     CLASS_NAMES,
     CLASS_NAMES_PL,
     EXHALE,
+    HOLD,
     HOLD_AFTER_EXHALE,
-    HOLD_AFTER_INHALE,
     IGNORE,
     INHALE,
     export_codes,
@@ -72,7 +72,7 @@ FOIL_DIR = ROOT / "data" / "raw" / "a121" / "guided"
 RANGE_DIR = ROOT / "data" / "raw" / "hb100_a121" / "guided"
 OUT_DIR = ROOT / "data" / "processed" / "breath_phases"
 FIGURE_DIR = ROOT / "docs" / "thesis" / "figures"
-PHASE_LABELS = (INHALE, HOLD_AFTER_EXHALE, EXHALE, HOLD_AFTER_INHALE)
+PHASE_LABELS = (INHALE, HOLD, EXHALE)
 
 
 @dataclass(frozen=True)

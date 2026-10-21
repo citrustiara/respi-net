@@ -65,7 +65,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, NOISE, label_runs
+from .breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, NOISE, label_runs, merge_holds
 from .chest_signal import ChestSignal, light_filter
 from .nn_dataset import LabelledRun, labelled_run
 from .paths import DATA_DIR
@@ -249,13 +249,15 @@ def to_labelled_run(
     fs: float = 20.0,
     low_pass_hz: float = 2.0,
     sign: float | None = None,
+    detailed: bool = False,
 ) -> LabelledRun:
     """The recording as a :class:`LabelledRun` on this project's grid and conventions.
 
     Resampled to ``fs`` (linear for the signal, nearest sample for labels),
     oriented to rise on inhale and scaled to unit spread, since belt counts
     and accelerometer units mean nothing to the radar model.  There is no
-    radar echo, so the echo channel is zero and flagged in ``meta``.
+    radar echo, so the echo channel is zero and flagged in ``meta``.  The two
+    published holds become one unless ``detailed=True``.
     """
 
     sign = orientation(recording) if sign is None else sign
@@ -263,7 +265,7 @@ def to_labelled_run(
     values = np.interp(time_s, recording.time_s, sign * recording.raw)
     values = light_filter(values - np.median(values), fs, low_pass_hz)
     spread = float(np.percentile(values, 95) - np.percentile(values, 5)) or 1.0
-    labels = recording.labels[nearest_index(recording.time_s, time_s)].astype(np.int8)
+    labels = merge_holds(recording.labels[nearest_index(recording.time_s, time_s)].astype(np.int8), detailed)
     signal = ChestSignal(
         source=recording.sensor,
         time_s=time_s - time_s[0],

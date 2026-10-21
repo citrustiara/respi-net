@@ -60,12 +60,12 @@ from respi_net.breath_phases import (
     CLASS_NAMES,
     CLASS_NAMES_PL,
     EXHALE,
-    HOLD_AFTER_EXHALE,
-    HOLD_AFTER_INHALE,
+    HOLD,
     IGNORE,
     INHALE,
     NOISE,
     NUM_CLASSES,
+    USED_CLASSES,
     label_runs,
 )
 from respi_net.nn_dataset import LabelledRun, assign_splits, export_dataset, load_dataset, runs_in, save_run
@@ -112,7 +112,7 @@ def minutes(runs: list[LabelledRun]) -> dict[str, float]:
     labels = np.concatenate([run.labels for run in runs]) if runs else np.zeros(0, np.int8)
     fs = runs[0].fs if runs else FS
     counts = np.bincount(labels[labels != IGNORE], minlength=NUM_CLASSES)
-    return {"labelled": round(float(counts.sum()) / fs / 60.0, 1), **{name: round(float(c) / fs / 60.0, 1) for name, c in zip(CLASS_NAMES, counts)}}
+    return {"labelled": round(float(counts.sum()) / fs / 60.0, 1), **{CLASS_NAMES[k]: round(float(counts[k]) / fs / 60.0, 1) for k in USED_CLASSES}}
 
 
 def training_noise_bank(runs: list[LabelledRun], splits: dict[str, str]):
@@ -212,8 +212,9 @@ def plot_examples(synthetic: list[LabelledRun], real: LabelledRun, copy: Labelle
     best = (-1, synthetic[0], 0)
     for run in synthetic:
         for start in range(0, len(run.labels) - width, int(5 * FS)):
-            present = set(np.unique(run.labels[start : start + width]))
-            score = 2 * (HOLD_AFTER_INHALE in present) + 2 * (HOLD_AFTER_EXHALE in present) + (NOISE in present)
+            part = run.labels[start : start + width]
+            holds = sum(1 for a, b, label in label_runs(part) if label == HOLD and a > 0 and b < width)  # whole holds only
+            score = min(holds, 3) + 2 * (NOISE in set(np.unique(part)))
             if score > best[0]:
                 best = (score, run, start)
     _, run, start = best
@@ -229,9 +230,9 @@ def plot_examples(synthetic: list[LabelledRun], real: LabelledRun, copy: Labelle
     _shade(axes[2], copy.time_s[copied], copy.features[0][copied], copy.labels[copied],
            text["c"].format(stretch=f"{stretch:g}".replace(".", text["decimal"])), text["y"])
     axes[2].set_xlabel(text["x"])
-    shown = (INHALE, EXHALE, HOLD_AFTER_INHALE, HOLD_AFTER_EXHALE, NOISE)
+    shown = (INHALE, EXHALE, HOLD, NOISE)
     handles = [plt.Rectangle((0, 0), 1, 1, color=CLASS_COLOURS[label], alpha=0.5) for label in shown]
-    fig.legend(handles, [text["names"][label] for label in shown], loc="lower center", ncol=5, frameon=False, fontsize=9, bbox_to_anchor=(0.5, -0.02))
+    fig.legend(handles, [text["names"][label] for label in shown], loc="lower center", ncol=4, frameon=False, fontsize=9, bbox_to_anchor=(0.5, -0.02))
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=160, bbox_inches="tight")
     plt.close(fig)
@@ -338,10 +339,11 @@ def main() -> int:
                 save_run(copy, args.own_examples_dir / f"example{suffix}.npz")
 
     print(f"\nLabelled minutes (noise bank: {summary['noise_bank_minutes']} min of real A121 holds)")
-    header = f"{'source':22} {'labelled':>9} " + " ".join(f"{name[:12]:>12}" for name in CLASS_NAMES)
+    shown = [CLASS_NAMES[k] for k in USED_CLASSES]
+    header = f"{'source':22} {'labelled':>9} " + " ".join(f"{name[:12]:>12}" for name in shown)
     print(header)
     for source, values in summary["sources"].items():
-        print(f"{source:22} {values['labelled']:9.1f} " + " ".join(f"{values[name]:12.1f}" for name in CLASS_NAMES))
+        print(f"{source:22} {values['labelled']:9.1f} " + " ".join(f"{values[name]:12.1f}" for name in shown))
     copy = next(run for run in coach_aug if run.meta.get("stretch") == 1.25)
     real = next(run for run in coach if run.run_id == copy.meta["augmented_from"])
     if args.thesis_figure:

@@ -62,10 +62,13 @@ def _correlation(a: np.ndarray, b: np.ndarray) -> float:
 def test_every_sample_gets_a_phase_in_an_allowed_order(seed: int, fs: float) -> None:
     config = SynthConfig(hold_after_inhale_prob=0.3, hold_after_exhale_prob=0.3, motion_bursts_per_min=2.0)
     sim = simulate_breathing(300, fs, _rng(seed), config)
+    detailed = simulate_breathing(300, fs, _rng(seed), config, detailed=True)
 
     assert sim.labels.dtype == np.int8
+    assert set(np.unique(detailed.labels)) == {INHALE, HOLD_AFTER_EXHALE, EXHALE, HOLD_AFTER_INHALE, NOISE}
+    assert np.array_equal(sim.labels, np.where(detailed.labels == HOLD_AFTER_INHALE, HOLD_AFTER_EXHALE, detailed.labels))
     assert len(sim.labels) == len(sim.chest_mm) == len(sim.time_s) == round(300 * fs)
-    assert set(np.unique(sim.labels)) == {INHALE, HOLD_AFTER_EXHALE, EXHALE, HOLD_AFTER_INHALE, NOISE}
+    assert set(np.unique(sim.labels)) == {INHALE, HOLD_AFTER_EXHALE, EXHALE, NOISE}  # one hold
     assert transitions_allowed(sim.labels)
     # The events tile the recording and rebuild the labels exactly.
     assert sim.events[0][0] == 0.0 and sim.events[-1][1] == pytest.approx(300)
@@ -104,14 +107,14 @@ def test_holds_keep_the_chest_where_the_last_breath_left_it() -> None:
         heart_mm=(0.05, 0.4),
         lf_noise_mm=(0.02, 0.1),
     )
-    sim = simulate_breathing(600, FS, _rng(6), noisy)
+    sim = simulate_breathing(600, FS, _rng(6), noisy, detailed=True)
     full = [np.median(sim.chest_mm[a:b]) for a, b in _runs(sim.labels, HOLD_AFTER_INHALE)]
     empty = [np.median(sim.chest_mm[a:b]) for a, b in _runs(sim.labels, HOLD_AFTER_EXHALE)]
 
     assert len(full) > 5 and len(empty) > 5
     assert min(full) > max(empty) + 0.5
 
-    clean = simulate_breathing(600, FS, _rng(7), replace(QUIET, hold_after_inhale_prob=0.5, hold_after_exhale_prob=0.5))
+    clean = simulate_breathing(600, FS, _rng(7), replace(QUIET, hold_after_inhale_prob=0.5, hold_after_exhale_prob=0.5), detailed=True)
     for start, stop in _runs(clean.labels, HOLD_AFTER_INHALE):
         plateau = clean.chest_mm[start:stop]
         assert start == 0 or plateau[0] >= clean.chest_mm[start - 1]  # starts at the top of the inhale

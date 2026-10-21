@@ -71,7 +71,8 @@ def test_recordings_map_codes_pair_by_time_and_undo_the_lead(tmp_path: Path) -> 
     inhale = run.labels == INHALE
     assert np.median(np.gradient(run.features[0])[inhale]) > 0
     assert np.all(run.features[2] == 0.0)
-    assert set(np.unique(run.labels)) == {IGNORE, EXHALE, HOLD_AFTER_EXHALE, INHALE, HOLD_AFTER_INHALE, NOISE}
+    assert set(np.unique(run.labels)) == {IGNORE, EXHALE, HOLD_AFTER_EXHALE, INHALE, NOISE}  # one hold
+    assert HOLD_AFTER_INHALE in to_labelled_run(tens, fs=20.0, detailed=True).labels
 
 
 def test_delay_labels_moves_labels_later() -> None:

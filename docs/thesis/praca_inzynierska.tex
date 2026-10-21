@@ -2823,11 +2823,13 @@ z~niezależnym torem odniesienia.}
 \section{Sformułowanie zadania}
 \label{sec:sieci-zadanie}
 
-Zadaniem sieci jest przypisanie każdej ramce radaru A121 fazy cyklu
-oddechowego. Przyjęto podział na klasy ze zbioru danych opublikowanego przez
-zespół Politechniki Gdańskiej \cite{szymanski2025}, aby etykiety tej pracy
-można było zestawiać z~tamtymi danymi (tab.~\ref{tab:klasy-faz}). Wewnątrz
-tablic szum ma numer~4, a~wartość $-1$ oznacza próbkę bez etykiety:
+Zadaniem sieci jest przypisanie każdej ramce radaru A121 jednej z~czterech
+klas: wydech, pauza, wdech albo szum (tab.~\ref{tab:klasy-faz}). Pauza jest jedną
+klasą, niezależnie od tego, przy jakiej objętości płuc oddech wstrzymano. Kody
+klas przyjęto ze zbioru danych opublikowanego przez zespół Politechniki Gdańskiej
+\cite{szymanski2025}, aby etykiety tej pracy można było zestawiać z~tamtymi
+danymi: pauza ma kod pauzy po wydechu, a~obie pauzy tamtego zbioru odwzorowuje się
+na nią. Wewnątrz tablic szum ma numer~4, a~wartość $-1$ oznacza próbkę bez etykiety:
 fragment, którego nikt nie oznaczył, albo niepewne otoczenie granicy fazy.
 
 \begin{table}[H]
@@ -2839,25 +2841,24 @@ fragment, którego nikt nie oznaczył, albo niepewne otoczenie granicy fazy.
 Kod & Klasa & Znaczenie \\
 \midrule
 0 & wydech & objętość płuc maleje \\
-1 & pauza po wydechu & oddech wstrzymany w~trakcie lub po wydechu \\
+1 & pauza & oddech wstrzymany przy dowolnej objętości płuc \\
 2 & wdech & objętość płuc rośnie \\
-3 & pauza po wdechu & oddech wstrzymany w~trakcie lub po wdechu \\
 999 & szum & fragment zbyt zakłócony, by go używać \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Dwie klasy pauzy można połączyć w~jedną, gdy czujnik nie odtwarza objętości
-płuc, tak jak telefon przy żebrach (podrozdz.~\ref{sec:sieci-pilot-telefon}):
-etykiety zostają zapisane w~pięciu klasach, a~połączenie jest odwzorowaniem
-stosowanym przy ocenie i~uczeniu (\texttt{merge\_holds}: wydech, pauza, wdech,
-szum). Radar widzi objętość płuc, więc rodzaj pauzy można dopisać z~poziomu klatki.
+Telefon przy żebrach nie odróżnia pauzy po wdechu od pauzy po wydechu
+(podrozdz.~\ref{sec:sieci-pilot-telefon}), a~radar odróżnia je tylko po poziomie
+klatki, który przy dryfie bywa niejednoznaczny; rodzaj pauzy da się w~razie potrzeby
+odczytać z~poziomu klatki po fakcie. Podział z~dwiema pauzami (kod~3: pauza po
+wdechu) pozostaje w~kodzie jako wariant zapasowy: detektor, dopasowanie etykiet do
+komend, dane syntetyczne i~wczytywanie zbioru \cite{szymanski2025} mają opcję
+\texttt{detailed}, która go przywraca.
 
-Pauza nosi nazwę oddechu, który przerywa, więc można ją rozpocząć tylko z~tego
-oddechu --- przejście wydech $\to$ pauza po wdechu jest z~definicji
-niemożliwe. Zakończyć ją można jednak w~obie strony: oddech da się wstrzymać
-przy dowolnej objętości płuc, a~wydech przerwany w~połowie bywa po pauzie
-dokończony. Nie wprowadzono twardych reguł wynikających ze stanu płuc (np.
+Pauzę można rozpocząć z~każdego oddechu i~zakończyć w~obie strony: oddech da się
+wstrzymać przy dowolnej objętości płuc, a~wydech przerwany w~połowie bywa po
+pauzie dokończony. Nie wprowadzono twardych reguł wynikających ze stanu płuc (np.
 ,,pełne płuca, więc wkrótce wydech''): westchnienia, dobieranie powietrza czy
 długie pauzy łamią je w~zwykłym oddychaniu. Przemieszczenie klatki, podawane
 sieci wprost, jest przybliżeniem objętości płuc, a~kilkanaście sekund
@@ -2873,7 +2874,7 @@ wyznaczonego z~przepływu średnio o~\SI{0.02}{s} (odchylenie standardowe
 spoczynek przed kolejnym wdechem wlicza się do wydechu \cite{bates2000};
 podział na cztery fazy, z~pauzami po wdechu i~po wydechu, stosuje się m.in.
 w~analizie oddechu w~badaniach węchu \cite{noto2018} i~w~zbiorze
-\cite{szymanski2025}, który przyjęto tu za wzór.
+\cite{szymanski2025}; tu obie pauzy łączy się w~jedną klasę.
 
 Sieć ma działać w~czasie rzeczywistym, a~więc przyczynowo: decyzja dla chwili
 $t$ korzysta tylko z~przeszłości. Częstość oddechu wynika z~wykrytych
@@ -2990,7 +2991,7 @@ faz. Rysunek~\ref{fig:fazy-etykiety} pokazuje wynik dla jednej próby.
     \includegraphics[width=\textwidth]{fazy_etykiety_skorygowane.png}
     \caption[Skorygowane etykiety faz na przebiegu A121]{Etykiety faz po
     korekcie oddech po oddechu na nagraniu A121 z~\SI{2}{m}. Tło: wdech
-    (niebieski), wydech (zielony), pauza po wydechu (pomarańczowy); białe
+    (niebieski), wydech (zielony), pauza (pomarańczowy); białe
     przerwy to wyłączone otoczenia granic. Dolny pasek porównuje komendy
     przesunięte o~wspólne opóźnienie z~etykietami po korekcie.}
     \label{fig:fazy-etykiety}
@@ -3070,8 +3071,8 @@ różnic telefon~$-$~radar. Następnie telefon przesunięto o~to opóźnienie,
 zsumowano oba znormalizowane sygnały i~dopasowano do niego komendy metodą
 z~podrozdz.~\ref{sec:sieci-korekta} (to jest odniesienie). Oba czujniki oznaczono
 tym samym detektorem co radar (podrozdz.~\ref{sec:sieci-baseline}).
-Pauzy po wdechu i~po wydechu połączono w~jedną klasę ,,pauza'': w~rzucie na jedną oś telefon
-wraca po każdym oddechu do poziomu wyjściowego i~nie odróżnia tych pauz
+Pauza jest jedną klasą (podrozdz.~\ref{sec:sieci-zadanie}); telefon i~tak by jej rodzaju nie podał,
+bo w~rzucie na jedną oś wraca po każdym oddechu do poziomu wyjściowego
 (rys.~\ref{fig:fazy-telefon-pauzy}, podrozdz.~\ref{sec:sieci-oznaczanie-reczne}).
 
 \begin{table}[H]
@@ -3219,7 +3220,7 @@ oba rodzaje pauz wyglądają tak samo, a~opadanie po głębokim wdechu wygląda 
     \caption[Pauzy w~radarze i~w~telefonie]{Trzy pauzy w~nagraniu 3-minutowym (radar na klatkę, telefon
     przy żebrach); poziom w~pauzie to mediana bez \SI{2.5}{s} przy krawędziach, rodzaj pauzy z~lokalnego poziomu
     radaru. Radar pokazuje poziom klatki, a~telefon (rzut na jedną oś) w~każdej z~pauz wraca do tego samego poziomu
-    wyjściowego, dlatego pauzy po wdechu i~po wydechu połączono w~jedną klasę.}
+    wyjściowego, więc rodzaju pauzy nie da się z~niego odczytać.}
     \label{fig:fazy-telefon-pauzy}
 \end{figure}
 
@@ -3367,7 +3368,7 @@ wygląda jak wydech i~tak jest oznaczane, zarówno przez człowieka, jak i~przez
 że klatka zostaje w~plateau; prawdziwy wydech na końcu pauzy jest w~telefonie niewielkim spadkiem
 i~zostaje wchłonięty przez pauzę albo przez początek następnego wdechu. Skutki: początek pauzy
 jest oznaczany o~\SIrange{2.2}{5.2}{s} za późno, koniec pauzy za późno lub z~fałszywym wdechem,
-a~rodzaju pauzy (po wdechu czy po wydechu) nie da się odczytać, stąd jedna klasa. Przyczyna jest
+a~rodzaju pauzy (po wdechu czy po wydechu) nie da się odczytać. Przyczyna jest
 częściowo w~przetwarzaniu, a~częściowo fizyczna. Rzut jednoosiowy odrzuca drugi kierunek nachylenia,
 w~którym przesunięcie utrzymuje się przez pauzę po wdechu (w~wstępnej analizie we wszystkich 7 pauzach
 po wdechu i~z~powrotem w~chwili wydechu według radaru; odległość pełnej orientacji od położenia
@@ -3618,7 +3619,7 @@ do \SI{0.8}{s}, więc nie da się go usunąć jedną regułą.
 Na poprawionych etykietach sprawdzono detektor deterministyczny
 (podrozdz.~\ref{sec:sieci-baseline}) bez dostrajania do tego zbioru
 (tab.~\ref{tab:fazy-szymanski}). Z~dawnym progiem pauzy \SI{2}{s} zgodność z~pasem wynosi
-77,9\% (69,3\% na etykietach opublikowanych), wyraźnie mniej niż na nagraniach sterowanych.
+78,6\% (70,0\% na etykietach opublikowanych), wyraźnie mniej niż na nagraniach sterowanych.
 Główną przyczyną jest definicja pauzy. W~zbiorze \cite{szymanski2025} pauzą
 jest każde widoczne zatrzymanie: mediana trwania pauzy wynosi \SI{1.4}{s}
 po wydechu i~\SI{1.8}{s} po wdechu, a~co dziesiąta jest krótsza niż
@@ -3626,8 +3627,8 @@ po wydechu i~\SI{1.8}{s} po wdechu, a~co dziesiąta jest krótsza niż
 wydechu. W~tej pracy pauzą jest bezruch od \SI{4}{s}, a~krótszy spoczynek należy do oddechu
 (podrozdz.~\ref{sec:sieci-oznaczanie-reczne}). Etykiety zbioru sprowadzono więc do tej reguły,
 doliczając pauzy krótsze niż \SI{4}{s} do sąsiednich oddechów (\texttt{fold\_short\_holds}),
-i~detektor z~progiem \SI{4}{s} zgadza się z~nimi w~84,4\% na pasie (80,3\% na iNode); na etykietach
-w~postaci oryginalnej tylko w~69,5\%, bo nie widzi pauz trwających \SIrange{0.6}{4}{s}.
+i~detektor z~progiem \SI{4}{s} zgadza się z~nimi w~84,9\% na pasie (80,5\% na iNode); na etykietach
+w~postaci oryginalnej tylko w~69,9\%, bo nie widzi pauz trwających \SIrange{0.6}{4}{s}.
 Przed łączeniem zbiorów obowiązuje więc jedna definicja.
 
 \begin{table}[H]
@@ -3641,12 +3642,12 @@ sterowanych A121 (średnie po nagraniach).}
 \toprule
 Miara & pas & iNode & A121 \\
 \midrule
-Dokładność offline, pauza od \SI{4}{s}, etykiety sprowadzone do reguły \SI{4}{s} & 84,4\% & 80,3\% & 96,3\% \\
-Makro-F1 (pięć klas), jw. & 0,822 & 0,785 & 0,955 \\
-Dokładność offline, pauza od \SI{4}{s}, etykiety jak w zbiorze & 69,5\% & 66,7\% & 96,3\% \\
-Dokładność offline, dawny próg \SI{2}{s}, etykiety jak w zbiorze & 77,9\% & 73,9\% & 94,3\% \\
-Dokładność w~czasie rzeczywistym & 58,9\% & 48,0\% & 84,3\% \\
-\quad po usunięciu opóźnienia & 80,4\% & 67,5\% & 92,4\% \\
+Dokładność offline, pauza od \SI{4}{s}, etykiety sprowadzone do reguły \SI{4}{s} & 84,9\% & 80,5\% & 97,3\% \\
+Makro-F1 (wdech, wydech, pauza), jw. & 0,833 & 0,784 & 0,971 \\
+Dokładność offline, pauza od \SI{4}{s}, etykiety jak w zbiorze & 69,9\% & 66,9\% & 97,3\% \\
+Dokładność offline, dawny próg \SI{2}{s}, etykiety jak w zbiorze & 78,6\% & 74,9\% & 95,3\% \\
+Dokładność w~czasie rzeczywistym & 59,4\% & 48,9\% & 87,0\% \\
+\quad po usunięciu opóźnienia & 81,0\% & 68,6\% & 95,2\% \\
 Opóźnienie granic w~czasie rzeczywistym & \SI{0.40}{s} & \SI{0.32}{s} & \SI{0.37}{s} \\
 \bottomrule
 \end{tabular}
@@ -3656,14 +3657,14 @@ W~czasie rzeczywistym detektor ogłasza zmianę fazy średnio \SI{0.4}{s} po
 granicy z~etykiety, a~początek pauzy jeszcze później, bo pauzę może uznać
 dopiero po \SI{1}{s} bezruchu. Przy oddechu tak szybkim jak hiperwentylacja
 w~tym zbiorze (75--83~oddechów/min, faza krótsza niż \SI{0.5}{s}) kosztuje to
-wiele próbek: dokładność spada do 58,9\%. Po cofnięciu wyjścia o~najlepsze
-dla danego nagrania przesunięcie (około \SI{0.4}{s}) wraca do 80,4\%,
+wiele próbek: dokładność spada do 59,4\%. Po cofnięciu wyjścia o~najlepsze
+dla danego nagrania przesunięcie (około \SI{0.4}{s}) wraca do 81,0\%,
 a~więc strata wynika z~opóźnienia, a~nie z~błędnie rozpoznanych faz.
 Dlatego dla wariantów czasu rzeczywistego obok dokładności podaje się
 opóźnienie granic (podrozdz.~\ref{sec:sieci-uczenie}).
 
-Akcelerometr iNode na klatce daje detektorowi 73,9\% zgodności z~etykietami
-tego czujnika wobec 77,9\% dla pasa. Akcelerometr jest więc użytecznym, choć
+Akcelerometr iNode na klatce daje detektorowi 74,9\% zgodności z~etykietami
+tego czujnika wobec 78,6\% dla pasa. Akcelerometr jest więc użytecznym, choć
 nieco słabszym od pasa torem odniesienia faz, zgodnie z~wynikiem dla telefonu
 powyżej.
 
@@ -3721,25 +3722,24 @@ oddechowych --- tych przybywa tylko z~nowymi nagraniami.
 \begin{table}[H]
 \centering
 \small
-\caption{Oznaczone dane do uczenia sieci, w~minutach. P.~wd. i~P.~wyd. to
-pauza po wdechu i~po wydechu. Akcelerometru iNode ani nagrań IMU bez
+\caption{Oznaczone dane do uczenia sieci, w~minutach. Akcelerometru iNode ani nagrań IMU bez
 radaru nie włączono do zbiorów uczących. Tabela będzie uzupełniana o~nowe
 nagrania z~radarem i~telefonem.}
 \label{tab:fazy-dane}
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}lrrrrrrr@{}}
+\begin{tabular}{@{}lrrrrrr@{}}
 \toprule
-Źródło & Osoby & Razem & Wdech & Wydech & P.~wd. & P.~wyd. & Szum \\
+Źródło & Osoby & Razem & Wdech & Wydech & Pauza & Szum \\
 \midrule
-A121, nagrania sterowane & 1 & 21,4 & 6,9 & 10,1 & 0,0 & 4,4 & 0,0 \\
-Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 11,4 & 18,6 & 2,5 \\
-Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 5,2 & 12,0 & 3,2 \\
-LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,0 & 0,9 & 0,0 \\
-iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,0 & 0,4 & 0,0 \\
+A121, nagrania sterowane & 1 & 21,4 & 6,9 & 10,1 & 4,4 & 0,0 \\
+Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 29,9 & 2,5 \\
+Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 17,2 & 3,2 \\
+LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,9 & 0,0 \\
+iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,4 & 0,0 \\
 \midrule
-Kopie nagrań A121 & -- & 90,0 & 29,3 & 42,1 & 0,0 & 18,7 & 0,0 \\
-Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 68,2 & 96,4 & 13,9 \\
-Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 18,0 & 23,0 & 2,3 \\
+Kopie nagrań A121 & -- & 90,1 & 29,3 & 42,1 & 18,7 & 0,0 \\
+Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 164,6 & 13,9 \\
+Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 41,0 & 2,3 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -3796,7 +3796,7 @@ to amplituda najsilniejszej bramki. Powstało 60~nagrań po \SI{5}{min}.
     \centering
     \includegraphics[width=\textwidth]{fazy_dane_sztuczne.png}
     \caption[Dane sztuczne]{Dane sztuczne. a)~Fragment nagrania syntetycznego:
-    pauzy po wdechu i~po wydechu oraz ruch ciała oznaczony jako szum.
+    pauzy po wdechu i~po wydechu (w~etykietach jedna klasa) oraz ruch ciała oznaczony jako szum.
     b)~Fragment rzeczywistego nagrania A121 i~c)~te same oddechy w~jego kopii,
     1,25 raza dłuższej, z~dodanym szumem radaru i~dryfem. Białe przerwy to
     otoczenia granic wyłączone z~uczenia.}
@@ -3808,8 +3808,7 @@ to amplituda najsilniejszej bramki. Powstało 60~nagrań po \SI{5}{min}.
 
 Detektor odczytuje kierunek ruchu klatki: narastanie to wdech, opadanie
 wydech, a~bezruch trwający co najmniej \SI{4}{s} (w~trybie czasu
-rzeczywistego \SI{1}{s}) to pauza --- po wdechu, jeśli ostatni oddech był
-wdechem, w~przeciwnym razie po wydechu. Krótszy bezruch jest punktem zwrotu.
+rzeczywistego \SI{1}{s}) to pauza. Krótszy bezruch jest punktem zwrotu.
 W~trybie offline nowy oddech zaczyna się w~samym zwrocie przebiegu wygładzonego
 do \SI{1}{Hz} (wdech w~dnie, wydech w~szczycie), szukanym do \SI{0.8}{s} od
 chwili, w~której zaczyna się ruch tego oddechu; tam samo przyciąga się
@@ -3821,8 +3820,8 @@ bierze za bezruch. Krótki ruch w~przeciwną stronę tuż przed
 pauzą (do \SI{0.8}{s}), po którym klatka zatrzymuje się w~odległości nie
 większej niż 40\% głębokości poprzedniego oddechu od miejsca, gdzie ten
 oddech się skończył, jest osiadaniem na początku pauzy
-(podrozdz.~\ref{sec:sieci-zbior-szymanski}): należy do pauzy, a~pauza
-nosi nazwę oddechu sprzed osiadania. Próg dobrano tak, by nie zmienił ani
+(podrozdz.~\ref{sec:sieci-zbior-szymanski}) i~należy do pauzy, a~nie do
+oddechu w~przeciwną stronę. Próg dobrano tak, by nie zmienił ani
 jednej próbki nagrań sterowanych, w~których pauza przerywa wydech w~połowie.
 Bezruch zdefiniowano względnie, jako
 prędkość mniejszą niż 40--50\% typowej prędkości oddychania w~ostatnich
@@ -3844,10 +3843,10 @@ sterowanych (średnie po nagraniach).}
 \toprule
 Miara & offline & czas rzeczywisty \\
 \midrule
-Dokładność & 96,3\% & 84,3\% \\
-Makro-F1 & 0,955 & 0,838 \\
+Dokładność & 97,3\% & 87,0\% \\
+Makro-F1 & 0,971 & 0,869 \\
 F1: wdech / wydech & 0,969 / 0,979 & 0,836 / 0,885 \\
-F1: pauza po wydechu & 0,916 & 0,794 \\
+F1: pauza & 0,965 & 0,886 \\
 Wykryte granice & 94,5\% & 81\% \\
 Mediana błędu granicy & \SI{0.09}{s} & \SI{0.38}{s} \\
 Fałszywe granice & 0,6/min & 7,4/min \\
@@ -3865,7 +3864,7 @@ sieci będzie trudny zbiór testowy z~niezależnym torem odniesienia.
 \label{sec:sieci-architektura}
 
 Przygotowano dwie przyczynowe architektury o~tym samym wejściu (trzy kanały
-po \SI{20}{Hz}) i~wyjściu (logity pięciu klas dla każdej próbki):
+po \SI{20}{Hz}) i~wyjściu (logity klas dla każdej próbki):
 \begin{itemize}
   \item \textbf{TCN} --- bloki resztkowe z~przyczynowymi splotami
   jednowymiarowymi (jądro 5, dylatacje 1--64, 32~kanały), normalizacja

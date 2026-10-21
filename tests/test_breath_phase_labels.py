@@ -6,7 +6,9 @@ import pytest
 from scipy.signal import detrend
 
 from respi_net.breath_phases import (
+    DETAILED_ALLOWED_TRANSITIONS,
     EXHALE,
+    HOLD,
     HOLD_AFTER_EXHALE,
     HOLD_AFTER_INHALE,
     IGNORE,
@@ -17,6 +19,7 @@ from respi_net.breath_phases import (
     export_codes,
     from_export_code,
     mask_around,
+    merge_holds,
     transitions_allowed,
 )
 from respi_net.chest_signal import (
@@ -91,8 +94,11 @@ def test_holds_take_the_class_of_the_breath_before_them() -> None:
 def test_transition_rules_and_masking() -> None:
     good = np.array([INHALE] * 3 + [HOLD_AFTER_INHALE] * 3 + [EXHALE] * 3 + [IGNORE] * 2 + [INHALE] * 2)
     bad = np.array([EXHALE] * 3 + [HOLD_AFTER_INHALE] * 3)
-    assert transitions_allowed(good)
-    assert not transitions_allowed(bad)
+    assert transitions_allowed(good, DETAILED_ALLOWED_TRANSITIONS)
+    assert not transitions_allowed(bad, DETAILED_ALLOWED_TRANSITIONS)
+    # One hold: any breath may stop, and a hold may end in either breath.
+    assert transitions_allowed(merge_holds(bad)) and transitions_allowed(np.array([EXHALE, HOLD, EXHALE, HOLD, INHALE]))
+    assert not transitions_allowed(good)  # code 3 is not a class of its own any more
     time_s = np.arange(10) / 10.0
     masked = mask_around(np.zeros(10, dtype=np.int8), time_s, [0.5], 0.1)
     assert masked.tolist() == [0, 0, 0, 0, -1, -1, -1, 0, 0, 0]

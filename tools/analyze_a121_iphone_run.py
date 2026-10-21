@@ -52,7 +52,7 @@ from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 
-from respi_net.breath_phases import CLASS_COLOURS, IGNORE, MERGED_CLASS_NAMES_PL, label_runs, merge_holds
+from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES_PL, IGNORE, label_runs, merge_holds
 from respi_net.chest_signal import a121_chest_signal, imu_chest_signal, light_filter
 from respi_net.label_alignment import align_cues, cue_phases, estimate_lag
 from respi_net.phase_baseline import detect_phases
@@ -524,7 +524,7 @@ def _bars(ax: plt.Axes, grid: np.ndarray, rows: list[tuple[str, np.ndarray]]) ->
 
 
 def merged_legend() -> list[Patch]:
-    return [Patch(color=CLASS_COLOURS[index], label=name) for index, name in zip((0, 1, 2), MERGED_CLASS_NAMES_PL)]
+    return [Patch(color=CLASS_COLOURS[index], label=name) for index, name in zip((0, 1, 2), CLASS_NAMES_PL)]
 
 
 def _shift_title(delay: float) -> str:

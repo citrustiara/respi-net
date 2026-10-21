@@ -20,7 +20,7 @@ def test_reviewed_labels_mask_hold_edges_and_unreviewed_regions():
     assert np.all(y[t < 1.7] == -1)
     assert np.all(y[(t > 2.4) & (t < 4.3)] == 2)
     assert np.all(y[np.abs(t - 5) < .6] == -1)
-    assert np.all(y[(t > 5.7) & (t < 9.3)] == 3)
+    assert np.all(y[(t > 5.7) & (t < 9.3)] == 1)  # a reviewed hold after inhale (3) is the one hold
     assert np.all(y[t > 10] == -1)
     with pytest.raises(ValueError):
         builder.reviewed_labels(t, {**annotation, "segments": [[2, 6, 2], [5, 10, 3]]})
@@ -34,7 +34,7 @@ def test_reviewed_edge_override_can_narrow_a_clear_hold_boundary():
     y = builder.reviewed_labels(t, annotation)
     assert np.all(y[np.abs(t - 5) < .2] == -1)
     assert np.all(y[(t > 4.5) & (t < 4.75)] == 2)
-    assert np.all(y[(t > 5.25) & (t < 5.5)] == 3)
+    assert np.all(y[(t > 5.25) & (t < 5.5)] == 1)
     assert np.all(y[t > 10] == -1)
     with pytest.raises(ValueError, match="existing edge"):
         builder.reviewed_labels(t, {**annotation, "boundary_overrides": [{"time_s": 7, "guard_s": .2}]})

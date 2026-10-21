@@ -55,6 +55,8 @@ from respi_net.breath_phases import (
     CLASS_COLOURS,
     CLASS_NAMES,
     CLASS_NAMES_PL,
+    DETAILED_CLASS_NAMES,
+    HOLD,
     EXHALE,
     HOLD_AFTER_EXHALE,
     HOLD_AFTER_INHALE,
@@ -152,7 +154,7 @@ def turn_offsets(recording: SzymanskiRecording, window_s: float = 1.0) -> dict[s
             continue
         near = np.abs(time_s - time_s[start]) <= window_s
         turn = np.argmax(chest[near]) if before == INHALE else np.argmin(chest[near])
-        name = f"{CLASS_NAMES[before]} -> {'hold' if after in (HOLD_AFTER_INHALE, HOLD_AFTER_EXHALE) else CLASS_NAMES[after]}"
+        name = f"{DETAILED_CLASS_NAMES[before]} -> {'hold' if after in (HOLD_AFTER_INHALE, HOLD_AFTER_EXHALE) else DETAILED_CLASS_NAMES[after]}"
         offsets.setdefault(name, []).append(float(time_s[start] - time_s[near][turn]))
     return offsets
 
@@ -181,7 +183,7 @@ def settles(recording: SzymanskiRecording, *, motion_fraction: float = 0.2, gap_
             while length < len(back) and back[length] > threshold:
                 length += 1
             length -= first
-        found.setdefault(CLASS_NAMES[after], []).append(length / recording.fs)
+        found.setdefault(DETAILED_CLASS_NAMES[after], []).append(length / recording.fs)
     return found
 
 
@@ -256,9 +258,9 @@ def plot_example(run: LabelledRun, published: LabelledRun, name: str, path: Path
     bars.set_ylim(0, 1)
     bars.set_xlim(t[0], t[-1])
     bars.set_xlabel("czas [s]")
-    handles = [plt.Rectangle((0, 0), 1, 1, color=CLASS_COLOURS[label]) for label in (INHALE, EXHALE, HOLD_AFTER_INHALE, HOLD_AFTER_EXHALE)]
+    handles = [plt.Rectangle((0, 0), 1, 1, color=CLASS_COLOURS[label]) for label in (INHALE, EXHALE, HOLD)]
     handles.append(plt.Rectangle((0, 0), 1, 1, facecolor="white", edgecolor="#9ca3af"))
-    names = [CLASS_NAMES_PL[label] for label in (INHALE, EXHALE, HOLD_AFTER_INHALE, HOLD_AFTER_EXHALE)] + ["bez etykiety"]
+    names = [CLASS_NAMES_PL[label] for label in (INHALE, EXHALE, HOLD)] + ["bez etykiety"]
     fig.legend(handles, names, loc="lower center", ncol=5, frameon=False, bbox_to_anchor=(0.5, -0.04), fontsize=9)
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=160, bbox_inches="tight")
@@ -281,7 +283,7 @@ def main() -> int:
         counts = np.bincount(recording.labels, minlength=5)
         runs = label_runs(recording.labels)
         for (_, _, before), (_, _, after) in zip(runs[:-1], runs[1:]):
-            changes[f"{CLASS_NAMES[before]} -> {CLASS_NAMES[after]}"] += 1
+            changes[f"{DETAILED_CLASS_NAMES[before]} -> {DETAILED_CLASS_NAMES[after]}"] += 1
         for start, stop, label in runs:
             if label in holds:
                 holds[label].append((stop - start) / recording.fs)
@@ -293,7 +295,7 @@ def main() -> int:
                 "subject": recording.subject,
                 "fs_hz": round(recording.fs, 1),
                 "minutes": round(float(recording.time_s[-1] - recording.time_s[0]) / 60.0, 2),
-                **{CLASS_NAMES[k]: int(counts[k]) for k in range(5)},
+                **{DETAILED_CLASS_NAMES[k]: int(counts[k]) for k in range(5)},
             }
         )
 
@@ -318,7 +320,7 @@ def main() -> int:
     print("\nBelt minutes per subject:", table[table.sensor == "tensometer"].groupby("subject")["minutes"].sum().round(1).to_dict())
     print("\nMost common phase changes:", changes.most_common(10))
     hold_summary = {
-        CLASS_NAMES[label]: {"count": len(values), "p10_s": float(np.percentile(values, 10)), "median_s": float(np.median(values)), "p90_s": float(np.percentile(values, 90))}
+        DETAILED_CLASS_NAMES[label]: {"count": len(values), "p10_s": float(np.percentile(values, 10)), "median_s": float(np.median(values)), "p90_s": float(np.percentile(values, 90))}
         for label, values in holds.items()
         if values
     }
@@ -354,7 +356,7 @@ def main() -> int:
         coach = list(runs_in(COACH_RUNS))
         for mode, settings in MODES.items():
             summary["detector"][f"coach_a121/{mode}"] = mean_scores([score_run(run, **settings) for run in coach])
-    columns = ["accuracy", "macro_f1", "f1_hold_after_inhale", "f1_hold_after_exhale", "boundary_detection", "boundary_delay_s", "accuracy_delay_removed", "best_shift_s"]
+    columns = ["accuracy", "macro_f1", "f1_hold", "boundary_detection", "boundary_delay_s", "accuracy_delay_removed", "best_shift_s"]
     print("\nDeterministic detector vs hand labels (means over recordings):")
     print(pd.DataFrame(summary["detector"]).T.reindex(columns=columns).round(3).to_string())
     (args.root.parent / "analysis.json").write_text(json.dumps(summary, indent=2, default=float), encoding="utf-8")

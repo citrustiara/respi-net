@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from respi_net.breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE
+from respi_net.breath_phases import EXHALE, HOLD, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE
 from respi_net.chest_signal import ChestSignal
 from respi_net.nn_dataset import (
     CHANNELS,
@@ -49,7 +49,7 @@ def test_baseline_finds_breaths_and_the_hold() -> None:
     offline = score_phases(truth, detect_phases(noisy, FS))
     realtime = score_phases(truth, detect_phases(noisy, FS, causal=True))
     assert offline.accuracy > 0.9
-    assert offline.per_class["hold_after_exhale"]["f1"] > 0.9
+    assert offline.per_class["hold"]["f1"] > 0.9
     assert realtime.accuracy > 0.75
     assert realtime.accuracy < offline.accuracy
 
@@ -105,13 +105,13 @@ def test_a_settle_into_a_hold_belongs_to_the_hold() -> None:
     chest[out] = 0.45 + 0.45 * np.cos(np.pi * np.clip(t[out] - 13.0, 0.0, 3.0) / 3.0)
     chest = 8.0 * chest + 0.02 * np.random.default_rng(4).standard_normal(len(chest))
 
-    offline = detect_phases(chest, FS)
+    offline = detect_phases(chest, FS, detailed=True)
     hold = (t >= 3.5) & (t < 12.5)
     assert np.mean(offline[hold] == HOLD_AFTER_INHALE) > 0.95
     assert not np.any(offline[(t >= 2.6) & (t < 12.5)] == EXHALE)
     assert not np.any(offline[(t >= 2.6) & (t < 12.5)] == HOLD_AFTER_EXHALE)
 
-    realtime = detect_phases(chest, FS, causal=True)
+    realtime = detect_phases(chest, FS, causal=True, detailed=True)
     late_hold = (t >= 5.0) & (t < 12.5)
     assert np.mean(realtime[late_hold] == HOLD_AFTER_INHALE) > 0.95
     assert not np.any(realtime[(t >= 3.0) & (t < 13.0)] == HOLD_AFTER_EXHALE)
@@ -171,5 +171,5 @@ def test_a_hold_starts_where_the_slowing_inhale_reaches_its_crest() -> None:
     chest[out] = 0.5 + 0.5 * np.cos(np.pi * np.clip(t[out] - 13.0, 0.0, 3.0) / 3.0)
     chest = 8.0 * chest + 0.01 * np.random.default_rng(6).standard_normal(len(chest))
     labels = detect_phases(chest, FS)
-    hold_start = time_s[np.flatnonzero(labels == HOLD_AFTER_INHALE)[0]]
+    hold_start = time_s[np.flatnonzero(labels == HOLD)[0]]
     assert abs(hold_start - 28.0) <= 0.3

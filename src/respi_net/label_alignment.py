@@ -30,11 +30,13 @@ from .breath_phases import (
     EXHALE,
     HOLD_AFTER_EXHALE,
     HOLD_AFTER_INHALE,
+    HOLD,
     IGNORE,
     INHALE,
     classes_for_cue_kinds,
     labels_from_segments,
     mask_around,
+    merge_holds,
 )
 
 SNAPPED_METHODS = ("turn", "stop", "start")
@@ -196,8 +198,13 @@ def align_cues(
     fallback_mask_s: float = 0.5,
     motion_fraction: float = 0.2,
     settle_s: float = 0.3,
+    detailed: bool = False,
 ) -> AlignmentResult:
-    """Per-sample phase labels for ``chest`` from coach ``cues``; see the module docstring."""
+    """Per-sample phase labels for ``chest`` from coach ``cues``; see the module docstring.
+
+    The alignment itself tells the two holds apart (a hold after inhale is expected high); the labels and segments it
+    returns have one hold class unless ``detailed=True``.  The boundaries keep the detailed classes.
+    """
 
     time_s = np.asarray(time_s, dtype=float)
     phases = cue_phases(cues)
@@ -311,6 +318,8 @@ def align_cues(
         final = next(phase for phase in reversed(labelled_phases))
         segments.append((last.time_s, final.end_s + lag, last.after))
 
+    if not detailed:
+        segments = [(start, end, HOLD if label == HOLD_AFTER_INHALE else label) for start, end, label in segments]
     labels = labels_from_segments(time_s, segments)
     widths = [fallback_mask_s if b.method == "fallback" else mask_s for b in boundaries]
     labels = mask_around(labels, time_s, [b.time_s for b in boundaries], widths)

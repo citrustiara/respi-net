@@ -32,7 +32,7 @@ from typing import Any
 
 import numpy as np
 
-from .breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, label_runs
+from .breath_phases import EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, label_runs, merge_holds
 from .chest_signal import light_filter
 from .phase_metrics import enforce_min_duration
 
@@ -249,8 +249,11 @@ def detect_phases(
     max_settle_fraction: float = 0.4,
     slow_motion_fraction: float | None = _DEFAULT,
     slow_motion_window_s: float = 1.5,
+    detailed: bool = False,
 ) -> np.ndarray:
-    """Phase labels (0-3, IGNORE before the first motion) for a chest signal rising on inhale.
+    """Phase labels (exhale, hold, inhale; IGNORE before the first motion) for a chest signal rising on inhale.
+
+    ``detailed=True`` names each hold after the breath before it (the two-hold fallback scheme).
 
     ``slow_motion_fraction`` (offline only; default :data:`DEFAULT_SLOW_MOTION_FRACTION`) also counts a slow movement as motion when it changes
     the trace by that fraction of the local breath depth within ``slow_motion_window_s``; the phone labeller uses
@@ -278,7 +281,7 @@ def detect_phases(
     if slow_motion_fraction is not None and not causal:
         direction = np.where(direction == 0, _slow_motion(smooth, fs, slow_motion_fraction, slow_motion_window_s), direction).astype(np.int8)
     if causal:
-        return _causal(direction, smooth, fs, min_hold_s, min_phase_s, max_settle_s, max_settle_fraction)
+        return merge_holds(_causal(direction, smooth, fs, min_hold_s, min_phase_s, max_settle_s, max_settle_fraction), detailed)
     direction = _absorb_settles(direction, smooth, fs, min_hold_s, max_settle_s, max_settle_fraction)
     turn = light_filter(chest, fs, TURN_LOW_PASS_HZ)
-    return enforce_min_duration(_offline(direction, turn, fs, min_hold_s, TURN_REACH_S), fs, min_phase_s)
+    return merge_holds(enforce_min_duration(_offline(direction, turn, fs, min_hold_s, TURN_REACH_S), fs, min_phase_s), detailed)

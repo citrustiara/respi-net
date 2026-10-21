@@ -47,7 +47,7 @@ from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 
-from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES_PL, IGNORE, export_codes, label_runs
+from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES_PL, EXHALE, HOLD, IGNORE, INHALE, export_codes, label_runs
 from respi_net.chest_signal import strain_belt_chest_signal
 from respi_net.label_alignment import align_cues
 from respi_net.paths import DATA_DIR
@@ -107,7 +107,7 @@ def plot_run(path: Path, signal, with_drift: np.ndarray, labels: np.ndarray, cue
     bottom.axhline(0, color="k", lw=0.5)
     bottom.set_ylabel("pas bez dryfu [jedn.]")
     bottom.set_xlabel("czas od startu [s]")
-    bottom.legend(handles=[Patch(color=CLASS_COLOURS[i], alpha=0.5, label=CLASS_NAMES_PL[i]) for i in range(4)], loc="upper right", fontsize=8, ncol=4)
+    bottom.legend(handles=[Patch(color=CLASS_COLOURS[i], alpha=0.5, label=CLASS_NAMES_PL[i]) for i in (INHALE, EXHALE, HOLD)], loc="upper right", fontsize=8, ncol=4)
     fig.suptitle(title, fontsize=11)
     fig.tight_layout()
     path.parent.mkdir(parents=True, exist_ok=True)

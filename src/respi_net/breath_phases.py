@@ -13,6 +13,12 @@ labels exported from this project can sit next to that data:
 Inside arrays and models noise is class 4, so the classes are 0-4 without a
 gap, and :data:`IGNORE` (-1) marks samples that carry no label at all: stretches
 nobody labelled, and the uncertain slice around every phase boundary.
+
+By default the two holds are one class, :data:`HOLD` (code 1), whatever lung
+volume the breath was held at: labels, datasets and models use exhale, hold,
+inhale and noise, and code 3 never occurs.  The detailed scheme with both holds
+is kept as a fallback -- the label producers take ``detailed=True`` -- and its
+names, transitions and colours carry the ``DETAILED_`` prefix.
 """
 
 from __future__ import annotations
@@ -28,16 +34,17 @@ HOLD_AFTER_INHALE = 3
 NOISE = 4
 IGNORE = -1
 
+# One hold class (code 1).  Code 3 (hold after inhale) belongs to the detailed fallback only; arrays and models
+# keep the width of five so the codes stay those of the published datasets.
+HOLD = HOLD_AFTER_EXHALE
 NUM_CLASSES = 5
 PHASE_CLASSES = (EXHALE, HOLD_AFTER_EXHALE, INHALE, HOLD_AFTER_INHALE)
-CLASS_NAMES = ("exhale", "hold_after_exhale", "inhale", "hold_after_inhale", "noise")
-CLASS_NAMES_PL = ("wydech", "pauza po wydechu", "wdech", "pauza po wdechu", "szum")
+USED_CLASSES = (EXHALE, HOLD, INHALE, NOISE)
+CLASS_NAMES = ("exhale", "hold", "inhale", "hold_after_inhale", "noise")
+CLASS_NAMES_PL = ("wydech", "pauza", "wdech", "pauza po wdechu", "szum")
 CLASS_COLOURS = ("#22c55e", "#f59e0b", "#3b82f6", "#dc2626", "#9ca3af")
-
-# The merged scheme: one "hold" whatever lung volume it happens at.  A phone on the ribs, which returns to its
-# baseline after each breath, cannot tell the two holds apart; the rest of the pipeline can keep five classes.
-HOLD = HOLD_AFTER_EXHALE
-MERGED_CLASS_NAMES_PL = ("wydech", "pauza", "wdech")
+DETAILED_CLASS_NAMES = ("exhale", "hold_after_exhale", "inhale", "hold_after_inhale", "noise")
+DETAILED_CLASS_NAMES_PL = ("wydech", "pauza po wydechu", "wdech", "pauza po wdechu", "szum")
 
 
 def fold_short_holds(labels: np.ndarray, fs: float, min_hold_s: float) -> np.ndarray:
@@ -63,8 +70,14 @@ def fold_short_holds(labels: np.ndarray, fs: float, min_hold_s: float) -> np.nda
     return out
 
 
-def merge_holds(labels: np.ndarray) -> np.ndarray:
-    """``labels`` with hold-after-inhale turned into the single hold class (:data:`HOLD`); the rest is unchanged."""
+def merge_holds(labels: np.ndarray, detailed: bool = False) -> np.ndarray:
+    """``labels`` with hold-after-inhale turned into the single hold class (:data:`HOLD`); the rest is unchanged.
+
+    ``detailed=True`` returns a copy as it is: the label producers pass their ``detailed`` flag straight through.
+    """
+
+    if detailed:
+        return np.array(labels, copy=True)
 
     out = np.array(labels, copy=True)
     out[out == HOLD_AFTER_INHALE] = HOLD
@@ -79,12 +92,19 @@ IGNORE_EXPORT_CODE = -1
 # inhale" is impossible by definition.  It can be left either way: a breath
 # can be held at any lung volume, and a breath held halfway out is often
 # finished before the next inhale.  Noise can interrupt and resume anything.
-ALLOWED_TRANSITIONS: dict[int, frozenset[int]] = {
+DETAILED_ALLOWED_TRANSITIONS: dict[int, frozenset[int]] = {
     INHALE: frozenset({EXHALE, HOLD_AFTER_INHALE, NOISE}),
     HOLD_AFTER_INHALE: frozenset({EXHALE, INHALE, NOISE}),
     EXHALE: frozenset({INHALE, HOLD_AFTER_EXHALE, NOISE}),
     HOLD_AFTER_EXHALE: frozenset({INHALE, EXHALE, NOISE}),
     NOISE: frozenset({INHALE, HOLD_AFTER_EXHALE, EXHALE, HOLD_AFTER_INHALE}),
+}
+# With one hold, any breath can stop and any hold can end in either breath.
+ALLOWED_TRANSITIONS: dict[int, frozenset[int]] = {
+    INHALE: frozenset({EXHALE, HOLD, NOISE}),
+    EXHALE: frozenset({INHALE, HOLD, NOISE}),
+    HOLD: frozenset({INHALE, EXHALE, NOISE}),
+    NOISE: frozenset({INHALE, HOLD, EXHALE}),
 }
 
 
@@ -193,7 +213,7 @@ def label_runs(labels: np.ndarray) -> list[tuple[int, int, int]]:
     return [(int(start), int(stop), int(labels[start])) for start, stop in zip(starts, stops)]
 
 
-def transitions_allowed(labels: np.ndarray) -> bool:
+def transitions_allowed(labels: np.ndarray, allowed: dict[int, frozenset[int]] | None = None) -> bool:
     """Whether a label sequence only ever steps along :data:`ALLOWED_TRANSITIONS`.
 
     IGNORE samples are skipped over, so a masked boundary does not count as a
@@ -204,7 +224,8 @@ def transitions_allowed(labels: np.ndarray) -> bool:
     for _, _, label in label_runs(labels):
         if label == IGNORE:
             continue
-        if previous is not None and label != previous and label not in ALLOWED_TRANSITIONS[previous]:
+        allowed_from = (ALLOWED_TRANSITIONS if allowed is None else allowed).get(previous, frozenset())
+        if previous is not None and label != previous and label not in allowed_from:
             return False
         previous = label
     return True

@@ -49,6 +49,8 @@ from torch import nn
 from respi_net.breath_phases import (
     CLASS_NAMES,
     EXHALE,
+    USED_CLASSES,
+    merge_holds,
     HOLD_AFTER_EXHALE,
     HOLD_AFTER_INHALE,
     IGNORE,
@@ -196,7 +198,7 @@ def _toy_window(width: int, fs: float, rng: np.random.Generator) -> tuple[np.nda
         lung = target
         total += count
     level = np.concatenate(levels)[:width]
-    label = np.concatenate(labels)[:width].astype(np.int8)
+    label = merge_holds(np.concatenate(labels)[:width].astype(np.int8))
     time_s = np.arange(width) / fs
     chest = rng.uniform(0.5, 2.0) * level + rng.normal(0.0, 0.01, width) + rng.normal(0.0, 0.1) * time_s / time_s[-1]
     echo = rng.normal(0.0, 0.05, width) - 3.0 * (label == NOISE)
@@ -590,14 +592,15 @@ def _fmt(value: Any, width: int = 6) -> str:
 
 
 def print_metrics(results: dict[str, dict[str, Any]], log: Log = _print) -> None:
-    short = {"inhale": "in", "hold_after_exhale": "hold-ex", "exhale": "ex", "hold_after_inhale": "hold-in", "noise": "noise"}
+    short = {"inhale": "in", "hold": "hold", "exhale": "ex", "noise": "noise"}
+    shown = [CLASS_NAMES[label] for label in USED_CLASSES]
     log(
         f"{'split':<6}{'windows':>8}{'acc':>7}{'mF1':>7}{'argmax':>7}{'online':>7}  "
-        + "".join(f"{short.get(name, name):>8}" for name in CLASS_NAMES)
+        + "".join(f"{short.get(name, name):>8}" for name in shown)
         + f"{'bnd det':>9}{'bnd err':>9}"
     )
     for name, split in results.items():
-        f1 = [split["per_class"][cls]["f1"] for cls in CLASS_NAMES]
+        f1 = [split["per_class"][cls]["f1"] for cls in shown]
         log(
             f"{name:<6}{split['windows']:>8}{_fmt(split['accuracy'], 7)}{_fmt(split['macro_f1'], 7)}"
             f"{_fmt(split['argmax']['macro_f1'], 7)}{_fmt(split['online']['macro_f1'], 7)}  "

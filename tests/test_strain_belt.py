@@ -140,5 +140,5 @@ def test_label_tool_reads_a_radar_session_belt_file(tmp_path):
     assert abs(row["cue_lag_s"] - 0.3) < 0.15
     assert row["cue_agreement"] > 0.85
     labels = pd.read_csv(tmp_path / "out" / "labels" / "a121_belt_test__run_01_belt_holds_1m_belt.csv")
-    assert {0, 1, 2, 3} <= set(labels["label"])
+    assert set(labels["label"]) >= {0, 1, 2} and 3 not in set(labels["label"])  # one hold
     assert (tmp_path / "out" / "plots" / "a121_belt_test__run_01_belt_holds_1m_belt.png").exists()
