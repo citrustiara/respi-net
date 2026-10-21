@@ -284,6 +284,22 @@ def local_rate_hz(chest: np.ndarray, fs: float, window_s: float = RATE_WINDOW_S,
     return rate
 
 
+FAST_BREATHING_HZ = FAST_TIERS[0][0]
+FAST_DISPLAY_BAND_HZ = (0.10, 2.00)  # what a respiration plot shows while breathing is fast
+
+
+def fast_breathing_hz(chest: np.ndarray, fs: float, history_s: float = 60.0) -> float:
+    """The breathing rate at the end of ``chest`` when it is clearly fast (the same test as the detector's fast tiers), else 0.
+
+    For a live display: the last ``history_s`` seconds are looked at, so the breathing before it sets what a
+    breath-sized rhythm is.
+    """
+
+    chest = np.asarray(chest, dtype=float)[-int(round(history_s * fs)) :]
+    rate = local_rate_hz(chest, fs)
+    return float(rate[-1]) if len(rate) and rate[-1] >= FAST_BREATHING_HZ else 0.0
+
+
 def detect_phases(
     chest: np.ndarray,
     fs: float,

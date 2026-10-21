@@ -18,6 +18,7 @@ from scipy.signal import find_peaks, welch
 from .a121 import A121_CAPTURE_COLUMNS, A121_COLUMNS, A121Config, A121Capture, parse_json_array
 from .a121_breaths import default_breath_annotations_path, generate_a121_breath_annotations
 from .chest_signal import A121_CHEST_SIGN, PHASE_TO_MM, a121_chest_signal
+from .phase_baseline import FAST_BREATHING_HZ, FAST_DISPLAY_BAND_HZ, fast_breathing_hz, local_rate_hz
 from .a121_vitals import (
     A121_RATE_WINDOW_S,
     A121_RESP_BAND_HZ,
@@ -543,6 +544,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.a121_resp_pending_hz = 0.0
         self.a121_resp_pending_count = 0
         self.a121_resp_missed_count = 0
+        self.a121_fast_resp_hz = 0.0
         self.a121_signal_window: A121SignalTestWindow | None = None
         self.a121_live_breath_items: list[Any] = []
         self.a121_history_breath_items: list[Any] = []
@@ -881,6 +883,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _reset_a121_rate_display(self) -> None:
         self.a121_resp_display_hz = 0.0
+        self.a121_fast_resp_hz = 0.0  # breathing faster than the respiration band, from the chest trace itself
         self.a121_resp_pending_hz = 0.0
         self.a121_resp_pending_count = 0
         self.a121_resp_missed_count = 0
@@ -1000,7 +1003,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return []
         fs = (len(times_s) - 1) / max(duration_s, 1e-9)
         bpm = float(resp_bpm) if np.isfinite(resp_bpm) and resp_bpm > 0 else 12.0
-        period_s = float(np.clip(60.0 / max(bpm, 1e-9), 2.0, 12.0))
+        period_s = float(np.clip(60.0 / max(bpm, 1e-9), 0.5, 12.0))  # 0.5 s: fast breathing up to 120/min
         norm = (resp_signal - float(np.median(resp_signal))) / (float(np.std(resp_signal)) + 1e-12)
         min_distance = max(1, int(round(fs * period_s * 0.45)))
         peaks, _ = find_peaks(norm, distance=min_distance, prominence=0.30)
@@ -1671,6 +1674,12 @@ class MainWindow(QtWidgets.QMainWindow):
         _, _, _direct_target_m, direct_selected_idx = self._a121_plot_latest_profile(live_rows, analysis, profile_target, gate_half_width)
 
         trace_times = live_result.times_s if live_result is not None else np.asarray([], dtype=float)
+        # The respiration band (0.10-0.50 Hz) ends at 30 breaths/min; clearly faster breathing is read from the chest trace.
+        self.a121_fast_resp_hz = (
+            fast_breathing_hz(live_result.chest_mm, live_result.sample_rate_hz)
+            if live_result is not None and live_result.sample_rate_hz > 0 and len(live_result.chest_mm)
+            else 0.0
+        )
         trace_mask = trace_times >= (trace_times[-1] - window_s) if len(trace_times) else np.asarray([], dtype=bool)
         trace_plot_times = trace_times[trace_mask]
 
@@ -1732,6 +1741,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if classic:
                 # Band-passed phase in physical units: breathing in mm (inhale up), heart in um.
                 plot_resp = A121_CHEST_SIGN * PHASE_TO_MM * live_result.resp_signal[trace_mask]
+                if self.a121_fast_resp_hz > 0:  # the 0.50 Hz band would smooth fast breaths away
+                    plot_resp = bandpass_filter(live_result.chest_mm, live_result.sample_rate_hz, FAST_DISPLAY_BAND_HZ)[trace_mask]
                 plot_heart = A121_CHEST_SIGN * PHASE_TO_MM * 1000.0 * live_result.heart_signal[trace_mask]
             else:
                 # Same light filtering as the phase network's input: holds stay flat, breath
@@ -1741,7 +1752,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.live_curves["resp"].setData(trace_plot_times, plot_resp)
             self.live_curves["heart"].setData(trace_plot_times, plot_heart)
             if self.a121_auto_breath_check.isChecked():
-                resp_bpm_for_phases = self.a121_resp_display_hz * 60.0
+                resp_bpm_for_phases = (self.a121_fast_resp_hz or self.a121_resp_display_hz) * 60.0
                 if resp_bpm_for_phases <= 0 and analysis is not None:
                     resp_bpm_for_phases = float(getattr(analysis, "resp_bpm", 0.0) or 0.0)
                 self._add_breath_phase_spans(
@@ -1767,7 +1778,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
             return
 
-        displayed_resp_hz = self.a121_resp_display_hz
+        displayed_resp_hz = self.a121_fast_resp_hz or self.a121_resp_display_hz
         tracked_heart_hz = self.a121_heart_tracker.current_hz or 0.0
         presence = "YES" if analysis.present else "no"
         gate_mode = (
@@ -1776,6 +1787,8 @@ class MainWindow(QtWidgets.QMainWindow):
             else "fallback auto" if self.a121_gate_center_m is None else "fallback gated"
         )
         resp_text = f"{displayed_resp_hz * 60.0:.1f} BPM ({displayed_resp_hz:.2f} Hz)" if displayed_resp_hz > 0 else "acquiring"
+        if self.a121_fast_resp_hz > 0:
+            resp_text += " - fast breathing"
         echo_text = (
             f"Echo (network input): {float(live_result.echo_db[-1]):.1f} dB\n"
             if live_result is not None and len(live_result.echo_db)
@@ -1980,19 +1993,35 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.history_plot_b.plot(trace_t, trace_resp, pen=pg.mkPen("#e2e8f0", width=1.4), name="Chest")
                 self.history_plot_c.plot(trace_t, chest.velocity(), pen=pg.mkPen("#38bdf8", width=1.1), name="Velocity")
                 span_signal = -trace_resp
+                rate_hz = local_rate_hz(trace_resp, chest.fs)
             else:
-                self._configure_plot(self.history_plot_b, "A121 respiration band 0.10-0.50 Hz (inhale up)", "Chest motion [mm]", "Time [s]")
-                self._configure_plot(self.history_plot_c, "A121 heart band 0.70-2.00 Hz", "Chest motion [um]", "Time [s]")
                 trace_t = analysis.times_s
                 trace_resp = A121_CHEST_SIGN * PHASE_TO_MM * analysis.resp_signal
+                chest_mm = A121_CHEST_SIGN * PHASE_TO_MM * analysis.raw_phase
+                rate_hz = local_rate_hz(chest_mm, analysis.sample_rate_hz) if len(chest_mm) == len(trace_t) else np.zeros(len(trace_t))
+                band = RESP_BAND_HZ
+                if np.any(rate_hz >= FAST_BREATHING_HZ):  # the 0.50 Hz band would smooth the fast breaths away
+                    band = FAST_DISPLAY_BAND_HZ
+                    trace_resp = bandpass_filter(chest_mm, analysis.sample_rate_hz, band)
+                note = " - fast breathing found" if band == FAST_DISPLAY_BAND_HZ else ""
+                self._configure_plot(self.history_plot_b, f"A121 respiration band {band[0]:.2f}-{band[1]:.2f} Hz (inhale up){note}", "Chest motion [mm]", "Time [s]")
+                self._configure_plot(self.history_plot_c, "A121 heart band 0.70-2.00 Hz", "Chest motion [um]", "Time [s]")
                 self.history_plot_b.plot(trace_t, trace_resp, pen=pg.mkPen("#34d399", width=1.3), name="Respiration")
                 self.history_plot_c.plot(trace_t, A121_CHEST_SIGN * PHASE_TO_MM * 1000.0 * analysis.heart_signal, pen=pg.mkPen("#fb7185", width=1.2), name="Heart")
                 span_signal = -trace_resp
+            fast = rate_hz >= FAST_BREATHING_HZ
+            fast_text = (
+                f"\nFast breathing: {np.sum(fast) / max(len(fast), 1) * (trace_t[-1] - trace_t[0]):.0f} s, up to {np.max(rate_hz) * 60.0:.0f} BPM"
+                if len(trace_t) > 1 and np.any(fast)
+                else ""
+            )
             breath_spans: list[tuple[float, float, str]] = []
             if self.a121_auto_breath_check.isChecked():
                 breath_spans = self._load_breath_annotation_spans(csv_path) if csv_path is not None else []
                 if not breath_spans:
-                    breath_spans = self._breath_phase_spans(trace_t, span_signal, float(analysis.resp_bpm))
+                    # A recording that is mostly fast breathing is split at its own pace; otherwise at the usual rate.
+                    mostly_fast = len(fast) and np.mean(fast) > 0.5
+                    breath_spans = self._breath_phase_spans(trace_t, span_signal, float(np.median(rate_hz[fast])) * 60.0 if mostly_fast else float(analysis.resp_bpm))
                 self._add_breath_phase_spans(self.history_plot_b, self.a121_history_breath_items, breath_spans)
             presence = "YES" if analysis.present else "no"
             breath_text = f"\nBreath phases: {len(breath_spans)} spans" if breath_spans else ""
@@ -2001,7 +2030,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"Presence: {presence} ({analysis.presence_score:.0f}/100)\n"
                 f"Auto target: {analysis.target_distance_m:.3f} m  gate {analysis.gate_min_m:.2f}-{analysis.gate_max_m:.2f} m\n"
                 f"Latest peak: {analysis.peak_distance_m:.3f} m  amp {analysis.peak_amplitude:.1f}\n"
-                f"Respiration: {analysis.resp_bpm:.1f} BPM\nHeart: {analysis.heart_bpm:.1f} BPM"
+                f"Respiration: {analysis.resp_bpm:.1f} BPM{fast_text}\nHeart: {analysis.heart_bpm:.1f} BPM"
                 f"{breath_text}"
             )
         else:

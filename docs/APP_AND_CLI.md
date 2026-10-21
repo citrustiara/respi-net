@@ -169,6 +169,7 @@ The stats panel shows sensor-dependent metrics:
   - peak distance/amplitude and range gate
   - compact range-bin count and signal-quality index
   - Acconeer `BreathingProcessor` respiration-rate estimate
+  - fast breathing: the respiration band ends at 30 breaths/min, so when the last 60 s of the chest trace show a clear rhythm of at least 0.6 Hz (36/min, as large as a breath; the same test as the phase detector's fast tiers) the rate is read from the chest trace and marked `fast breathing`, and the classic respiration plot widens to 0.10-2.00 Hz meanwhile. Recordings opened from history list `Fast breathing: N s, up to X BPM`.
   - heart candidate confidence
   - Kalman-gated tracked heart estimate, shown as `acquiring` until stable enough
 - IMU:
