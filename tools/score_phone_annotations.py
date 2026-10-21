@@ -78,7 +78,7 @@ BELT_LABELS = ROOT / "data" / "processed" / "strain_belt" / "labels"
 def belt(annotations: list[Path]) -> dict[str, object]:
     """Belt labels against hand annotations of the belt trace, per annotation and over all of them pooled."""
 
-    from respi_net.breath_phases import NOISE, NOISE_EXPORT_CODE
+    from respi_net.breath_phases import from_export_codes
     import pandas as pd
 
     out: dict[str, object] = {}
@@ -87,7 +87,7 @@ def belt(annotations: list[Path]) -> dict[str, object]:
         table = pd.read_csv(BELT_LABELS / f"{name}.csv")
         grid = table["time_s"].to_numpy(dtype=float)
         codes = table["label"].to_numpy()
-        belt_labels = merge_holds(np.where(codes == NOISE_EXPORT_CODE, NOISE, codes).astype(np.int8))
+        belt_labels = from_export_codes(codes)
         reference = segments_to_labels(load_segments(annotation), grid)
         out[annotation.name] = {
             "annotated_s": float(np.sum(reference != IGNORE) * np.median(np.diff(grid))),

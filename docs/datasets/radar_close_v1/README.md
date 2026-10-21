@@ -9,8 +9,9 @@ sygnału**, do dalszego przeglądu i docelowo sprawdzenia z pasem.
 ## Zawartość
 
 Edytowalne przedziały: `annotations/radar_close_v1/*.json`. Klasy: 0 wydech,
-1 pauza po wydechu, 2 wdech, 3 pauza po wdechu, 4 szum; −1 pominięte. W~wygenerowanych
-etykietach obie pauzy są jedną klasą (1, pauza); rodzaj pauzy zostaje tylko w~plikach JSON.
+1 pauza po wydechu, 2 wdech, 3 pauza po wdechu, 4 szum; −1 pominięte. Wygenerowane
+etykiety mają cztery klasy sieci: 0 wydech, 1 pauza (obie pauzy), 2 wdech, 3 szum; rodzaj pauzy
+zostaje tylko w~plikach JSON.
 Początek przedziału jest włączony, koniec wyłączony, czas liczony od początku
 pomiaru. Poza zaznaczonymi przedziałami wszystko pozostaje bez etykiety.
 
@@ -39,7 +40,7 @@ predykcji ani tego, którą klasę sieć ma tam zwrócić. Przygotowano ponownie
 wszystkie 18 kopii i okna z aktualnych etykiet źródła.
 
 Nie oznaczono klasy szumu. To mały zbiór pilotażowy,
-nie kompletny materiał do oceny modelu pięcioklasowego.
+nie kompletny materiał do oceny modelu czteroklasowego.
 
 Wykresy obok tego pliku: niebieski wdech, zielony wydech, czerwony pauza po
 wdechu, żółty pauza po wydechu, białe pominięte. Szary przebieg: fazowe

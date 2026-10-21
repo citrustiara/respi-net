@@ -1,24 +1,25 @@
 """Breathing-phase classes shared by labels, datasets, baselines and models.
 
-The classes and their numbers follow the respiratory-phase datasets of
-Szymański et al. (Scientific Data, 2025, Gdańsk University of Technology), so
-labels exported from this project can sit next to that data:
+Four classes, and the network has one output per class:
 
-    0   exhale                (breath-out)
-    1   hold after exhale     (retention after breath-out)
-    2   inhale                (breath-in)
-    3   hold after inhale     (retention after breath-in)
-    999 noise                 (too contaminated to use)
+    0   exhale   (breath-out)
+    1   hold     (breath held, at any lung volume)
+    2   inhale   (breath-in)
+    3   noise    (too contaminated to use)
 
-Inside arrays and models noise is class 4, so the classes are 0-4 without a
-gap, and :data:`IGNORE` (-1) marks samples that carry no label at all: stretches
-nobody labelled, and the uncertain slice around every phase boundary.
+:data:`IGNORE` (-1) marks samples that carry no label at all: stretches nobody
+labelled, and the uncertain slice around every phase boundary.
 
-By default the two holds are one class, :data:`HOLD` (code 1), whatever lung
-volume the breath was held at: labels, datasets and models use exhale, hold,
-inhale and noise, and code 3 never occurs.  The detailed scheme with both holds
-is kept as a fallback -- the label producers take ``detailed=True`` -- and its
-names, transitions and colours carry the ``DETAILED_`` prefix.
+Label files use the codes of the respiratory-phase datasets of Szymański et al.
+(Scientific Data, 2025, Gdańsk University of Technology), so they can sit next
+to that data: 0 exhale, 1 hold after exhale, 2 inhale, 3 hold after inhale,
+999 noise.  The one hold is written as 1.
+
+The two holds of that dataset are kept as a fallback: the label producers take
+``detailed=True`` and then name a hold after inhale :data:`HOLD_AFTER_INHALE`
+(4 inside arrays); names, transitions and colours of that scheme carry the
+``DETAILED_`` prefix.  :func:`merge_holds` turns detailed labels into the four
+classes.
 """
 
 from __future__ import annotations
@@ -28,23 +29,21 @@ from typing import Iterable, Sequence
 import numpy as np
 
 EXHALE = 0
-HOLD_AFTER_EXHALE = 1
+HOLD = 1
 INHALE = 2
-HOLD_AFTER_INHALE = 3
-NOISE = 4
+NOISE = 3
 IGNORE = -1
+HOLD_AFTER_EXHALE = HOLD  # the detailed fallback names the one hold after the breath before it
+HOLD_AFTER_INHALE = 4  # detailed fallback only; never a class of the four-class scheme
 
-# One hold class (code 1).  Code 3 (hold after inhale) belongs to the detailed fallback only; arrays and models
-# keep the width of five so the codes stay those of the published datasets.
-HOLD = HOLD_AFTER_EXHALE
-NUM_CLASSES = 5
-PHASE_CLASSES = (EXHALE, HOLD_AFTER_EXHALE, INHALE, HOLD_AFTER_INHALE)
-USED_CLASSES = (EXHALE, HOLD, INHALE, NOISE)
-CLASS_NAMES = ("exhale", "hold", "inhale", "hold_after_inhale", "noise")
-CLASS_NAMES_PL = ("wydech", "pauza", "wdech", "pauza po wdechu", "szum")
-CLASS_COLOURS = ("#22c55e", "#f59e0b", "#3b82f6", "#dc2626", "#9ca3af")
-DETAILED_CLASS_NAMES = ("exhale", "hold_after_exhale", "inhale", "hold_after_inhale", "noise")
-DETAILED_CLASS_NAMES_PL = ("wydech", "pauza po wydechu", "wdech", "pauza po wdechu", "szum")
+NUM_CLASSES = 4
+CLASS_NAMES = ("exhale", "hold", "inhale", "noise")
+CLASS_NAMES_PL = ("wydech", "pauza", "wdech", "szum")
+CLASS_COLOURS = ("#22c55e", "#f59e0b", "#3b82f6", "#9ca3af")
+DETAILED_NUM_CLASSES = 5
+DETAILED_CLASS_NAMES = ("exhale", "hold_after_exhale", "inhale", "noise", "hold_after_inhale")
+DETAILED_CLASS_COLOURS = ("#22c55e", "#f59e0b", "#3b82f6", "#9ca3af", "#dc2626")
+DETAILED_CLASS_NAMES_PL = ("wydech", "pauza po wydechu", "wdech", "szum", "pauza po wdechu")
 
 
 def fold_short_holds(labels: np.ndarray, fs: float, min_hold_s: float) -> np.ndarray:
@@ -108,33 +107,48 @@ ALLOWED_TRANSITIONS: dict[int, frozenset[int]] = {
 }
 
 
+# Label-file codes (Szymański et al.) of each class, the detailed hold after inhale included.
+_EXPORT = {EXHALE: 0, HOLD: 1, INHALE: 2, HOLD_AFTER_INHALE: 3, NOISE: NOISE_EXPORT_CODE, IGNORE: IGNORE_EXPORT_CODE}
+_IMPORT = {code: label for label, code in _EXPORT.items()}
+
+
 def export_code(label: int) -> int:
     """The number written to label files: Szymański's codes, 999 for noise."""
 
-    if label == NOISE:
-        return NOISE_EXPORT_CODE
-    if label == IGNORE:
-        return IGNORE_EXPORT_CODE
-    if label in PHASE_CLASSES:
-        return int(label)
-    raise ValueError(f"Unknown breathing-phase label {label!r}")
+    try:
+        return _EXPORT[int(label)]
+    except KeyError:
+        raise ValueError(f"Unknown breathing-phase label {label!r}") from None
 
 
 def from_export_code(code: int) -> int:
-    if code == NOISE_EXPORT_CODE:
-        return NOISE
-    if code == IGNORE_EXPORT_CODE:
-        return IGNORE
-    if code in PHASE_CLASSES:
-        return int(code)
-    raise ValueError(f"Unknown breathing-phase code {code!r}")
+    """The class of a label-file code; a hold after inhale (3) comes back as :data:`HOLD_AFTER_INHALE`."""
+
+    try:
+        return _IMPORT[int(code)]
+    except KeyError:
+        raise ValueError(f"Unknown breathing-phase code {code!r}") from None
 
 
 def export_codes(labels: np.ndarray) -> np.ndarray:
     labels = np.asarray(labels)
-    codes = labels.astype(np.int32, copy=True)
+    codes = labels.astype(np.int32, copy=True)  # exhale, hold, inhale and IGNORE keep their numbers
     codes[labels == NOISE] = NOISE_EXPORT_CODE
+    codes[labels == HOLD_AFTER_INHALE] = _EXPORT[HOLD_AFTER_INHALE]
     return codes
+
+
+def from_export_codes(codes: np.ndarray, detailed: bool = False) -> np.ndarray:
+    """Classes of label-file codes, the two holds as one unless ``detailed=True``."""
+
+    codes = np.asarray(codes)
+    unknown = set(np.unique(codes).tolist()) - set(_IMPORT)
+    if unknown:
+        raise ValueError(f"Unknown breathing-phase codes {sorted(unknown)}")
+    labels = codes.astype(np.int8, copy=True) if not np.any(codes == NOISE_EXPORT_CODE) else np.where(codes == NOISE_EXPORT_CODE, 0, codes).astype(np.int8)
+    labels[codes == NOISE_EXPORT_CODE] = NOISE
+    labels[codes == _EXPORT[HOLD_AFTER_INHALE]] = HOLD_AFTER_INHALE
+    return merge_holds(labels, detailed)
 
 
 def hold_class_after(previous_breath: int | None) -> int:

@@ -49,7 +49,6 @@ from torch import nn
 from respi_net.breath_phases import (
     CLASS_NAMES,
     EXHALE,
-    USED_CLASSES,
     merge_holds,
     HOLD_AFTER_EXHALE,
     HOLD_AFTER_INHALE,
@@ -593,7 +592,7 @@ def _fmt(value: Any, width: int = 6) -> str:
 
 def print_metrics(results: dict[str, dict[str, Any]], log: Log = _print) -> None:
     short = {"inhale": "in", "hold": "hold", "exhale": "ex", "noise": "noise"}
-    shown = [CLASS_NAMES[label] for label in USED_CLASSES]
+    shown = list(CLASS_NAMES)
     log(
         f"{'split':<6}{'windows':>8}{'acc':>7}{'mF1':>7}{'argmax':>7}{'online':>7}  "
         + "".join(f"{short.get(name, name):>8}" for name in shown)

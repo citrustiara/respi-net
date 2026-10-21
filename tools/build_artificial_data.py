@@ -65,7 +65,6 @@ from respi_net.breath_phases import (
     INHALE,
     NOISE,
     NUM_CLASSES,
-    USED_CLASSES,
     label_runs,
 )
 from respi_net.nn_dataset import LabelledRun, assign_splits, export_dataset, load_dataset, runs_in, save_run
@@ -112,7 +111,7 @@ def minutes(runs: list[LabelledRun]) -> dict[str, float]:
     labels = np.concatenate([run.labels for run in runs]) if runs else np.zeros(0, np.int8)
     fs = runs[0].fs if runs else FS
     counts = np.bincount(labels[labels != IGNORE], minlength=NUM_CLASSES)
-    return {"labelled": round(float(counts.sum()) / fs / 60.0, 1), **{CLASS_NAMES[k]: round(float(counts[k]) / fs / 60.0, 1) for k in USED_CLASSES}}
+    return {"labelled": round(float(counts.sum()) / fs / 60.0, 1), **{name: round(float(c) / fs / 60.0, 1) for name, c in zip(CLASS_NAMES, counts)}}
 
 
 def training_noise_bank(runs: list[LabelledRun], splits: dict[str, str]):
@@ -339,7 +338,7 @@ def main() -> int:
                 save_run(copy, args.own_examples_dir / f"example{suffix}.npz")
 
     print(f"\nLabelled minutes (noise bank: {summary['noise_bank_minutes']} min of real A121 holds)")
-    shown = [CLASS_NAMES[k] for k in USED_CLASSES]
+    shown = list(CLASS_NAMES)
     header = f"{'source':22} {'labelled':>9} " + " ".join(f"{name[:12]:>12}" for name in shown)
     print(header)
     for source, values in summary["sources"].items():

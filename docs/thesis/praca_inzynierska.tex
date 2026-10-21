@@ -2829,7 +2829,7 @@ klasą, niezależnie od tego, przy jakiej objętości płuc oddech wstrzymano. K
 klas przyjęto ze zbioru danych opublikowanego przez zespół Politechniki Gdańskiej
 \cite{szymanski2025}, aby etykiety tej pracy można było zestawiać z~tamtymi
 danymi: pauza ma kod pauzy po wydechu, a~obie pauzy tamtego zbioru odwzorowuje się
-na nią. Wewnątrz tablic szum ma numer~4, a~wartość $-1$ oznacza próbkę bez etykiety:
+na nią. Wewnątrz tablic i~na wyjściu sieci klasy mają numery 0--3 (szum to~3), a~wartość $-1$ oznacza próbkę bez etykiety:
 fragment, którego nikt nie oznaczył, albo niepewne otoczenie granicy fazy.
 
 \begin{table}[H]
@@ -3864,24 +3864,24 @@ sieci będzie trudny zbiór testowy z~niezależnym torem odniesienia.
 \label{sec:sieci-architektura}
 
 Przygotowano dwie przyczynowe architektury o~tym samym wejściu (trzy kanały
-po \SI{20}{Hz}) i~wyjściu (logity klas dla każdej próbki):
+po \SI{20}{Hz}) i~wyjściu (cztery logity, po jednym na klasę, dla każdej próbki):
 \begin{itemize}
   \item \textbf{TCN} --- bloki resztkowe z~przyczynowymi splotami
   jednowymiarowymi (jądro 5, dylatacje 1--64, 32~kanały), normalizacja
   warstwowa po kanałach w~każdej chwili, bez uśredniania po czasie. Pole
   recepcyjne wynosi 509~próbek, czyli \SI{25.45}{s}: więcej niż jeden oddech
   przy \SI{6}{oddech\per\minute} i~cała \SI{15}{s} pauza. Model ma
-  44\,261~parametrów;
+  44\,228~parametrów;
   \item \textbf{GRU} --- dwuwarstwowa, jednokierunkowa sieć rekurencyjna
-  (64~jednostki, 38\,533~parametry), naturalnie działająca strumieniowo.
+  (64~jednostki, 38\,468~parametrów), naturalnie działająca strumieniowo.
 \end{itemize}
 Obie pracują strumieniowo: kolejne porcje ramek dają wyniki identyczne
 z~przetworzeniem całego nagrania naraz (TCN przechowuje ostatnie wejścia
 każdego splotu, GRU --- stan ukryty). Wyjście dekoduje się algorytmem
-Viterbiego z~dozwolonymi przejściami (tab.~\ref{tab:klasy-faz}), a~w~czasie
-rzeczywistym prostszym wygładzaczem: nowa klasa jest przyjmowana, gdy
-utrzyma pewność przez kilka ramek, faza trwa co najmniej \SI{0.3}{s},
-a~przejście jest dozwolone. Zapobiega to migotaniu decyzji na granicach.
+Viterbiego z~karą za każdą zmianę klasy (przy jednej pauzie każde przejście między
+klasami jest dozwolone), a~w~czasie rzeczywistym prostszym wygładzaczem: nowa klasa
+jest przyjmowana, gdy utrzyma pewność przez kilka ramek, a~faza trwa co najmniej
+\SI{0.3}{s}. Zapobiega to migotaniu decyzji na granicach.
 
 \section{Uczenie, dane syntetyczne i metryki}
 \label{sec:sieci-uczenie}

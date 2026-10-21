@@ -10,7 +10,7 @@ torch = pytest.importorskip("torch")
 from respi_net.breath_phases import (  # noqa: E402
     CLASS_NAMES,
     EXHALE,
-    HOLD_AFTER_INHALE,
+    HOLD,
     IGNORE,
     INHALE,
     NOISE,
@@ -120,15 +120,14 @@ def test_streaming_equals_one_pass_over_the_whole_sequence(name: str, history_s:
 
 
 def test_smoother_blocks_transitions_the_breath_cannot_make() -> None:
-    smoother = OnlinePhaseSmoother(FS)  # 3 frames to confirm, phases of at least 0.3 s = 6 frames
+    # With one hold every breath change is allowed; a narrower map shows the blocking: exhale may only stop.
+    smoother = OnlinePhaseSmoother(FS, allowed={EXHALE: frozenset({HOLD}), HOLD: frozenset({INHALE})})
 
-    out = smoother.update(
-        np.concatenate([_confident(EXHALE, 20), _confident(HOLD_AFTER_INHALE, 20), _confident(INHALE, 10)])
-    )
+    out = smoother.update(np.concatenate([_confident(EXHALE, 20), _confident(INHALE, 20), _confident(HOLD, 10)]))
 
     assert list(out[:2]) == [IGNORE, IGNORE]  # nothing confirmed yet
-    assert np.all(out[2:42] == EXHALE)  # exhale -> hold after inhale is impossible
-    assert np.all(out[42:] == INHALE)  # inhale takes over on its third confident frame
+    assert np.all(out[2:42] == EXHALE)  # exhale -> inhale is blocked here
+    assert np.all(out[42:] == HOLD)  # hold takes over on its third confident frame
 
 
 def test_smoother_ignores_flicker_unsure_frames_and_too_short_phases() -> None:
@@ -147,11 +146,11 @@ def test_smoother_ignores_flicker_unsure_frames_and_too_short_phases() -> None:
 
 
 def test_noise_interrupts_any_phase() -> None:
-    smoother = OnlinePhaseSmoother(FS, allowed={HOLD_AFTER_INHALE: frozenset()})
+    smoother = OnlinePhaseSmoother(FS, allowed={HOLD: frozenset()})
 
-    out = smoother.update(np.concatenate([_confident(HOLD_AFTER_INHALE, 10), _confident(NOISE, 5)]))
+    out = smoother.update(np.concatenate([_confident(HOLD, 10), _confident(NOISE, 5)]))
 
-    assert out[9] == HOLD_AFTER_INHALE and out[-1] == NOISE
+    assert out[9] == HOLD and out[-1] == NOISE
 
 
 def test_masked_loss_skips_ignored_frames() -> None:
@@ -249,7 +248,7 @@ def _write_tiny_dataset(path: Path, fs: float = FS, width: int = 120) -> None:
     rng = np.random.default_rng(0)
     y = np.full((4, width), IGNORE, dtype=np.int8)
     y[:, 10:50] = INHALE
-    y[:, 50:60] = HOLD_AFTER_INHALE
+    y[:, 50:60] = HOLD
     y[:, 62:110] = EXHALE
     meta = {
         "fs": fs,

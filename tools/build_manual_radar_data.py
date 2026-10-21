@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from respi_net.artificial_runs import enhanced_augment_run, noise_bank_from_holds, reduced_power_run
-from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES, IGNORE, label_runs, merge_holds
+from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES, EXHALE, HOLD_AFTER_EXHALE, HOLD_AFTER_INHALE, IGNORE, INHALE, NOISE, label_runs, merge_holds
 from respi_net.chest_signal import ChestSignal, a121_chest_signal
 from respi_net.nn_dataset import LabelledRun, export_dataset, labelled_run, save_run
 
@@ -33,14 +33,18 @@ SEED = 20261006
 STRETCH = (0.7, 0.8, 0.9, 1.1, 1.25, 1.4)
 
 
+# Codes of the reviewed JSON files: 0 exhale, 1 hold after exhale, 2 inhale, 3 hold after inhale, 4 noise.
+REVIEWED_CODES = {0: EXHALE, 1: HOLD_AFTER_EXHALE, 2: INHALE, 3: HOLD_AFTER_INHALE, 4: NOISE}
+
+
 def reviewed_labels(time_s: np.ndarray, annotation: dict) -> np.ndarray:
     labels = np.full(len(time_s), IGNORE, dtype=np.int8)
     previous_end = -np.inf
     for start, end, label in annotation["segments"]:
-        if start < previous_end or end <= start or label not in range(5):
+        if start < previous_end or end <= start or label not in REVIEWED_CODES:
             raise ValueError("Invalid, overlapping or unordered annotation segments")
         previous_end = end
-        labels[(time_s >= start) & (time_s < end)] = label
+        labels[(time_s >= start) & (time_s < end)] = REVIEWED_CODES[label]
     # One mask per boundary: take the larger adjacent default unless a
     # reviewed, explicit override narrows/widens this particular edge.
     guards = {}

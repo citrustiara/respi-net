@@ -55,6 +55,7 @@ from respi_net.breath_phases import (
     CLASS_COLOURS,
     CLASS_NAMES,
     CLASS_NAMES_PL,
+    DETAILED_CLASS_COLOURS,
     DETAILED_CLASS_NAMES,
     HOLD,
     EXHALE,
@@ -220,14 +221,14 @@ def plot_label_timing(published: SzymanskiRecording, corrected: SzymanskiRecordi
             for start, stop, label in label_runs(labels):
                 begin, end = time_s[start], time_s[min(stop, len(time_s) - 1)]
                 if label != IGNORE and end > lo and begin < hi:
-                    bars.axvspan(max(begin, lo), min(end, hi), ymin=top - 0.42, ymax=top, color=CLASS_COLOURS[label], lw=0)
+                    bars.axvspan(max(begin, lo), min(end, hi), ymin=top - 0.42, ymax=top, color=DETAILED_CLASS_COLOURS[label], lw=0)
         bars.set_xlim(lo, hi)
         bars.set_ylim(0, 1)
         bars.set_yticks([0.75, 0.25], [text["published"], text["corrected"]])
         if index == len(pairs) - 1:
             bars.set_xlabel(text["time"])
     lines = [plt.Line2D([], [], color="#111827", marker="o", ms=3.5), plt.Line2D([], [], color="#f97316", marker="o", ms=3.5)]
-    patches = [plt.Rectangle((0, 0), 1, 1, color=CLASS_COLOURS[label]) for label in text["classes"]]
+    patches = [plt.Rectangle((0, 0), 1, 1, color=DETAILED_CLASS_COLOURS[label]) for label in text["classes"]]
     fig.legend(lines + patches, [text["raw"], text["copy"], *text["classes"].values()], loc="lower center", ncol=3,
                frameon=False, fontsize=9, bbox_to_anchor=(0.5, -0.05))
     path.parent.mkdir(parents=True, exist_ok=True)
