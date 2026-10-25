@@ -10,6 +10,7 @@ import pandas as pd
 from scipy.signal import butter, coherence, detrend, find_peaks, hilbert, sosfiltfilt, welch, lfilter
 
 from .a121 import parse_json_array
+from .a121_range import BREATHING_MOTION_SNR_MIN, MOTION_NOISE_BAND_MIN_HZ, LiveRangeSelector, motion_snr
 from .chest_signal import A121_CHEST_SIGN, DEFAULT_LOW_PASS_HZ, PHASE_TO_MM
 
 RESP_BAND_HZ = (0.10, 0.50)
@@ -43,10 +44,8 @@ HEART_PEAK_MIN_PROMINENCE = 8.0
 HEART_MAX_BREATHING_COHERENCE = 0.5
 # Coherence is ignored where the breathing reference has less power than this share of its peak.
 HEART_REFERENCE_POWER_FLOOR = 1e-3
-# Breathing makes the raw IQ of the chest return change in the breathing band far above the
-# receiver noise floor. Static scenes and noise stay close to it.
-BREATHING_MOTION_SNR_MIN = 10.0
-MOTION_NOISE_BAND_MIN_HZ = 2.5
+# BREATHING_MOTION_SNR_MIN and MOTION_NOISE_BAND_MIN_HZ (raw IQ moving above receiver noise) come from a121_range,
+# which leaves bins below it out of the chest range.
 
 
 @dataclass(frozen=True)
@@ -113,6 +112,10 @@ class A121LiveTraceResult:
     chest_mm: np.ndarray = field(default_factory=lambda: np.asarray([], dtype=float))
     # Echo strength of the same bins, 20*log10 of the weighted amplitude (network input channel).
     echo_db: np.ndarray = field(default_factory=lambda: np.asarray([], dtype=float))
+    # Why the chest bin is where it is: "acconeer-target", "strongest-bin" or "breathing-score".
+    gate_source: str = ""
+    # The breathing-score selection is frozen: no range breathes now (a hold, or movement).
+    range_frozen: bool = False
 
 
 class A121LiveTraceProcessor:
@@ -123,10 +126,17 @@ class A121LiveTraceProcessor:
     initial conditions, detrending, selected-bin weights, and therefore also the already-drawn
     past. This processor mirrors the causal part of Acconeer's breathing processor and appends one
     new filtered sample per radar frame while preserving all previous samples verbatim.
+
+    The chest bin starts at Acconeer's target (else the strongest echo) and, with ``range_selection="breathing"``
+    (default), moves to a bin that breathes clearly better (:class:`respi_net.a121_range.LiveRangeSelector`);
+    ``"acconeer"`` keeps the old choice.  The chest trace stays continuous across a move.
     """
 
-    def __init__(self, max_history_s: float = 180.0) -> None:
+    def __init__(self, max_history_s: float = 180.0, range_selection: str = "breathing") -> None:
+        if range_selection not in ("breathing", "acconeer"):
+            raise ValueError(f"Unknown range selection {range_selection!r}; use breathing or acconeer.")
         self.max_history_s = float(max_history_s)
+        self.range_selection = range_selection
         self.reset()
 
     def reset(self) -> None:
@@ -134,6 +144,10 @@ class A121LiveTraceProcessor:
         self.m: int = 0
         self.distances = np.asarray([], dtype=float)
         self.selected_index: int | None = None
+        self.prior_index: int | None = None  # Acconeer's target, else the strongest echo
+        self.prior_source = ""
+        self.range_selector: LiveRangeSelector | None = None
+        self.chest_offset_mm = 0.0  # keeps the chest trace continuous when the chest bin moves
         self.target_distance_m: float = 0.0
         self.last_frame: int | None = None
         self.last_timestamp_ms: float | None = None
@@ -235,6 +249,7 @@ class A121LiveTraceProcessor:
         self.angle_unwrapped = np.zeros(self.m, dtype=float)
         self.lp_filt_ampl = None
         self.sf = float(np.exp(-1.0 / max(self.fs * A121_RATE_WINDOW_S, 1e-9)))
+        self.range_selector = LiveRangeSelector(self.fs, self.m) if self.range_selection == "breathing" else None
 
     @staticmethod
     def _iir_step(
@@ -251,23 +266,28 @@ class A121LiveTraceProcessor:
         y_hist[0] = y
         return y
 
-    def _select_index(self, amplitude: np.ndarray, target_distance_m: float | None) -> int:
-        if self.m <= 0:
-            return 0
+    def _prior_index(self, amplitude: np.ndarray, target_distance_m: float | None) -> int:
+        """Acconeer's target bin when given, else the strongest echo of the first frame (kept)."""
         if target_distance_m is not None and np.isfinite(target_distance_m) and target_distance_m > 0:
-            idx = int(np.argmin(np.abs(self.distances - float(target_distance_m))))
-            self.selected_index = idx
-            self.target_distance_m = float(self.distances[idx])
-            return idx
-        if self.selected_index is None:
+            self.prior_index = int(np.argmin(np.abs(self.distances - float(target_distance_m))))
+            self.prior_source = "acconeer-target"
+        elif self.prior_index is None:
             search = self.distances >= A121_MIN_TARGET_DISTANCE_M if len(self.distances) == len(amplitude) else np.ones(len(amplitude), dtype=bool)
             if not np.any(search):
                 search = np.ones(len(amplitude), dtype=bool)
-            idx = int(np.argmax(np.where(search, amplitude, -np.inf)))
-            self.selected_index = idx
-            self.target_distance_m = float(self.distances[idx]) if len(self.distances) > idx else 0.0
-            return idx
-        return int(np.clip(self.selected_index, 0, self.m - 1))
+            self.prior_index = int(np.argmax(np.where(search, amplitude, -np.inf)))
+            self.prior_source = "strongest-bin"
+        return int(np.clip(self.prior_index, 0, self.m - 1))
+
+    def _select_index(self, amplitude: np.ndarray, target_distance_m: float | None, time_s: float, z: np.ndarray) -> int:
+        if self.m <= 0:
+            return 0
+        idx = self._prior_index(amplitude, target_distance_m)
+        if self.range_selector is not None and self.angle_unwrapped is not None:
+            idx = self.range_selector.update(time_s, z, self.angle_unwrapped, idx)
+        self.selected_index = idx
+        self.target_distance_m = float(self.distances[idx]) if len(self.distances) > idx else 0.0
+        return idx
 
     def _candidate_indices(
         self,
@@ -312,9 +332,9 @@ class A121LiveTraceProcessor:
         if len(latest_distances) == 0:
             return self.result()
         if self.m != len(latest_distances) or self.fs <= 0 or abs(fs - self.fs) / max(self.fs, 1e-9) > 0.20:
-            old_selected = self.selected_index
+            old_prior = self.prior_index
             self.reset()
-            self.selected_index = old_selected if old_selected is not None and old_selected < len(latest_distances) else None
+            self.prior_index = old_prior if old_prior is not None and old_prior < len(latest_distances) else None
             self._initialize_filters(fs, latest_distances)
 
         assert self.static_x is not None and self.static_y is not None
@@ -358,7 +378,18 @@ class A121LiveTraceProcessor:
                 self.angle_unwrapped = self.angle_unwrapped + diff
                 self.prev_angle = angle.copy()
 
-            selected_idx = self._select_index(self.lp_filt_ampl if self.lp_filt_ampl is not None else amp, target_distance_m)
+            if self.first_timestamp_ms is None:
+                self.first_timestamp_ms = timestamp_ms
+            time_s = (timestamp_ms - self.first_timestamp_ms) / 1000.0
+            if self.last_time_s is not None and time_s <= self.last_time_s:
+                time_s = self.last_time_s + 1.0 / max(self.fs, 1e-9)
+            self.last_time_s = float(time_s)
+            self.last_timestamp_ms = timestamp_ms
+            if frame is not None:
+                self.last_frame = frame
+
+            previous_idx = self.selected_index
+            selected_idx = self._select_index(self.lp_filt_ampl if self.lp_filt_ampl is not None else amp, target_distance_m, time_s, z)
             candidate_idx = self._candidate_indices(selected_idx, gate_half_width_m, use_gating)
             weights = self.lp_filt_ampl[candidate_idx] if self.lp_filt_ampl is not None and len(candidate_idx) else np.asarray([1.0])
             weights = np.maximum(weights.astype(float), 0.0)
@@ -392,16 +423,6 @@ class A121LiveTraceProcessor:
             # The low-pass has unit DC gain, so it follows the undetrended cumulative phase.
             chest_all = self._iir_step(self.angle_unwrapped, self.b_chest, self.a_chest, self.chest_x, self.chest_y)
 
-            if self.first_timestamp_ms is None:
-                self.first_timestamp_ms = timestamp_ms
-            time_s = (timestamp_ms - self.first_timestamp_ms) / 1000.0
-            if self.last_time_s is not None and time_s <= self.last_time_s:
-                time_s = self.last_time_s + 1.0 / max(self.fs, 1e-9)
-            self.last_time_s = float(time_s)
-            self.last_timestamp_ms = timestamp_ms
-            if frame is not None:
-                self.last_frame = frame
-
             self.processed_count += 1
             self.times.append(float(time_s))
             self.raw_phase.append(float(self.angle_unwrapped[selected_idx]))
@@ -417,7 +438,10 @@ class A121LiveTraceProcessor:
                 self.heart_signal.append(float(heart_all[selected_idx]))
                 chest_phase = float(chest_all[selected_idx])
                 echo_amp = float(amp[selected_idx])
-            self.chest_mm.append(A121_CHEST_SIGN * PHASE_TO_MM * chest_phase)
+            chest_mm = A121_CHEST_SIGN * PHASE_TO_MM * chest_phase
+            if previous_idx is not None and selected_idx != previous_idx and self.chest_mm:
+                self.chest_offset_mm = self.chest_mm[-1] - chest_mm  # the new bins carry on from the last sample
+            self.chest_mm.append(chest_mm + self.chest_offset_mm)
             self.echo_db.append(20.0 * float(np.log10(max(echo_amp, 1e-9))))
 
         return self.result()
@@ -437,6 +461,8 @@ class A121LiveTraceProcessor:
             heart_signal=np.asarray(self.heart_signal, dtype=float),
             chest_mm=np.asarray(self.chest_mm, dtype=float),
             echo_db=np.asarray(self.echo_db, dtype=float),
+            gate_source=self.range_selector.source if self.range_selector is not None and self.range_selector.source == "breathing-score" else self.prior_source,
+            range_frozen=bool(self.range_selector is not None and self.range_selector.frozen),
         )
 
 
@@ -1482,12 +1508,9 @@ def _aligned_weighted_average(signals: np.ndarray, weights: np.ndarray, ref_col:
 def _breathing_motion_snr(complex_profile: np.ndarray, fs: float, bins: np.ndarray) -> float:
     """Return how far the raw IQ of ``bins`` changes in the breathing band above receiver noise.
 
-    For each bin, the mean power in the breathing band is divided by the median power above
-    MOTION_NOISE_BAND_MIN_HZ, where only noise is expected, and the largest ratio is returned.
-    A breathing chest moves its return far above the noise floor. A static scene or noise does
-    not. Raw IQ is used because the unwrapped phase of noise is a random walk with strong
-    low-frequency power, which looks like slow motion. The ratio does not depend on the IQ
-    amplitude scale. Returns inf when the frame rate is too low to measure the noise band.
+    The largest :func:`respi_net.a121_range.motion_snr` of the bins: a breathing chest moves its return far above
+    the noise floor, a static scene or noise does not.  Returns inf when the frame rate is too low to measure the
+    noise band.
     """
     z = np.asarray(complex_profile, dtype=np.complex128)
     if z.ndim != 2 or z.shape[0] < 16 or fs <= 0 or fs * 0.46 <= MOTION_NOISE_BAND_MIN_HZ:
@@ -1496,15 +1519,7 @@ def _breathing_motion_snr(complex_profile: np.ndarray, fs: float, bins: np.ndarr
     indices = indices[(0 <= indices) & (indices < z.shape[1])]
     if len(indices) == 0:
         return float("inf")
-    nperseg = min(z.shape[0], max(64, int(round(fs * 10.0))))
-    freqs, psd = welch(z[:, indices], fs=fs, nperseg=nperseg, return_onesided=False, axis=0)
-    abs_freqs = np.abs(freqs)
-    breathing = (abs_freqs >= A121_RESP_BAND_HZ[0]) & (abs_freqs <= A121_RESP_BAND_HZ[1])
-    noise = (abs_freqs >= MOTION_NOISE_BAND_MIN_HZ) & (abs_freqs <= fs * 0.46)
-    if not np.any(breathing) or not np.any(noise):
-        return float("inf")
-    floor = np.maximum(np.median(psd[noise], axis=0), np.finfo(float).tiny)
-    return float(np.max(np.mean(psd[breathing], axis=0) / floor))
+    return float(np.max(motion_snr(z[:, indices], fs, A121_RESP_BAND_HZ, MOTION_NOISE_BAND_MIN_HZ)))
 
 
 def _breathing_harmonic_reference(breathing: np.ndarray, resp_hz: float, fs: float) -> np.ndarray | None:

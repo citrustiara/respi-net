@@ -2912,7 +2912,7 @@ W~torze faz jedynym filtrem jest więc dolnoprzepustowy \SI{2}{Hz}, który
 tłumi szum, nie zmieniając kształtu oddechu. Krótkie nagranie traci powolny
 dryf przez odjęcie jednej prostej, która nie może zgiąć plateau. Do sieci
 trafiają trzy kanały: przemieszczenie klatki (fazy rozplecione w~bramkach
-wybranych przez Acconeer, rosnące przy wdechu), jego prędkość oraz siła echa
+klatki, podrozdz.~\ref{sec:sieci-bramki}, rosnące przy wdechu), jego prędkość oraz siła echa
 w~dB. Prędkość niesie kierunek ruchu i~jest prawie niewrażliwa na dryf.
 
 Rysunek~\ref{fig:fazy-filtracja}b pokazuje też cenę tej decyzji.
@@ -2936,6 +2936,100 @@ a~w~uczeniu dryf jest dodawany jako augmentacja.
     usuwa.}
     \label{fig:fazy-filtracja}
 \end{figure}
+
+\subsection{Wybór bramek klatki piersiowej}
+\label{sec:sieci-bramki}
+
+Aplikacja Acconeer, a~bez niej najsilniejsze echo, wybiera bramki najsilniej
+odbijającego obiektu. Na ciele nie musi to być klatka: zegarek, telefon czy
+klamra odbijają znacznie silniej niż skóra i~ubranie, a~ruszają się z~ręką
+i~tętnem bardziej niż z~oddechem. W~kontrolnym nagraniu \SI{90}{s} (siedząc,
+radar z~boku, około \SI{80}{cm}) najsilniejsze echo dał zegarek
+w~\SI{0.49}{m} (amplituda około 1000 wobec 160--250 na klatce
+w~\SIrange{0.64}{0.73}{m}) i~to jego bramki wybrał Acconeer. Oddech był tam
+tylko około trzy razy większy od szumu wysokoczęstotliwościowego, na klatce
+około dziesięć razy, przy tej samej częstości 12,7 na minutę.
+
+Każdą bramkę ocenia się więc po tym, jak oddycha
+(\texttt{respi\_net.a121\_range}). Na jej rozplecionej fazie, w~oknach
+\SI{20}{s} co \SI{5}{s}, liczy się \emph{wyrazistość}, czyli stosunek
+wartości skutecznej w~paśmie oddechu \SIrange{0.1}{0.7}{Hz} do wartości
+w~paśmie \SIrange{1.5}{4}{Hz}, gdzie z~klatki zostają już tylko szum
+odbiornika, harmoniczne tętna i~drobne ruchy, oraz \emph{regularność}, czyli
+udział dominującego rytmu w~mocy pasma \SIrange{0.1}{2.5}{Hz}. Okno liczy się
+tylko wtedy, gdy ten rytm przechodzi test szybkiego oddechu detektora
+(podrozdz.~\ref{sec:sieci-baseline}): dominuje, a~powyżej \SI{0.6}{Hz} ma co
+najmniej 20\% typowego oddechu (z~bramki, która najlepiej oddycha w~zwykłym
+tempie). Bicie serca, około \SI{1}{Hz} i~kilka procent oddechu, nie przechodzi
+więc ani w~pauzie, ani na nadgarstku. Wynikiem okna jest iloczyn wyrazistości
+i~regularności, a~wynikiem bramki mediana po oknach, w~których oddycha
+jakakolwiek bramka, więc pauzy i~układanie się nie obciążają żadnej. Bramki,
+których surowe IQ prawie nie zmienia się ponad szum odbiornika, pomija się, bo
+rozpleciona faza szumu błądzi losowo i~udaje powolny oddech. Sygnał tworzy
+najlepsza bramka z~sąsiadami, które mają co najmniej 70\% jej wyniku
+i~poruszają się zgodnie z~nią, ważone jak dotąd medianą echa.
+
+Offline całe nagranie ocenia się raz, a~dotychczasowy wybór zostaje, dopóki
+najlepsza grupa nie jest od niego wyraźnie lepsza: wynik dotychczasowego
+przebiegu jest mniejszy niż połowa wyniku grupy, a~oba oddychają w~tę samą
+stronę (korelacja w~paśmie oddechu nieujemna). Drugi warunek jest konieczny:
+w~dwóch nagraniach z~\SI{2}{m} najwyżej ocenione było odbicie oddychające
+w~przeciwfazie ($r=-0{,}85$), na którym wdech staje się wydechem
+(tab.~\ref{tab:fazy-bramki}). Na żywo (\texttt{A121LiveTraceProcessor}
+w~aplikacji) ostatnie \SI{30}{s} ocenia się co \SI{2}{s}, a~wyniki bramek
+uśrednia ze stałą czasową \SI{30}{s}. Bramka zmienia się dopiero wtedy, gdy
+nowa jest wyraźnie lepsza od bieżącej (ta sama reguła) przy każdej ocenie przez
+\SI{10}{s}; przebieg klatki pozostaje przy tym ciągły. Wybór jest zamrożony,
+gdy nic nie oddycha: bieżąca bramka przez ostatnie \SI{4}{s} porusza się
+o~mniej niż 20\% swojego zwykłego ruchu albo w~żadnej bramce rytm się nie
+liczy. W~pauzie zostają tylko bicie serca i~ruchy ręki, które nie mogą wtedy
+przejąć wyboru, a~po pauzie decyduje dopiero \SI{20}{s} nagrane po niej.
+
+Na 31~nagraniach własnych (19 z~komendami z~retestu \SI{2}{m} i~porównania
+zasięgu, 2 z~pasem, 7 z~telefonem i~3 długie z~bliska bez odniesienia;
+\texttt{tools/compare\_a121\_range\_selection.py}) offline zmieniła się bramka
+tylko w~nagraniu 12-minutowym z~radarem pod kątem
+(podrozdz.~\ref{sec:sieci-pilot-telefon}): z~\SIrange{0.39}{0.42}{m} na
+\SIrange{0.345}{0.375}{m}, a~zgodność detektorów na radarze i~telefonie wzrosła
+z~76 do 93\%. W~pozostałych 30 etykiety są identyczne co do bitu, więc zbiory
+uczące się nie zmieniły. W~nagraniu z~zegarkiem wybór przeszedł na
+\SIrange{0.68}{0.71}{m} (wynik 2,7 wobec 13,2). W~10-minutowym nagraniu
+z~pasem, siedząc bokiem w~odległości około \SI{80}{cm} przy swobodnym oddechu,
+nie ma silnego nieruchomego odbicia, a~bramki Acconeera
+(\SIrange{0.425}{0.455}{m}) oddychają dobrze (wynik 14,1 wobec 15,7 najlepszej
+grupy w~\SIrange{0.59}{0.62}{m}), więc wybór się nie zmienia: zgodność detektora
+z~pasem wynosi 88,5\%, a~korelacja z~pasem po filtrze \SIrange{0.05}{0.7}{Hz}
+0,89. Wariant, który zawsze bierze lepszą grupę, zmienia 24~nagrania
+i~poprawia średnio zgodność z~pasem, telefonem i~oznaczeniami ręcznymi, ale nie
+z~komendami, dlatego domyślnie zostaje próg połowy. Na żywo, w~odtworzonych
+29~nagraniach, bramka zmieniła się w~siedmiu (w~nagraniu z~zegarkiem \SI{30}{s}
+po starcie; w~nagraniu siedząc bokiem na \SI{0.38}{m}, a~pod koniec na
+\SI{0.62}{m}, gdzie pojedyncze bramki korelują z~pasem równie dobrze:
+zgodność 88,3 $\rightarrow$ 90,3\%, korelacja 0,88 $\rightarrow$ 0,87),
+a~zamrożenie trwało
+\SIrange{8}{14}{s} w~każdej \SI{15}{s} pauzie nagrań z~komendami i~niemal
+wyłącznie w~pauzach (1135 z~1136 ćwierćsekundowych próbek zamrożenia
+przypadło na pauzę lub do \SI{4}{s} po niej).
+
+\begin{table}[H]
+\centering
+\caption{Wybór bramek według oddechu na nagraniach własnych: nagrania ze
+zmienioną bramką i~zgodność detektora z~odniesieniem w~tych nagraniach
+(średnio przed $\rightarrow$ po; w~nawiasie liczba nagrań). Na żywo ocenia
+się przebieg z~\texttt{A121LiveTraceProcessor}.}
+\label{tab:fazy-bramki}
+\small
+\begin{tabular}{@{}p{5.4cm}rp{7.2cm}@{}}
+\toprule
+Wariant & zmiany & zgodność w~zmienionych nagraniach \\
+\midrule
+Offline: próg połowy, zgodny kierunek (domyślnie) & 1/31 & telefon 76 $\rightarrow$ 93\% (1) \\
+Offline: zawsze lepsza grupa, zgodny kierunek & 24/31 & komendy 92,7 $\rightarrow$ 92,9\% (17, najgorzej $-3{,}4$~pkt), telefon 70,1 $\rightarrow$ 76,1\% (5), oznaczenia ręczne 79,5 $\rightarrow$ 88,7\% (2), pas 88,5 $\rightarrow$ 92,0\% (1) \\
+Offline: zawsze najlepsza grupa & 26/31 & jw., lecz komendy 92,5 $\rightarrow$ 89,9\% (19), w~tym dwa nagrania w~przeciwfazie: 91,5 $\rightarrow$ 63,8\% i~89,8 $\rightarrow$ 64,8\% \\
+Na żywo: reguła domyślna, zamrożenie w~pauzach & 7/29 & telefon $+9$ do $+14$~pkt (3), oznaczenia ręczne $+14$ i~$+15$~pkt (2), pas $+2{,}0$~pkt (1), detektor czasu rzeczywistego wobec komend $+6{,}3$ i~$-1{,}7$~pkt (2) \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Zbiór danych i anotacja}
 \label{sec:sieci-anotacja}
@@ -3174,19 +3268,23 @@ osoba, jedno nagranie, jedna pozycja, oddech z~komendami, pauza tylko po wydechu
 po wdechu i~wydechu, nieregularny, ruch i~kaszel) nagrano leżąc, z~radarem
 z~boku pod kątem w~odległości \SI{45}{cm} i~telefonem po drugiej stronie ciała;
 strumienie były kompletne (telefon \SI{100}{Hz} bez strat, radar 99,8\% ramek).
-Radar pod kątem widzi ruch klatki osłabiony: w~spokojnym oddechu amplituda
-(percentyle 5--95) wynosi \SI{1.2}{mm}, w~szybkim \SI{0.9}{mm} (w~pilotażu
-\SI{5.8}{mm}), a~telefon \SI{15}{mg}--\SI{17}{mg}. Tylko 6 z~11 minut dało
-korelację prędkości z~telefonem co najmniej 0,5; w~tych minutach opóźnienie po
-korekcie zegara wynosi \SI{0.00}{s} z~rozrzutem \SI{0.10}{s} (przed korektą:
-od \SI{-0.04}{s} do \SI{-0.95}{s}, rys.~\ref{fig:fazy-telefon-12min}, trzeci
-wykres), czyli spełnia przyjęte kryterium stałości (rozrzut poniżej \SI{0.15}{s}).
-Zgodność detektorów na telefonie i~na radarze wynosi 96\% w~spokojnym oddechu,
-93\% w~wolnym, 78\% w~płytkim, 78\% w~pauzach, 50\% w~nieregularnym,
-35\% w~szybkim i~46\% w~ruchu (razem 76\%); jest niska tam, gdzie radar prawie nie
-widzi oddechu --- w~szybkim oddechu telefon pokazuje wyraźne oscylacje co około
-\SI{2}{s}, a~radar linię prostą. Pauz dłuższych niż \SI{4}{s} telefon znalazł 6,
-radar 13, wspólnych jest 6.
+Acconeer wybrał tu bramki \SIrange{0.39}{0.42}{m}, w~których ruch klatki
+był osłabiony (amplituda w~spokojnym oddechu \SI{1.2}{mm}, w~szybkim
+\SI{0.9}{mm}); ocena bramek według oddechu (podrozdz.~\ref{sec:sieci-bramki})
+wybiera \SIrange{0.345}{0.375}{m}, gdzie amplituda (percentyle 5--95) wynosi
+\SI{5.4}{mm} w~spokojnym i~\SI{2.8}{mm} w~szybkim oddechu (w~pilotażu
+\SI{5.8}{mm}), a~telefonu \SI{15}{mg}--\SI{17}{mg}. Wszystkie 11 minut dały
+korelację prędkości z~telefonem co najmniej 0,5 (w~bramkach Acconeera tylko 6);
+opóźnienie po korekcie zegara wynosi \SI{0.07}{s} z~rozrzutem \SI{0.09}{s}
+(przed korektą: od \SI{-0.02}{s} do \SI{-1.17}{s}, rys.~\ref{fig:fazy-telefon-12min},
+trzeci wykres), czyli spełnia przyjęte kryterium stałości (rozrzut poniżej
+\SI{0.15}{s}). Zgodność detektorów na telefonie i~na radarze wynosi 97\%
+w~spokojnym oddechu, 97\% w~wolnym, 98\% w~szybkim, 90\% w~płytkim, 89\%
+w~pauzach, 80\% w~nieregularnym i~89\% w~ruchu (razem 93\%). W~bramkach
+Acconeera było to razem 76\%, a~w~szybkim oddechu tylko 35\%: telefon
+pokazywał tam wyraźne oscylacje co około \SI{2}{s}, a~radar prawie linię
+prostą. Pauz dłuższych niż \SI{4}{s} telefon znalazł 6, radar 9, wspólnych
+jest 6.
 
 \begin{figure}[H]
     \centering
@@ -3201,7 +3299,7 @@ radar 13, wspólnych jest 6.
 
 \paragraph{Nagranie 3-minutowe z~prawdziwymi pauzami.} Nagranie \SI{3}{min} bez
 przewodnika, z~radarem skierowanym na klatkę (amplituda \SI{11.6}{mm} zamiast
-\SI{1.2}{mm}, echo \SI{62}{dB}), potwierdziło stałość opóźnienia: w~półminutowych
+\SI{5.4}{mm}, echo \SI{62}{dB}), potwierdziło stałość opóźnienia: w~półminutowych
 odcinkach wynosiło od \SI{-0.15}{s} do \SI{0.09}{s} (rozrzut \SI{0.08}{s}),
 a~bez korekty zegara radaru dochodziło do \SI{-0.29}{s}. Detektory na telefonie
 i~na radarze zgadzają się w~87\%; pauz dłuższych niż \SI{4}{s} telefon znalazł 4,
@@ -3226,7 +3324,7 @@ oba rodzaje pauz wyglądają tak samo, a~opadanie po głębokim wdechu wygląda 
 
 \paragraph{Wniosek z~nagrań.} Po korekcie zegara radaru telefon przy żebrach jest stabilnym odniesieniem
 czasowym dla radaru (opóźnienie około zera, niepewność $\pm$\SI{0.1}{s}--\SI{0.2}{s}, bez dryfu w~obrębie
-sesji, choć różne między sesjami), widzi oddech naturalny również tam, gdzie radar pod kątem prawie go nie widzi,
+sesji, choć różne między sesjami), widzi oddech naturalny również tam, gdzie radar w~źle wybranych bramkach prawie go nie widzi,
 i~spójnie oznacza zwykłe oddechy oraz bezruch. Nie jest natomiast zweryfikowanym odniesieniem wokół głębokich
 oddechów przed pauzą (podrozdz.~\ref{sec:sieci-oznaczanie-reczne}), a~zgodność detektora z~oznaczeniami
 ręcznymi (94,5--99,8\%), bliska powtarzalności samego oznaczającego (95--99\%), opisuje spójność oznaczeń jednego

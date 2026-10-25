@@ -1630,6 +1630,15 @@ class MainWindow(QtWidgets.QMainWindow):
             use_gating=analysis_target_m is not None,
             gate_half_width_m=gate_half_width,
         )
+        # The live trace moves to a range that breathes clearly better than Acconeer's (a121_range): the rates and the
+        # profile marker follow it.  a121_gate_center_m stays Acconeer's, so the move does not reset the trace.
+        if live_result is not None and live_result.gate_source == "breathing-score":
+            analysis_target_m = live_result.target_distance_m
+        range_text = ""
+        if live_result is not None:
+            why = {"breathing-score": "breathing score", "acconeer-target": "Acconeer target", "strongest-bin": "strongest echo"}
+            frozen = ", kept: no breathing now" if live_result.range_frozen else ""
+            range_text = f"Chest range: {live_result.target_distance_m:.3f} m ({why.get(live_result.gate_source, live_result.gate_source)}{frozen})\n"
 
         analysis_use_gating = analysis_target_m is not None
         should_analyze = (
@@ -1773,6 +1782,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"Frames: {storage_count}\n"
                 f"A121 reference state: {state_text}\n"
                 f"Selected target: {target_text}\n"
+                f"{range_text}"
                 f"Analyzer: HR window {heart_analysis_window_s:.0f} s, refresh every {self._a121_analysis_refresh_interval_s():.1f} s\n"
                 f"Rates: acquiring analysis window…"
             )
@@ -1802,6 +1812,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Target: {gate_mode} center {analysis.target_distance_m:.3f} m  range {analysis.gate_min_m:.2f}-{analysis.gate_max_m:.2f} m\n"
             f"Latest peak: {analysis.peak_distance_m:.3f} m  amp {analysis.peak_amplitude:.1f}\n"
             f"Range bins: {analysis.candidate_bins}  SQI: {analysis.signal_quality:.2f}\n"
+            f"{range_text}"
             f"{echo_text}"
             f"Respiration: {resp_text}  conf {analysis.resp_confidence:.1f}\n"
             f"Heart: {tracked_text}  candidate conf {analysis.heart_confidence:.1f}\n"

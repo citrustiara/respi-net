@@ -161,6 +161,7 @@ def a121_chest_signal(
     detrend_linear: bool = True,
     causal: bool = False,
     regular_time: bool = True,
+    range_selection: str = "breathing",
 ) -> ChestSignal:
     """Chest displacement in mm from an A121 Sparse IQ recording, rising on inhale.
 
@@ -168,6 +169,12 @@ def a121_chest_signal(
     bin's phase is unwrapped.  ``detrend_linear`` removes one straight line
     over the whole recording -- right for runs of a few minutes, not for a
     night, where drift is not a line.
+
+    ``range_selection="breathing"`` (default) scores every bin by how well it
+    breathes and replaces the recorded choice -- Acconeer's range, else its
+    target, else the strongest echo -- when that choice breathes clearly worse
+    (:func:`respi_net.a121_range.choose_chest_range`); ``"acconeer"`` keeps the
+    recorded choice as it is.
     """
 
     df = pd.read_csv(source) if not isinstance(source, pd.DataFrame) else source
@@ -192,6 +199,14 @@ def a121_chest_signal(
     amplitude = np.abs(profile)
     median_amplitude = np.median(amplitude, axis=0)
     gate, gate_source = _a121_gate(df, distances, median_amplitude)
+    range_meta: dict[str, Any] = {}
+    if range_selection == "breathing":
+        from .a121_range import choose_chest_range  # imported here: a121_range builds on this module
+
+        choice = choose_chest_range(profile, fs, distances, median_amplitude, gate, gate_source)
+        gate, gate_source, range_meta = choice.gate, choice.source, choice.meta
+    elif range_selection != "acconeer":
+        raise ValueError(f"Unknown range selection {range_selection!r}; use breathing or acconeer.")
     weights = np.maximum(median_amplitude[gate], 0.0)
     weights = weights / (float(np.sum(weights)) + 1e-12)
 
@@ -217,6 +232,7 @@ def a121_chest_signal(
             "frames": int(len(df)),
             "low_pass_hz": float(low_pass_hz),
             "causal": bool(causal),
+            **range_meta,
         },
     )
 

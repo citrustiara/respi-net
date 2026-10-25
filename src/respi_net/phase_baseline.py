@@ -28,7 +28,7 @@ it too.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -248,6 +248,39 @@ RATE_DOMINANCE = 0.4  # share of the 0.1-2.5 Hz power in the peak +-0.1 Hz: a rh
 RATE_MIN_DEPTH = 0.2  # size of the window's rhythm (5th-95th percentile) over the recording's median
 
 
+class WindowRhythm(NamedTuple):
+    peak_hz: np.ndarray  # dominant frequency in 0.1-2.5 Hz
+    share: np.ndarray  # its share of that band's power (peak +-0.1 Hz)
+    size: np.ndarray  # 5th-95th percentile of the window's component within 0.1 Hz of the peak
+    freqs: np.ndarray
+    power: np.ndarray  # tapered power spectrum of the detrended window, frequencies along axis 0
+
+
+def window_rhythm(part: np.ndarray, fs: float) -> WindowRhythm:
+    """The dominant rhythm of one window, for each column of ``part`` (time along axis 0) after its straight-line
+    trend is taken off.  :func:`local_rate_hz` and the A121 range scoring (:mod:`respi_net.a121_range`) both judge
+    breathing by it.  A column with no power has share 0."""
+
+    part = np.asarray(part, dtype=float)
+    width = len(part)
+    x = np.arange(width)
+    slope, intercept = np.polyfit(x, part, 1)
+    part = part - (np.multiply.outer(x, slope) + intercept)
+    freqs = np.fft.rfftfreq(width, 1.0 / fs)
+    band = (freqs >= 0.1) & (freqs <= min(2.5, 0.45 * fs))
+    taper = np.hanning(width).reshape((width,) + (1,) * (part.ndim - 1))
+    spectrum = np.fft.rfft(part, axis=0)
+    power = np.abs(np.fft.rfft(part * taper, axis=0)) ** 2
+    total = power[band].sum(axis=0)
+    peak = freqs[band][np.argmax(power[band], axis=0)]
+    near = band.reshape(power.shape[:1] + (1,) * (part.ndim - 1)) & (np.abs(np.subtract.outer(freqs, peak)) <= 0.1)
+    share = np.where(total > 0, np.where(near, power, 0.0).sum(axis=0) / np.where(total > 0, total, 1.0), 0.0)
+    # Size of the rhythm itself: the window's component within 0.1 Hz of the peak.
+    rhythm = np.fft.irfft(np.where(near, spectrum, 0.0), width, axis=0)
+    size = np.subtract(*np.percentile(rhythm, [95, 5], axis=0))
+    return WindowRhythm(peak, share, size, freqs, power)
+
+
 def local_rate_hz(chest: np.ndarray, fs: float, window_s: float = RATE_WINDOW_S, step_s: float = 2.0) -> np.ndarray:
     """Dominant breathing frequency around each sample, 0 where no single rhythm dominates (holds, noise, irregular)
     or where that rhythm is much smaller than the recording's breathing (the heartbeat in a hold)."""
@@ -257,24 +290,13 @@ def local_rate_hz(chest: np.ndarray, fs: float, window_s: float = RATE_WINDOW_S,
     rate = np.zeros(n)
     if n < width or width < 8:
         return rate
-    freqs = np.fft.rfftfreq(width, 1.0 / fs)
-    band = (freqs >= 0.1) & (freqs <= min(2.5, 0.45 * fs))
-    taper = np.hanning(width)
     starts = list(range(0, n - width + 1, step))
     found: list[tuple[int, float, float]] = []
     for start in starts:
-        part = chest[start : start + width]
-        part = part - np.polyval(np.polyfit(np.arange(width), part, 1), np.arange(width))
-        power = np.abs(np.fft.rfft(part * taper)) ** 2
-        total = float(power[band].sum())
-        if total <= 0:
+        rhythm = window_rhythm(chest[start : start + width], fs)
+        if not rhythm.share > 0:
             continue
-        peak = float(freqs[band][np.argmax(power[band])])
-        near = band & (np.abs(freqs - peak) <= 0.1)
-        share = float(power[near].sum()) / total
-        # Size of the rhythm itself: the window's component within 0.1 Hz of the peak.
-        rhythm = np.fft.irfft(np.where(near, np.fft.rfft(part), 0.0), width)
-        found.append((start, peak if share >= RATE_DOMINANCE else 0.0, float(np.subtract(*np.percentile(rhythm, [95, 5])))))
+        found.append((start, float(rhythm.peak_hz) if rhythm.share >= RATE_DOMINANCE else 0.0, float(rhythm.size)))
     typical = float(np.median([spread for _, _, spread in found])) if found else 0.0
     for start, peak, spread in found:
         centre = slice(start + (width - step) // 2, start + (width + step) // 2)
