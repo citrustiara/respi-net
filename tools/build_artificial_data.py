@@ -18,7 +18,11 @@ Two datasets in the nn_dataset format, ready for
   recording as in ``dataset_szymanski_belt_v1.npz``), their augmented copies
   and the synthetic runs (training only);
 * ``dataset_finetune_v1.npz``: the own A121 coach runs (real, split as in
-  ``dataset_coach_v1.npz``) and their augmented copies (training only).
+  ``dataset_coach_v1.npz``), the A121 runs labelled from the strain belt
+  (``tools/build_a121_belt_runs.py``, always training) and the augmented
+  copies of both (training only).  The belt-labelled runs' copies come from
+  their own random stream, so adding a recording leaves every other copy and
+  synthetic run unchanged.
 
 With ``--enhanced``, ``enhanced_v2/`` holds addition-only v2 datasets and
 ``*_v1_plus_v2.npz`` unions with content deduplication. Existing originals
@@ -53,6 +57,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.signal import butter, sosfiltfilt
 
 from respi_net.artificial_runs import augment_run, enhanced_augment_run, noise_bank_from_holds, reduced_power_run, synthetic_run
 from respi_net.breath_phases import (
@@ -71,6 +76,7 @@ from respi_net.nn_dataset import LabelledRun, assign_splits, export_dataset, loa
 from respi_net.szymanski_dataset import recordings, to_labelled_run
 
 OUT = ROOT / "data" / "processed" / "breath_phases"
+BELT_SESSIONS = OUT / "a121_belt" / "runs"
 FIGURE = ROOT / "docs" / "thesis" / "figures" / "fazy_dane_sztuczne.png"
 TEXT = {
     "pl": {
@@ -144,6 +150,44 @@ def enhanced_copies(runs: list[LabelledRun], splits: dict[str, str], bank, seed:
             for drop in (0, 6, 12):
                 copies.append(reduced_power_run(run, drop, np.random.default_rng(seed + 100 + index)))
     return [replace(run, run_id=run.run_id + "__enhanced_v2") for run in copies]
+
+
+def without_slow_drift(run: LabelledRun, cutoff_hz: float = 0.05) -> LabelledRun:
+    """``run`` with its chest drift below ``cutoff_hz`` removed, as the source of stretched copies.
+
+    A recording with slow body movement (the sitting belt run drifts ~2 cm) has a
+    5-95th percentile spread of the drift, not of the breaths, so breath_size()
+    -- and with it the copies' noise and drift -- would come out several times
+    too large.  The copies get their own drift instead.
+    """
+
+    sos = butter(2, cutoff_hz, "highpass", fs=run.fs, output="sos")
+    chest = sosfiltfilt(sos, run.features[0]).astype(np.float32)
+    features = np.vstack([chest, np.gradient(chest) * run.fs, run.features[2]]).astype(np.float32)
+    return replace(run, features=features, meta={**run.meta, "copy_source": f"drift below {cutoff_hz:g} Hz removed"})
+
+
+def belt_session_copies(runs: list[LabelledRun], bank, seed: int, enhanced: bool) -> list[LabelledRun]:
+    """Copies of the radar + belt training runs, from their own random stream so the other sets stay as they were.
+
+    Stretched copies start from :func:`without_slow_drift`; v2's reduced-power
+    replays keep the real movement.
+    """
+
+    rng = np.random.default_rng(seed)
+    low, high = np.log(NOISE_RATIO)
+    copies = []
+    for index, run in enumerate(runs):
+        base = without_slow_drift(run)
+        if not enhanced:
+            copies += [augment_run(base, stretch, float(np.exp(rng.uniform(low, high))), bank, rng) for stretch in STRETCH]
+            continue
+        for stretch, drift in zip(STRETCH, (.05, .1, .2, .3, .45, .6)):
+            ratio = float(np.exp(rng.uniform(low, high)))
+            copies.append(enhanced_augment_run(base, stretch, ratio, bank, rng, drift_per_min=drift))
+        copies += [reduced_power_run(run, drop, np.random.default_rng(seed + 100 + 10 * index + k)) for k, drop in enumerate((0, 6, 12))]
+    return [replace(copy, run_id=copy.run_id + "__enhanced_v2") for copy in copies] if enhanced else copies
+
 
 
 def merge_window_datasets(base_path: Path, addition_path: Path, output_path: Path) -> dict:
@@ -259,6 +303,9 @@ def main() -> int:
     coach_splits = reference_splits(OUT / "dataset_coach_v1.npz", coach)
     belt_splits = reference_splits(OUT / "dataset_szymanski_belt_v1.npz", belt)
     bank = training_noise_bank(coach, coach_splits)
+    # Radar + belt recordings (tools/build_a121_belt_runs.py): training runs, outside the coach split and noise bank.
+    belt_sessions = list(runs_in(BELT_SESSIONS))
+    session_splits = {run.run_id: "train" for run in belt_sessions}
 
     coach_aug = augment(coach, coach_splits, bank, rng)
     belt_aug = augment(belt, belt_splits, bank, rng)
@@ -270,22 +317,23 @@ def main() -> int:
     if args.enhanced:
         coach_aug = enhanced_copies(coach, coach_splits, bank, args.seed + 20261006)
         belt_aug = enhanced_copies(belt, belt_splits, bank, args.seed + 20261007)
+    session_aug = belt_session_copies(belt_sessions, bank, args.seed + 20261025, args.enhanced)
     destination = args.output_dir or (OUT / "enhanced_v2" if args.enhanced else OUT)
     version = "v2" if args.enhanced else "v1"
 
-    train_only = {run.run_id: "train" for run in [*coach_aug, *belt_aug, *synthetic]}
+    train_only = {run.run_id: "train" for run in [*coach_aug, *belt_aug, *session_aug, *synthetic]}
     sets = {
         f"dataset_pretrain_{version}.npz": ([*belt, *belt_aug, *synthetic], {**belt_splits, **train_only},
                                     "Belt (Szymanski et al., corrected labels) + augmented copies + synthetic A121; local use only"),
-        f"dataset_finetune_{version}.npz": ([*coach, *coach_aug], {**coach_splits, **train_only},
-                                    "Own A121 coach runs + augmented copies of the training runs"),
+        f"dataset_finetune_{version}.npz": ([*coach, *coach_aug, *belt_sessions, *session_aug], {**coach_splits, **session_splits, **train_only},
+                                    "Own A121 coach runs + A121 runs with belt labels (training) + augmented copies of the training runs"),
     }
     if args.enhanced:
         # V2 is an addition, not a second complete dataset. Real originals,
         # old augmentation and synthetic runs already exist in v1.
         sets = {
             "dataset_pretrain_v2.npz": (belt_aug, train_only, "Additional v2 belt augmentations only; local use only"),
-            "dataset_finetune_v2.npz": (coach_aug, train_only, "Additional v2 own A121 augmentations only"),
+            "dataset_finetune_v2.npz": ([*coach_aug, *session_aug], train_only, "Additional v2 own A121 augmentations only"),
         }
     summary: dict[str, object] = {
         "version": version,
@@ -301,6 +349,8 @@ def main() -> int:
             "own_a121_coach": {"people": 1, **minutes(coach), "train": minutes([r for r in coach if coach_splits[r.run_id] == "train"])["labelled"]},
             "szymanski_belt": {"people": 3, **minutes(belt), "train": minutes([r for r in belt if belt_splits[r.run_id] == "train"])["labelled"]},
             "augmented_own_a121": {"copies_per_run": 9 if args.enhanced else len(STRETCH), "runs": len(coach_aug), **minutes(coach_aug)},
+            "own_a121_belt_labels": {"people": 1, "runs": len(belt_sessions), **minutes(belt_sessions), "train": minutes(belt_sessions)["labelled"]},
+            "augmented_own_a121_belt_labels": {"copies_per_run": 9 if args.enhanced else len(STRETCH), "runs": len(session_aug), **minutes(session_aug)},
             "augmented_belt": {"copies_per_run": len(STRETCH), "runs": len(belt_aug), **minutes(belt_aug)},
             "synthetic_a121": {"runs": 0 if args.enhanced else count, **minutes([] if args.enhanced else synthetic)},
         },
@@ -327,7 +377,7 @@ def main() -> int:
         for path in (destination / "copies").glob("*.npz"):
             if not path.stem.endswith("__enhanced_v2"):
                 path.unlink()
-        for run in [*coach_aug, *belt_aug]:
+        for run in [*coach_aug, *belt_aug, *session_aug]:
             save_run(run, destination / "copies" / f"{run.run_id}.npz")
     if args.own_examples_dir:
         real = next(run for run in coach if coach_splits[run.run_id] == "train")

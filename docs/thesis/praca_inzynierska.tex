@@ -3805,7 +3805,9 @@ zbiory uczący, walidacyjny i~testowy. W~danych sterowanych nie ma pauz po
 wdechu ani fragmentów szumu.
 
 Tabela~\ref{tab:fazy-dane} zestawia oznaczone dane. Rzeczywistych jest
-\SI{114}{min}, w~tym tylko \SI{21.4}{min} z~radaru (nagrania IMU bez radaru
+\SI{124}{min}, w~tym tylko \SI{31.4}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
+i~\SI{10}{min} swobodnego oddechu na siedząco, z~radarem z~boku, oznaczonego
+z~pasa tensometrycznego (nagrania IMU bez radaru
 dodają \SI{6.6}{min}: to tylko sześć nagrań po \SI{90}{s} z~kompletnym
 strumieniem, oznaczonych tą samą metodą względem komend, a~wcześniejsze 20~plików
 IMU, łącznie około \SI{15}{min}, nie ma komend i~nie jest oznaczone), dlatego nagrania części
@@ -3813,7 +3815,11 @@ uczącej uzupełniono danymi sztucznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}
 Powstały dwa zbiory, okna co \SI{10}{s}: do wstępnego uczenia --- pas
 z~kopiami i~dane syntetyczne (3661~okien uczących, 72~walidacyjne i~58~testowych,
 wszystkie walidacyjne i~testowe z~rzeczywistego pasa) --- oraz do dostrajania:
-nagrania A121 z~kopiami (351, 12 i~12~okien). Dane sztuczne zwiększają
+nagrania A121 z~kopiami (745, 12 i~12~okien; nagranie z~pasem i~jego kopie
+są wyłącznie w~części uczącej). Kopie tego nagrania powstają z~sygnału bez
+powolnego dryfu ciała poniżej \SI{0.05}{Hz}: przy dryfie około \SI{2}{cm}
+rozrzut percentyli 5--95 wynosi \SI{19.6}{mm} zamiast \SI{4.2}{mm} wielkości
+oddechu, więc szum i~dryf kopii byłyby kilkakrotnie za duże. Dane sztuczne zwiększają
 różnorodność tempa i~szumu, ale nie liczbę osób, pozycji ciała ani nawyków
 oddechowych --- tych przybywa tylko z~nowymi nagraniami.
 
@@ -3830,12 +3836,14 @@ nagrania z~radarem i~telefonem.}
 Źródło & Osoby & Razem & Wdech & Wydech & Pauza & Szum \\
 \midrule
 A121, nagrania sterowane & 1 & 21,4 & 6,9 & 10,1 & 4,4 & 0,0 \\
+A121 z~pasem, siedząc, z~boku & 1 & 10,0 & 4,2 & 5,6 & 0,2 & 0,0 \\
 Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 29,9 & 2,5 \\
 Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 17,2 & 3,2 \\
 LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,9 & 0,0 \\
 iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,4 & 0,0 \\
 \midrule
 Kopie nagrań A121 & -- & 90,1 & 29,3 & 42,1 & 18,7 & 0,0 \\
+Kopie nagrania A121 z~pasem & -- & 61,3 & 25,8 & 34,2 & 1,2 & 0,0 \\
 Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 164,6 & 13,9 \\
 Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 41,0 & 2,3 \\
 \bottomrule
