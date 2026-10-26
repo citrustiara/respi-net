@@ -131,7 +131,7 @@ Common controls:
 
 A121-specific controls:
 
-- `A121 target selection` - uses Acconeer's breathing reference state machine/presence-distance selector by default; the live chest trace starts there and moves to a range that breathes clearly better (its breathing score at least twice the current one's at every 2 s update for 10 s, same breathing direction; frozen during holds), shown as `Chest range: ... (breathing score)`. The phase-network chest view of a recording opened from history scores the whole file once instead (`respi_net.a121_range`); the classic rate view keeps the recorded Acconeer range.
+- `A121 target selection` - uses Acconeer's breathing reference state machine/presence-distance selector by default; the live chest trace starts there and moves to a range that breathes clearly better (its breathing score at least twice the current one's at every 2 s update for 10 s, same breathing direction -- or, moving against the current range, right way up by the shape of the breath while the current one is not, judged over a minute or more of breathing; frozen during holds), shown as `Chest range: ... (breathing score)`. The phase-network chest view of a recording opened from history scores the whole file once instead (`respi_net.a121_range`); the classic rate view keeps the recorded Acconeer range.
 - `A121 gate display` - overlays the currently selected compact range segment on the amplitude plot
 - `A121 breath phases` - automatically shades detected inhale/exhale phases on A121 respiration plots and saves a `*_breath_annotations.csv` sidecar for CSV recordings
 - `Offline/fallback gate` - compact segment width used only when no recorded/live Acconeer selected range is available

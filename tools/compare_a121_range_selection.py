@@ -18,6 +18,15 @@ the recording has, each at its own best delay within +-1.5 s (the sensors and th
 and the correlation of the chest trace with the belt or phone trace.  Recordings with no reference (long
 close-range runs, the 90 s watch check) are listed with their gates and scores only.
 
+Which way up each trace is: ``cue_r`` is the cue template's correlation with the chest velocity at its best delay,
+signed (negative: the chest falls on inhale), ``belt_r`` the signed correlation with the belt in 0.05-0.7 Hz at the
+delay of the largest magnitude; the phone's axis is turned to the radar, so it cannot tell.  The polarity the
+selection reads from the breath shape (:func:`respi_net.a121_range.polarity`, +1 right way up, -1 upside down,
+0 unsure) is listed for the old gate and the best group with its rise share and the share of windows under one
+half.  ``--polarity-margin inf`` gives the rule before the polarity (a group moving against the old gate never
+replaces it), ``--flip`` turns a chosen trace over when its polarity says upside down, ``--ignore-direction`` switches
+on the score alone.
+
     uv run python tools/compare_a121_range_selection.py
     uv run python tools/compare_a121_range_selection.py --extra path/to/a121.csv --csv out.csv --score-unchanged
 """
@@ -38,6 +47,7 @@ if str(SRC) not in sys.path:
 
 import numpy as np
 import pandas as pd
+from scipy.signal import butter, sosfiltfilt
 
 from respi_net import a121_range
 from respi_net.breath_phases import IGNORE, from_export_codes, merge_holds
@@ -121,6 +131,23 @@ def best_lag_accuracy(reference: np.ndarray, predicted: np.ndarray) -> tuple[flo
     return best
 
 
+def signed_band_correlation(a: np.ndarray, b: np.ndarray) -> float:
+    """Correlation of the two traces in 0.05-0.7 Hz at the delay (within +-``MAX_LAG_S``) of the largest magnitude,
+    with its sign: negative when one is upside down against the other."""
+
+    sos = butter(2, (0.05, 0.7), "bandpass", fs=GRID_HZ, output="sos")
+    fa, fb = sosfiltfilt(sos, a), sosfiltfilt(sos, b)
+    reach = int(round(MAX_LAG_S * GRID_HZ))
+    best = 0.0
+    for shift in range(-reach, reach + 1):
+        x = fa[max(0, shift) : len(fa) + min(0, shift)]
+        y = fb[max(0, -shift) : len(fb) + min(0, -shift)]
+        if np.std(x) > 0 and np.std(y) > 0:
+            value = float(np.corrcoef(x, y)[0, 1])
+            best = value if abs(value) > abs(best) else best
+    return best
+
+
 def best_lag_correlation(a: np.ndarray, b: np.ndarray) -> float:
     """Largest |correlation| of the two velocities within +-``MAX_LAG_S``."""
 
@@ -136,15 +163,16 @@ def best_lag_correlation(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def cue_reference(grid: np.ndarray, trace: np.ndarray, cues: list[dict[str, Any]]) -> tuple[np.ndarray, float]:
-    """Cue labels at the delay that matches them to ``trace``, and the template correlation there."""
+    """Cue labels at the delay that matches them to ``trace``, and the template correlation there, signed (negative
+    when ``trace`` falls on inhale)."""
 
     phases = cue_phases(cues)
-    lag, match, _ = estimate_lag(grid, np.gradient(trace) * GRID_HZ, phases, np.arange(-1.5, 1.5001, 0.025))
+    lag, match, sign = estimate_lag(grid, np.gradient(trace) * GRID_HZ, phases, np.arange(-1.5, 1.5001, 0.025))
     labels = np.full(len(grid), IGNORE, dtype=np.int8)
     for phase in phases:
         if phase.label != IGNORE:
             labels[(grid >= phase.start_s + lag) & (grid < phase.end_s + lag)] = phase.label
-    return merge_holds(labels), match
+    return merge_holds(labels), sign * match
 
 
 def references(recording: Recording, grid: np.ndarray) -> list[tuple[str, np.ndarray | None, np.ndarray | None]]:
@@ -210,8 +238,16 @@ def compare(recording: Recording, score_unchanged: bool = False) -> dict[str, An
         "old_score": meta.get("old_gate_score", float("nan")),
         "best_score": meta.get("best_group_score", float("nan")),
         "best_gate": "-".join(f"{value:.3f}" for value in meta.get("best_group_m", [])),
+        "in_phase": meta.get("best_group_in_phase"),
+        "old_pol": meta.get("old_gate_polarity"),
+        "old_rise": meta.get("old_gate_rise_share"),
+        "old_below": meta.get("old_gate_rise_below"),
+        "best_pol": meta.get("best_group_polarity"),
+        "best_rise": meta.get("best_group_rise_share"),
+        "best_below": meta.get("best_group_rise_below"),
+        "flipped": "turned over" in str(meta.get("range_note", "")),
     }
-    changed = (old.meta["gate_start_m"], old.meta["gate_end_m"]) != (meta["gate_start_m"], meta["gate_end_m"])
+    changed = (old.meta["gate_start_m"], old.meta["gate_end_m"]) != (meta["gate_start_m"], meta["gate_end_m"]) or row["flipped"]
     old_labels = merge_holds(detect_phases(old.chest, old.fs))
     new_labels = merge_holds(detect_phases(new.chest, new.fs))
     row["changed"] = changed
@@ -227,12 +263,14 @@ def compare(recording: Recording, score_unchanged: bool = False) -> dict[str, An
     if recording.cues:
         old_cues, old_match = cue_reference(grid, old_trace, recording.cues)
         new_cues, new_match = cue_reference(grid, new_trace, recording.cues)
-        row |= {"cue_match_old": round(old_match, 3), "cue_match_new": round(new_match, 3)}
+        row |= {"cue_r_old": round(old_match, 3), "cue_r_new": round(new_match, 3)}
         row |= {"cue_acc_old": round(best_lag_accuracy(old_cues, old_on)[0], 3), "cue_acc_new": round(best_lag_accuracy(new_cues, new_on)[0], 3)}
     for name, labels, trace in refs:
         key = name.replace(" ", "_")
         if trace is not None:
             row |= {f"{key}_corr_old": round(best_lag_correlation(old_trace, trace), 3), f"{key}_corr_new": round(best_lag_correlation(new_trace, trace), 3)}
+            if name == "belt":
+                row |= {"belt_r_old": round(signed_band_correlation(old_trace, trace), 3), "belt_r_new": round(signed_band_correlation(new_trace, trace), 3)}
         if labels is not None or name == "phone":
             if name == "phone":
                 labels_old = merge_holds(detect_phases(_oriented(trace, old_trace), GRID_HZ, **PHONE_DETECTOR))
@@ -250,7 +288,19 @@ def main() -> int:
     parser.add_argument("--score-unchanged", action="store_true", help="score the references where the gate did not move too")
     parser.add_argument("--keep-old-fraction", type=float, help=f"try another KEEP_OLD_FRACTION (default {a121_range.KEEP_OLD_FRACTION})")
     parser.add_argument("--group-half-width", type=int, help=f"try another GROUP_HALF_WIDTH (default {a121_range.GROUP_HALF_WIDTH})")
+    parser.add_argument("--polarity-margin", type=float, help=f"try another POLARITY_MARGIN (default {a121_range.POLARITY_MARGIN}; inf: no polarity)")
+    parser.add_argument("--polarity-agreement", type=float, help=f"try another POLARITY_AGREEMENT (default {a121_range.POLARITY_AGREEMENT})")
+    parser.add_argument("--flip", action="store_true", help="turn a chosen trace over when its polarity says upside down")
+    parser.add_argument("--ignore-direction", action="store_true", help="switch on the score alone, whichever way the group moves")
+    parser.add_argument("--only", action="append", default=[], help="only recordings whose name contains this (repeatable)")
     args = parser.parse_args()
+    if args.polarity_margin is not None:
+        a121_range.POLARITY_MARGIN = args.polarity_margin
+    if args.polarity_agreement is not None:
+        a121_range.POLARITY_AGREEMENT = args.polarity_agreement
+    a121_range.POLARITY_FLIP = bool(args.flip)
+    if args.ignore_direction:
+        a121_range.clearly_better = lambda new, old, *_: old < a121_range.KEEP_OLD_FRACTION * new
     if args.keep_old_fraction is not None:
         a121_range.KEEP_OLD_FRACTION = args.keep_old_fraction
     if args.group_half_width is not None:
@@ -258,10 +308,12 @@ def main() -> int:
 
     rows = []
     for recording in recordings(args.extra):
+        if args.only and not any(part in recording.name for part in args.only):
+            continue
         rows.append(compare(recording, args.score_unchanged))
         print(f"{recording.kind:12s} {recording.name:28s} {rows[-1]['source']:15s} {rows[-1]['old_gate']} -> {rows[-1]['new_gate']}", flush=True)
     table = pd.DataFrame(rows)
-    with pd.option_context("display.width", 250, "display.max_columns", 40):
+    with pd.option_context("display.width", 320, "display.max_columns", 60):
         print()
         print(table.drop(columns=["labels_identical"]).to_string(index=False))
     unchanged = table[~table["changed"]]

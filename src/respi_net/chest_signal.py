@@ -172,7 +172,8 @@ def a121_chest_signal(
 
     ``range_selection="breathing"`` (default) scores every bin by how well it
     breathes and replaces the recorded choice -- Acconeer's range, else its
-    target, else the strongest echo -- when that choice breathes clearly worse
+    target, else the strongest echo -- when that choice breathes clearly worse,
+    or upside down by the shape of the breath
     (:func:`respi_net.a121_range.choose_chest_range`); ``"acconeer"`` keeps the
     recorded choice as it is.
     """
@@ -200,11 +201,12 @@ def a121_chest_signal(
     median_amplitude = np.median(amplitude, axis=0)
     gate, gate_source = _a121_gate(df, distances, median_amplitude)
     range_meta: dict[str, Any] = {}
+    range_sign = 1.0
     if range_selection == "breathing":
         from .a121_range import choose_chest_range  # imported here: a121_range builds on this module
 
         choice = choose_chest_range(profile, fs, distances, median_amplitude, gate, gate_source)
-        gate, gate_source, range_meta = choice.gate, choice.source, choice.meta
+        gate, gate_source, range_meta, range_sign = choice.gate, choice.source, choice.meta, choice.sign
     elif range_selection != "acconeer":
         raise ValueError(f"Unknown range selection {range_selection!r}; use breathing or acconeer.")
     weights = np.maximum(median_amplitude[gate], 0.0)
@@ -212,7 +214,7 @@ def a121_chest_signal(
 
     phase = np.unwrap(np.angle(profile[:, gate]), axis=0)
     phase = detrend(phase, axis=0, type="linear") if detrend_linear else phase - phase[:1]
-    raw = A121_CHEST_SIGN * (phase @ weights) * PHASE_TO_MM
+    raw = A121_CHEST_SIGN * range_sign * (phase @ weights) * PHASE_TO_MM
     chest = light_filter(raw, fs, low_pass_hz, causal=causal)
     echo = amplitude[:, gate] @ weights
     echo_db = 20.0 * np.log10(np.maximum(echo, 1e-9))

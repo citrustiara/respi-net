@@ -168,16 +168,18 @@ def without_slow_drift(run: LabelledRun, cutoff_hz: float = 0.05) -> LabelledRun
 
 
 def belt_session_copies(runs: list[LabelledRun], bank, seed: int, enhanced: bool) -> list[LabelledRun]:
-    """Copies of the radar + belt training runs, from their own random stream so the other sets stay as they were.
+    """Copies of the radar + belt training runs, from their own random streams so the other sets stay as they were.
 
-    Stretched copies start from :func:`without_slow_drift`; v2's reduced-power
-    replays keep the real movement.
+    Each run's stream is seeded from its id, so a new recording leaves the
+    copies of the others unchanged.  Stretched copies start from
+    :func:`without_slow_drift`; v2's reduced-power replays keep the real movement.
     """
 
-    rng = np.random.default_rng(seed)
     low, high = np.log(NOISE_RATIO)
     copies = []
-    for index, run in enumerate(runs):
+    for run in runs:
+        run_seed = seed + int.from_bytes(hashlib.sha256(run.run_id.encode()).digest()[:4], "little")
+        rng = np.random.default_rng(run_seed)
         base = without_slow_drift(run)
         if not enhanced:
             copies += [augment_run(base, stretch, float(np.exp(rng.uniform(low, high))), bank, rng) for stretch in STRETCH]
@@ -185,9 +187,8 @@ def belt_session_copies(runs: list[LabelledRun], bank, seed: int, enhanced: bool
         for stretch, drift in zip(STRETCH, (.05, .1, .2, .3, .45, .6)):
             ratio = float(np.exp(rng.uniform(low, high)))
             copies.append(enhanced_augment_run(base, stretch, ratio, bank, rng, drift_per_min=drift))
-        copies += [reduced_power_run(run, drop, np.random.default_rng(seed + 100 + 10 * index + k)) for k, drop in enumerate((0, 6, 12))]
+        copies += [reduced_power_run(run, drop, np.random.default_rng(run_seed + 100 + k)) for k, drop in enumerate((0, 6, 12))]
     return [replace(copy, run_id=copy.run_id + "__enhanced_v2") for copy in copies] if enhanced else copies
-
 
 
 def merge_window_datasets(base_path: Path, addition_path: Path, output_path: Path) -> dict:

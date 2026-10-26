@@ -54,7 +54,9 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
 - Wybór bramek A121 według oddechu (podrozdz. „Wybór bramek klatki piersiowej”):
   `src/respi_net/a121_range.py`; porównanie ze starym wyborem na wszystkich nagraniach
   z odniesieniem: `tools/compare_a121_range_selection.py` (`--keep-old-fraction 1.0` daje
-  wariant „zawsze lepsza grupa”); nagranie 12-minutowe i jego rysunek:
+  wariant „zawsze lepsza grupa”, `--polarity-margin inf` regułę sprzed biegunowości,
+  `--ignore-direction` wybór bez warunku kierunku, `--flip` odwracanie przebiegu); przebieg
+  na żywo odtworzony z nagrań: `tools/replay_a121_live_range_selection.py`; nagranie 12-minutowe i jego rysunek:
   `tools/analyze_a121_iphone_run.py --session self_lying_sideangle_d45_01 --thesis-figure`.
   Sekcja „Historia: co nie działało” odtworzona z historii repozytorium —
   commity `7924d95`, `9d2130a` („vital signals fix”) i `bf82a08`.

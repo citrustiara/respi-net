@@ -2970,43 +2970,95 @@ najlepsza bramka z~sąsiadami, które mają co najmniej 70\% jej wyniku
 i~poruszają się zgodnie z~nią, ważone jak dotąd medianą echa.
 
 Offline całe nagranie ocenia się raz, a~dotychczasowy wybór zostaje, dopóki
-najlepsza grupa nie jest od niego wyraźnie lepsza: wynik dotychczasowego
-przebiegu jest mniejszy niż połowa wyniku grupy, a~oba oddychają w~tę samą
-stronę (korelacja w~paśmie oddechu nieujemna). Drugi warunek jest konieczny:
-w~dwóch nagraniach z~\SI{2}{m} najwyżej ocenione było odbicie oddychające
+najlepsza grupa nie jest od niego wyraźnie lepsza. Gdy oba przebiegi
+oddychają w~tę samą stronę (korelacja w~paśmie oddechu nieujemna), wynik
+dotychczasowego musi być mniejszy niż połowa wyniku grupy. Gdy poruszają się
+w~przeciwfazie, jeden z~nich jest odwrócony, a~wynik nie mówi który:
+w~trzech nagraniach z~\SI{2}{m} najwyżej ocenione było odbicie
 w~przeciwfazie ($r=-0{,}85$), na którym wdech staje się wydechem
-(tab.~\ref{tab:fazy-bramki}). Na żywo (\texttt{A121LiveTraceProcessor}
+(tab.~\ref{tab:fazy-bramki}). Rozstrzyga wtedy \emph{biegunowość}, odczytana
+z~samego kształtu oddechu, bez innego czujnika: wdech jest czynny i~krótszy
+od biernego, wygasającego wydechu, więc przebieg rosnący na wdechu rośnie
+przez mniej niż połowę czasu. W~każdym oknie oceny liczy się udział próbek,
+w~których przebieg rośnie, wśród próbek, w~których jego prędkość (pasmo
+\SIrange{0.05}{0.9}{Hz}) przekracza 20\% swojej wartości skutecznej, więc
+pauzy i~punkty zwrotne się nie liczą. Przebieg jest \emph{prosto}, gdy
+mediana tego udziału po oknach, w~których oddycha (co najmniej sześciu, czyli
+\SI{45}{s}), leży co najmniej 0,03 poniżej 0,5, a~poniżej 0,5 wypada co
+najmniej 75\% tych okien, a~\emph{odwrócony} przy nierównościach
+przeciwnych; w~pozostałych przypadkach biegunowość jest niepewna. Grupa
+w~przeciwfazie zastępuje dotychczasowy wybór tylko wtedy, gdy jest prosto,
+a~dotychczasowy wybór nie; grupa odwrócona nie zastępuje go nigdy,
+a~niepewność zostawia dotychczasowy wybór, jak dawny warunek kierunku. Na
+26~nagraniach z~komendami lub pasem biegunowość nie pomyliła się ani razu:
+dotychczasowy wybór był prosto w~15 z~25 nagrań, w~których rzeczywiście był
+prosto (w~pozostałych niepewny), a~najlepsza grupa była odwrócona dokładnie
+w~trzech nagraniach z~odbiciem z~\SI{2}{m}. Na 878 pojedynczych bramkach
+z~wyraźnym odniesieniem ($|r| \ge 0{,}4$) rozstrzygnęła 547 i~pomyliła się
+raz, na bramce z~wynikiem poniżej połowy najlepszego. Wskazówki geometryczne
+zawiodły: odwrócone odbicia z~\SI{2}{m} leżały
+\SIrange{9}{13}{cm} \emph{przed} klatką, a~najsilniejsze echo bywa
+odwrócone (niżej). Przebiegu odwróconego się nie odwraca: w~żadnym nagraniu
+wybrany przebieg nie wyszedł odwrócony, a~w~nagraniu, które naprawia
+biegunowość, bramki Acconeera mają ją niepewną --- widać ją dopiero na
+wyraźnie oddychającej grupie.
+
+Na żywo (\texttt{A121LiveTraceProcessor}
 w~aplikacji) ostatnie \SI{30}{s} ocenia się co \SI{2}{s}, a~wyniki bramek
 uśrednia ze stałą czasową \SI{30}{s}. Bramka zmienia się dopiero wtedy, gdy
 nowa jest wyraźnie lepsza od bieżącej (ta sama reguła) przy każdej ocenie przez
-\SI{10}{s}; przebieg klatki pozostaje przy tym ciągły. Wybór jest zamrożony,
-gdy nic nie oddycha: bieżąca bramka przez ostatnie \SI{4}{s} porusza się
-o~mniej niż 20\% swojego zwykłego ruchu albo w~żadnej bramce rytm się nie
-liczy. W~pauzie zostają tylko bicie serca i~ruchy ręki, które nie mogą wtedy
-przejąć wyboru, a~po pauzie decyduje dopiero \SI{20}{s} nagrane po niej.
+\SI{10}{s}; przebieg klatki pozostaje przy tym ciągły. Biegunowość każdej
+bramki uśrednia się po ocenach, w~których oddycha (stała czasowa
+\SI{120}{s}), i~rozstrzyga dopiero po \SI{60}{s} oddechu. Wybór jest
+zamrożony, gdy nic nie oddycha: bieżąca bramka przez ostatnie \SI{4}{s}
+porusza się o~mniej niż 20\% swojego zwykłego ruchu albo w~żadnej bramce rytm
+się nie liczy. W~pauzie zostają tylko bicie serca i~ruchy ręki, które nie mogą
+wtedy przejąć wyboru ani zmienić biegunowości, a~po pauzie decyduje dopiero
+\SI{20}{s} nagrane po niej.
 
-Na 31~nagraniach własnych (19 z~komendami z~retestu \SI{2}{m} i~porównania
-zasięgu, 2 z~pasem, 7 z~telefonem i~3 długie z~bliska bez odniesienia;
+Na 33~nagraniach własnych (19 z~komendami z~retestu \SI{2}{m} i~porównania
+zasięgu, 4 z~pasem, 7 z~telefonem i~3 długie z~bliska bez odniesienia;
 \texttt{tools/compare\_a121\_range\_selection.py}) offline zmieniła się bramka
-tylko w~nagraniu 12-minutowym z~radarem pod kątem
-(podrozdz.~\ref{sec:sieci-pilot-telefon}): z~\SIrange{0.39}{0.42}{m} na
-\SIrange{0.345}{0.375}{m}, a~zgodność detektorów na radarze i~telefonie wzrosła
-z~76 do 93\%. W~pozostałych 30 etykiety są identyczne co do bitu, więc zbiory
-uczące się nie zmieniły. W~nagraniu z~zegarkiem wybór przeszedł na
+w~trzech. W~nagraniu 12-minutowym z~radarem pod kątem
+(podrozdz.~\ref{sec:sieci-pilot-telefon}) z~\SIrange{0.39}{0.42}{m} na
+\SIrange{0.345}{0.375}{m}, a~zgodność detektorów na radarze i~telefonie
+wzrosła z~76 do 93\%. W~5-minutowym nagraniu z~pasem (siedząc,
+około \SI{50}{cm}, z~przewijaniem telefonu) z~\SIrange{0.545}{0.576}{m} na
+\SIrange{0.455}{0.485}{m}: zgodność z~pasem 89,0 $\rightarrow$ 96,0\%.
+Trzecie to nagranie, dla którego wprowadzono biegunowość: \SI{3}{min}
+z~pasem, siedząc bardzo bokiem w~odległości około \SI{50}{cm}. Bramki
+Acconeera (\SIrange{0.395}{0.425}{m}, najsilniejsze echo) poruszały się
+odwrotnie niż pas (korelacja w~paśmie \SIrange{0.05}{0.7}{Hz} $-0{,}48$),
+a~bramki \SIrange{0.23}{0.34}{m} zgodnie z~nim ($+0{,}96$ do $+0{,}98$).
+Najlepsza grupa (\SIrange{0.29}{0.32}{m}, wynik 19,5 wobec 2,5) była
+w~przeciwfazie, więc dawna reguła zostawiała przebieg odwrócony. Grupa jest
+prosto (udział wzrostu 0,42, wszystkie okna poniżej 0,5), bramki Acconeera
+niepewne (0,52), więc wybór przechodzi na grupę: korelacja z~pasem
+$+0{,}98$, zgodność detektora z~pasem 67,2 $\rightarrow$ 94,0\%.
+W~pozostałych 30 etykiety są identyczne co do bitu, więc zbiory uczące się
+nie zmieniły. W~nagraniu z~zegarkiem wybór przeszedł na
 \SIrange{0.68}{0.71}{m} (wynik 2,7 wobec 13,2). W~10-minutowym nagraniu
 z~pasem, siedząc bokiem w~odległości około \SI{80}{cm} przy swobodnym oddechu,
 nie ma silnego nieruchomego odbicia, a~bramki Acconeera
 (\SIrange{0.425}{0.455}{m}) oddychają dobrze (wynik 14,1 wobec 15,7 najlepszej
 grupy w~\SIrange{0.59}{0.62}{m}), więc wybór się nie zmienia: zgodność detektora
 z~pasem wynosi 88,5\%, a~korelacja z~pasem po filtrze \SIrange{0.05}{0.7}{Hz}
-0,89. Wariant, który zawsze bierze lepszą grupę, zmienia 24~nagrania
+0,89. Wariant, który zawsze bierze lepszą grupę, zmienia 26~nagrań
 i~poprawia średnio zgodność z~pasem, telefonem i~oznaczeniami ręcznymi, ale nie
-z~komendami, dlatego domyślnie zostaje próg połowy. Na żywo, w~odtworzonych
-29~nagraniach, bramka zmieniła się w~siedmiu (w~nagraniu z~zegarkiem \SI{30}{s}
-po starcie; w~nagraniu siedząc bokiem na \SI{0.38}{m}, a~pod koniec na
-\SI{0.62}{m}, gdzie pojedyncze bramki korelują z~pasem równie dobrze:
-zgodność 88,3 $\rightarrow$ 90,3\%, korelacja 0,88 $\rightarrow$ 0,87),
-a~zamrożenie trwało
+z~komendami, dlatego domyślnie zostaje próg połowy; biegunowość chroni w~nim
+nagrania z~\SI{2}{m} tak samo jak dawny warunek kierunku. Na żywo
+(\texttt{tools/replay\_a121\_live\_range\_selection.py}: 33~nagrania
+odtworzone ramka po ramce z~celem Acconeera) bramka odeszła od wyboru Acconeera
+w~11, a~biegunowość zmieniła w~nich jedną decyzję (w~30-minutowym nagraniu
+nocnym przejście na bramkę prosto). W~nagraniu z~boku z~\SI{50}{cm} bramka
+przeszła na \SI{0.305}{m} po \SI{30}{s} także bez biegunowości, bo w~tym
+pierwszym oknie obie bramki poruszały się zgodnie; gdy strumień zaczyna się
+\SIrange{10}{80}{s} później, dawna reguła zostaje na odwróconej bramce do końca
+(korelacja z~pasem od $-0{,}82$ do $-0{,}89$), a~z~biegunowością przechodzi na
+\SIrange{0.26}{0.305}{m} po \SIrange{86}{94}{s}. W~nagraniu 10-minutowym
+bramka przeszła na \SI{0.38}{m}, a~pod koniec na \SI{0.62}{m}, gdzie
+pojedyncze bramki korelują z~pasem równie dobrze (zgodność 88,6
+$\rightarrow$ 89,9\%, korelacja 0,88 $\rightarrow$ 0,87). Zamrożenie trwało
 \SIrange{8}{14}{s} w~każdej \SI{15}{s} pauzie nagrań z~komendami i~niemal
 wyłącznie w~pauzach (1135 z~1136 ćwierćsekundowych próbek zamrożenia
 przypadło na pauzę lub do \SI{4}{s} po niej).
@@ -3023,10 +3075,11 @@ się przebieg z~\texttt{A121LiveTraceProcessor}.}
 \toprule
 Wariant & zmiany & zgodność w~zmienionych nagraniach \\
 \midrule
-Offline: próg połowy, zgodny kierunek (domyślnie) & 1/31 & telefon 76 $\rightarrow$ 93\% (1) \\
-Offline: zawsze lepsza grupa, zgodny kierunek & 24/31 & komendy 92,7 $\rightarrow$ 92,9\% (17, najgorzej $-3{,}4$~pkt), telefon 70,1 $\rightarrow$ 76,1\% (5), oznaczenia ręczne 79,5 $\rightarrow$ 88,7\% (2), pas 88,5 $\rightarrow$ 92,0\% (1) \\
-Offline: zawsze najlepsza grupa & 26/31 & jw., lecz komendy 92,5 $\rightarrow$ 89,9\% (19), w~tym dwa nagrania w~przeciwfazie: 91,5 $\rightarrow$ 63,8\% i~89,8 $\rightarrow$ 64,8\% \\
-Na żywo: reguła domyślna, zamrożenie w~pauzach & 7/29 & telefon $+9$ do $+14$~pkt (3), oznaczenia ręczne $+14$ i~$+15$~pkt (2), pas $+2{,}0$~pkt (1), detektor czasu rzeczywistego wobec komend $+6{,}3$ i~$-1{,}7$~pkt (2) \\
+Offline: próg połowy, warunek kierunku (poprzednio) & 2/33 & telefon 76 $\rightarrow$ 93\% (1), pas 89,0 $\rightarrow$ 96,0\% (1); nagranie z~boku z~\SI{50}{cm} zostaje odwrócone (pas 67,2\%) \\
+Offline: próg połowy, biegunowość (domyślnie) & 3/33 & jw. oraz pas 67,2 $\rightarrow$ 94,0\% (1, korelacja $-0{,}48 \rightarrow +0{,}98$) \\
+Offline: zawsze lepsza grupa, biegunowość & 26/33 & komendy 92,7 $\rightarrow$ 92,9\% (17, najgorzej $-3{,}4$~pkt), telefon 70,1 $\rightarrow$ 76,1\% (5), oznaczenia ręczne 79,5 $\rightarrow$ 88,7\% (2), pas 81,6 $\rightarrow$ 94,0\% (3) \\
+Offline: zawsze lepsza grupa, bez kierunku i~biegunowości & 28/33 & jw., lecz komendy 92,5 $\rightarrow$ 89,9\% (19), w~tym dwa nagrania w~przeciwfazie: 91,5 $\rightarrow$ 63,8\% i~89,8 $\rightarrow$ 64,8\% \\
+Na żywo: reguła domyślna, zamrożenie w~pauzach & 11/33 & pas $+1{,}3$ do $+21{,}9$~pkt (3), telefon $+1{,}9$ do $+11{,}7$~pkt (3), oznaczenia ręczne $+2{,}1$ i~$+13{,}7$~pkt (2), komendy $-0{,}1$ i~$-1{,}5$~pkt (2) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -3805,9 +3858,11 @@ zbiory uczący, walidacyjny i~testowy. W~danych sterowanych nie ma pauz po
 wdechu ani fragmentów szumu.
 
 Tabela~\ref{tab:fazy-dane} zestawia oznaczone dane. Rzeczywistych jest
-\SI{124}{min}, w~tym tylko \SI{31.4}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
-i~\SI{10}{min} swobodnego oddechu na siedząco, z~radarem z~boku, oznaczonego
-z~pasa tensometrycznego (nagrania IMU bez radaru
+\SI{132}{min}, w~tym tylko \SI{39.3}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
+i~\SI{17.9}{min} swobodnego oddechu na siedząco, oznaczonego z~pasa
+tensometrycznego --- \SI{10}{min} z~radarem z~boku z~\SI{80}{cm},
+\SI{3}{min} z~boku z~\SI{50}{cm} i~\SI{5}{min} z~\SI{50}{cm} podczas
+przewijania telefonu (nagrania IMU bez radaru
 dodają \SI{6.6}{min}: to tylko sześć nagrań po \SI{90}{s} z~kompletnym
 strumieniem, oznaczonych tą samą metodą względem komend, a~wcześniejsze 20~plików
 IMU, łącznie około \SI{15}{min}, nie ma komend i~nie jest oznaczone), dlatego nagrania części
@@ -3815,11 +3870,11 @@ uczącej uzupełniono danymi sztucznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}
 Powstały dwa zbiory, okna co \SI{10}{s}: do wstępnego uczenia --- pas
 z~kopiami i~dane syntetyczne (3661~okien uczących, 72~walidacyjne i~58~testowych,
 wszystkie walidacyjne i~testowe z~rzeczywistego pasa) --- oraz do dostrajania:
-nagrania A121 z~kopiami (745, 12 i~12~okien; nagranie z~pasem i~jego kopie
-są wyłącznie w~części uczącej). Kopie tego nagrania powstają z~sygnału bez
-powolnego dryfu ciała poniżej \SI{0.05}{Hz}: przy dryfie około \SI{2}{cm}
-rozrzut percentyli 5--95 wynosi \SI{19.6}{mm} zamiast \SI{4.2}{mm} wielkości
-oddechu, więc szum i~dryf kopii byłyby kilkakrotnie za duże. Dane sztuczne zwiększają
+nagrania A121 z~kopiami (1015, 12 i~12~okien; nagrania z~pasem i~ich kopie
+są wyłącznie w~części uczącej). Kopie nagrań z~pasem powstają z~sygnału bez
+powolnego dryfu ciała poniżej \SI{0.05}{Hz}: w~nagraniu z~\SI{80}{cm}, przy
+dryfie około \SI{2}{cm}, rozrzut percentyli 5--95 wynosi \SI{19.6}{mm} zamiast
+\SI{4.2}{mm} wielkości oddechu, więc szum i~dryf kopii byłyby kilkakrotnie za duże. Dane sztuczne zwiększają
 różnorodność tempa i~szumu, ale nie liczbę osób, pozycji ciała ani nawyków
 oddechowych --- tych przybywa tylko z~nowymi nagraniami.
 
@@ -3836,14 +3891,14 @@ nagrania z~radarem i~telefonem.}
 Źródło & Osoby & Razem & Wdech & Wydech & Pauza & Szum \\
 \midrule
 A121, nagrania sterowane & 1 & 21,4 & 6,9 & 10,1 & 4,4 & 0,0 \\
-A121 z~pasem, siedząc, z~boku & 1 & 10,0 & 4,2 & 5,6 & 0,2 & 0,0 \\
+A121 z~pasem, siedząc & 1 & 17,9 & 7,8 & 9,9 & 0,2 & 0,0 \\
 Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 29,9 & 2,5 \\
 Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 17,2 & 3,2 \\
 LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,9 & 0,0 \\
 iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,4 & 0,0 \\
 \midrule
 Kopie nagrań A121 & -- & 90,1 & 29,3 & 42,1 & 18,7 & 0,0 \\
-Kopie nagrania A121 z~pasem & -- & 61,3 & 25,8 & 34,2 & 1,2 & 0,0 \\
+Kopie nagrań A121 z~pasem & -- & 109,9 & 47,7 & 61,0 & 1,2 & 0,0 \\
 Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 164,6 & 13,9 \\
 Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 41,0 & 2,3 \\
 \bottomrule
