@@ -3858,22 +3858,22 @@ zbiory uczący, walidacyjny i~testowy. W~danych sterowanych nie ma pauz po
 wdechu ani fragmentów szumu.
 
 Tabela~\ref{tab:fazy-dane} zestawia oznaczone dane. Rzeczywistych jest
-\SI{132}{min}, w~tym tylko \SI{39.3}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
-i~\SI{17.9}{min} swobodnego oddechu na siedząco, oznaczonego z~pasa
+\SI{136}{min}, w~tym tylko \SI{43.2}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
+i~\SI{21.8}{min} swobodnego oddechu na siedząco, oznaczonego z~pasa
 tensometrycznego --- \SI{10}{min} z~radarem z~boku z~\SI{80}{cm},
-\SI{3}{min} z~boku z~\SI{50}{cm} i~\SI{5}{min} z~\SI{50}{cm} podczas
-przewijania telefonu (nagrania IMU bez radaru
+\SI{3}{min} z~boku z~\SI{50}{cm}, \SI{5}{min} z~\SI{50}{cm} podczas
+przewijania telefonu i~\SI{4}{min} z~\SI{140}{cm} z~inną soczewką (nagrania IMU bez radaru
 dodają \SI{6.6}{min}: to tylko sześć nagrań po \SI{90}{s} z~kompletnym
 strumieniem, oznaczonych tą samą metodą względem komend, a~wcześniejsze 20~plików
 IMU, łącznie około \SI{15}{min}, nie ma komend i~nie jest oznaczone), dlatego nagrania części
 uczącej uzupełniono danymi sztucznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}).
 Powstały dwa zbiory, okna co \SI{10}{s}: do wstępnego uczenia --- pas
 z~kopiami, przebiegi pasa z~własnych nagrań z~radarem (te same
-\SI{18}{min} oddechu co w~nagraniach A121, z~tymi samymi etykietami, tylko
-w~części uczącej) z~kopiami i~dane syntetyczne (4319~okien uczących,
+\SI{22}{min} oddechu co w~nagraniach A121, z~tymi samymi etykietami, tylko
+w~części uczącej) z~kopiami i~dane syntetyczne (4453~okien uczących,
 72~walidacyjne i~58~testowych, wszystkie walidacyjne i~testowe z~rzeczywistego
 pasa) --- oraz do dostrajania:
-nagrania A121 z~kopiami (1015, 12 i~12~okien; nagrania z~pasem i~ich kopie
+nagrania A121 z~kopiami (1149, 12 i~12~okien; nagrania z~pasem i~ich kopie
 są wyłącznie w~części uczącej). Kopie nagrań z~pasem powstają z~sygnału bez
 powolnego dryfu ciała poniżej \SI{0.05}{Hz}: w~nagraniu z~\SI{80}{cm}, przy
 dryfie około \SI{2}{cm}, rozrzut percentyli 5--95 wynosi \SI{19.6}{mm} zamiast
@@ -3894,16 +3894,16 @@ nagrania z~radarem i~telefonem.}
 Źródło & Osoby & Razem & Wdech & Wydech & Pauza & Szum \\
 \midrule
 A121, nagrania sterowane & 1 & 21,4 & 6,9 & 10,1 & 4,4 & 0,0 \\
-A121 z~pasem, siedząc & 1 & 17,9 & 7,8 & 9,9 & 0,2 & 0,0 \\
-Własny pas, te same nagrania & 1 & 18,0 & 7,8 & 10,0 & 0,2 & 0,0 \\
+A121 z~pasem, siedząc & 1 & 21,8 & 9,4 & 12,1 & 0,4 & 0,0 \\
+Własny pas, te same nagrania & 1 & 22,0 & 9,4 & 12,2 & 0,4 & 0,0 \\
 Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 29,9 & 2,5 \\
 Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 17,2 & 3,2 \\
 LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,9 & 0,0 \\
 iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,4 & 0,0 \\
 \midrule
 Kopie nagrań A121 & -- & 90,1 & 29,3 & 42,1 & 18,7 & 0,0 \\
-Kopie nagrań A121 z~pasem & -- & 109,9 & 47,7 & 61,0 & 1,2 & 0,0 \\
-Kopie przebiegów własnego pasa & -- & 110,8 & 48,0 & 61,5 & 1,2 & 0,0 \\
+Kopie nagrań A121 z~pasem & -- & 134,3 & 57,5 & 74,4 & 2,4 & 0,0 \\
+Kopie przebiegów własnego pasa & -- & 135,5 & 57,9 & 75,2 & 2,4 & 0,0 \\
 Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 164,6 & 13,9 \\
 Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 41,0 & 2,3 \\
 \bottomrule
