@@ -18,7 +18,12 @@ folders given:
 Each run goes to ``data/processed/breath_phases/a121_belt/runs/<run>.npz``
 (nn_dataset format, subject S01), where ``tools/build_artificial_data.py``
 takes it into the fine-tuning sets as a training run with its copies.
-``check.png`` beside it shows the radar with the belt labels.
+``plots/<run>.png`` shows the radar with the belt labels.
+
+The belt trace itself, with the same labels, goes to ``belt_runs/<run>__belt.npz``
+in the form of the supervisor's belt recordings
+(:func:`respi_net.szymanski_dataset.to_labelled_run`): 20 Hz, rising on inhale,
+unit spread, zero echo channel.  The builder takes it into the pre-training sets.
 
     uv run python tools/build_a121_belt_runs.py
 """
@@ -44,7 +49,7 @@ import pandas as pd
 from scipy.signal import butter, sosfiltfilt
 
 from respi_net.breath_phases import CLASS_COLOURS, CLASS_NAMES, IGNORE, label_runs, merge_holds
-from respi_net.chest_signal import a121_chest_signal, strain_belt_chest_signal
+from respi_net.chest_signal import ChestSignal, a121_chest_signal, light_filter, strain_belt_chest_signal
 from respi_net.nn_dataset import labelled_run, save_run
 from respi_net.phase_baseline import detect_phases
 
@@ -54,6 +59,7 @@ BELT_MIN_HOLD_S = 2.0  # as tools/label_strain_belt_runs.py
 MIN_DEPTH_TO_NOISE = 50.0  # worn belt ~500, belt on the desk ~13
 WARMUP_S = 3.0  # the radar settles after its session starts
 MAX_LAG_S = 2.0
+BELT_RUN_FS = 20.0  # the grid of every run in the datasets
 
 
 def recording_dirs(paths: list[Path]) -> list[Path]:
@@ -79,6 +85,22 @@ def belt_to_radar_lag_s(time_s: np.ndarray, belt: np.ndarray, radar: np.ndarray,
         if abs(corr) > abs(best[1]):
             best = (lag / fs, corr)
     return best
+
+
+def belt_trace_run(folder: Path, belt: ChestSignal, belt_labels: np.ndarray):
+    """The belt trace as a run like the supervisor's belt recordings, labelled with ``belt_labels``."""
+
+    time_s = np.arange(belt.time_s[0], belt.time_s[-1], 1.0 / BELT_RUN_FS)
+    values = np.interp(time_s, belt.time_s, belt.chest)
+    values = light_filter(values - np.median(values), BELT_RUN_FS, 2.0)
+    spread = float(np.percentile(values, 95) - np.percentile(values, 5)) or 1.0
+    nearest = np.clip(np.searchsorted(belt.time_s, time_s), 0, len(belt.time_s) - 1)
+    signal = ChestSignal("strain_belt", time_s - time_s[0], BELT_RUN_FS, values / spread, "spread", values,
+                         np.zeros(len(time_s)), {"echo_available": False})
+    name = f"{run_id(folder)}__belt"
+    meta = {"dataset": "a121_belt", "sensor": "strain_belt", "recording": str(folder.relative_to(ROOT)) if folder.is_relative_to(ROOT) else str(folder),
+            "label_origin": f"strain belt, offline detect_phases (min hold {BELT_MIN_HOLD_S:g} s), holds merged"}
+    return labelled_run(name, signal, belt_labels[nearest], group=name, meta=meta)
 
 
 def plot_run(path: Path, time_s: np.ndarray, chest: np.ndarray, labels: np.ndarray, title: str) -> None:
@@ -122,9 +144,11 @@ def build_run(folder: Path, out: Path) -> dict[str, object]:
     }
     run = labelled_run(run_id(folder), radar, labels, group=run_id(folder), meta=meta)
     save_run(run, out / "runs" / f"{run.run_id}.npz")
+    belt_run = belt_trace_run(folder, belt, belt_labels)
+    save_run(belt_run, out / "belt_runs" / f"{belt_run.run_id}.npz")
     plot_run(out / "plots" / f"{run.run_id}.png", radar.time_s, radar.chest, labels,
              f"{run.run_id}  ·  belt->radar lag {lag_s:+.2f} s, r {corr:+.2f}  ·  radar rising in inhale {rises.get('inhale', 0):.0%}, exhale {rises.get('exhale', 0):.0%}")
-    row.update({"status": "labelled", "minutes": round(run.labelled_s / 60.0, 1), **{k: v for k, v in meta.items() if k.startswith(("belt_", "radar_"))}})
+    row.update({"status": "labelled", "minutes": round(run.labelled_s / 60.0, 1), "belt_minutes": round(belt_run.labelled_s / 60.0, 1), **{k: v for k, v in meta.items() if k.startswith(("belt_", "radar_"))}})
     return row
 
 

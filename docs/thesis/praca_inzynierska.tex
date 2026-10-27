@@ -3868,8 +3868,11 @@ strumieniem, oznaczonych tą samą metodą względem komend, a~wcześniejsze 20~
 IMU, łącznie około \SI{15}{min}, nie ma komend i~nie jest oznaczone), dlatego nagrania części
 uczącej uzupełniono danymi sztucznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}).
 Powstały dwa zbiory, okna co \SI{10}{s}: do wstępnego uczenia --- pas
-z~kopiami i~dane syntetyczne (3661~okien uczących, 72~walidacyjne i~58~testowych,
-wszystkie walidacyjne i~testowe z~rzeczywistego pasa) --- oraz do dostrajania:
+z~kopiami, przebiegi pasa z~własnych nagrań z~radarem (te same
+\SI{18}{min} oddechu co w~nagraniach A121, z~tymi samymi etykietami, tylko
+w~części uczącej) z~kopiami i~dane syntetyczne (4319~okien uczących,
+72~walidacyjne i~58~testowych, wszystkie walidacyjne i~testowe z~rzeczywistego
+pasa) --- oraz do dostrajania:
 nagrania A121 z~kopiami (1015, 12 i~12~okien; nagrania z~pasem i~ich kopie
 są wyłącznie w~części uczącej). Kopie nagrań z~pasem powstają z~sygnału bez
 powolnego dryfu ciała poniżej \SI{0.05}{Hz}: w~nagraniu z~\SI{80}{cm}, przy
@@ -3892,6 +3895,7 @@ nagrania z~radarem i~telefonem.}
 \midrule
 A121, nagrania sterowane & 1 & 21,4 & 6,9 & 10,1 & 4,4 & 0,0 \\
 A121 z~pasem, siedząc & 1 & 17,9 & 7,8 & 9,9 & 0,2 & 0,0 \\
+Własny pas, te same nagrania & 1 & 18,0 & 7,8 & 10,0 & 0,2 & 0,0 \\
 Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 29,9 & 2,5 \\
 Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 17,2 & 3,2 \\
 LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,9 & 0,0 \\
@@ -3899,6 +3903,7 @@ iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,4 & 0,0 \\
 \midrule
 Kopie nagrań A121 & -- & 90,1 & 29,3 & 42,1 & 18,7 & 0,0 \\
 Kopie nagrań A121 z~pasem & -- & 109,9 & 47,7 & 61,0 & 1,2 & 0,0 \\
+Kopie przebiegów własnego pasa & -- & 110,8 & 48,0 & 61,5 & 1,2 & 0,0 \\
 Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 164,6 & 13,9 \\
 Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 41,0 & 2,3 \\
 \bottomrule
