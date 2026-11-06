@@ -236,6 +236,25 @@ def test_output_names_follow_run_number_and_pattern_id(tmp_path: Path) -> None:
     }
     odd = tool.Trial(12, pattern_from_dict({"blocks": [{"kind": "normal", "duration_seconds": 5}]}, pattern_id="my pattern/1"))
     assert tool.output_paths(tmp_path, odd)["cues"] == tmp_path / "run_12_my_pattern_1_cues.csv"
+    with_heart = tool.output_paths(tmp_path, trial, ("belt",), heart_strap=True)
+    assert [path.name for path in with_heart.values()] == [
+        "run_02_nn_holds_a121.csv",
+        "run_02_nn_holds_belt.csv",
+        "run_02_nn_holds_hr.csv",
+        "run_02_nn_holds_cues.csv",
+    ]
+
+
+def test_heart_strap_option_reaches_the_plan_and_the_manifest(tmp_path) -> None:
+    settings = tool.SessionSettings(session_dir=tmp_path / "s", references=("belt",), heart_strap=True)
+    trials = tool.build_trials(["nn_holds"])
+    plan = "\n".join(tool.plan_lines(trials, settings))
+    assert "A121 + pas + pas tętna" in plan and "run_XX_<wzorzec>_hr.csv" in plan
+    manifest = tool.new_manifest(trials, settings)
+    assert manifest["heart_strap"]["device"] == tool.HEART_STRAP_DEFAULT_NAME
+    summary = {"a121": {}, "heart_strap": {"battery_percent": 20, "window": {"notifications": 60, "rr_beats": 75,
+               "median_heart_rate_bpm": 76.0, "coverage_percent": 99.0, "largest_gap_s": 1.1}}}
+    assert "Pas tętna: 60 powiadomień, 75 uderzeń z RR" in tool.format_summary(summary)
 
 
 def test_a121_range_follows_the_distance_or_the_overrides() -> None:

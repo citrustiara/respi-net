@@ -19,6 +19,7 @@ Every accepted trial leaves these files beside the session's ``manifest.json``::
     run_XX_<pattern-id>_a121.csv    A121 Sparse IQ frames (A121_CAPTURE_COLUMNS)
     run_XX_<pattern-id>_iphone.csv  iPhone IMU samples (IMU_COLUMNS), with --reference iphone/both
     run_XX_<pattern-id>_belt.csv    strain-belt samples (STRAIN_BELT_COLUMNS), with --reference belt/both
+    run_XX_<pattern-id>_hr.csv      heart rate and RR intervals of a BLE heart-rate strap (HEART_STRAP_COLUMNS), with --heart-strap
     run_XX_<pattern-id>_cues.csv    one row per pattern phase, with host wall times
 
 A trial is rejected automatically when the iPhone stream is incomplete (the
@@ -39,6 +40,11 @@ Print the plan without touching hardware or opening the window::
 Radar + strain belt (no phone), e.g. the hold protocol at 80 cm::
 
     uv run python tools/a121_iphone_guided_recording.py --reference belt --patterns nn_holds --distance-cm 80
+
+With the Suunto heart-rate strap as well (heart rate and RR intervals, a reference for the radar's heart estimate;
+gaps in it are reported, they do not reject a trial)::
+
+    uv run python tools/a121_iphone_guided_recording.py --reference belt --heart-strap --patterns nn_holds --distance-cm 80
 
 Choose patterns (ids or paths) and resume an interrupted session::
 
@@ -99,6 +105,7 @@ from respi_net.imu_guided_protocol import (
 )
 from respi_net.iphone_imu import IPHONE_IMU_DEVICE_NAME, IPhoneIMUBluetoothCapture
 from respi_net.strain_belt import STRAIN_BELT_COLUMNS, STRAIN_BELT_DEVICE_NAME, StrainBeltCapture
+from respi_net.heart_strap import HEART_STRAP_COLUMNS, HeartStrapCapture, heart_strap_summary
 
 # The iPhone completeness gate is the one of the LSM6DS3 + iPhone study, reused
 # as is so both datasets reject incomplete phone streams by the same rule.
@@ -178,6 +185,15 @@ BELT_PLACEMENT_NOTE = (
 BELT_PLACEMENT_PL = (
     "Pas tensometryczny załóż na klatkę na wysokości dolnych żeber, dopięty. Pudełko z ESP32 przesuń na bok — "
     "poza miejsce, na które celuje radar (górna część klatki)."
+)
+# Heart-rate strap (--heart-strap): a standard BLE Heart Rate strap such as the Suunto Smart Sensor, about one
+# notification a second carrying the heart rate and the RR intervals of the beats since the last one.
+HEART_STRAP_DEFAULT_NAME = "Suunto Smart Sensor"
+HEART_STRAP_FIRST_NOTIFICATIONS = 2
+HEART_STRAP_FIRST_TIMEOUT_S = 6.0
+HEART_STRAP_PLACEMENT_NOTE = (
+    "Heart-rate strap (Suunto Smart Sensor) under the chest at the sternum, electrodes wetted; heart rate and RR "
+    "intervals are a reference for the radar's heart estimate, not for the breathing phases."
 )
 TIME_ALIGNMENT_NOTE = (
     "All times are host epoch milliseconds (time.time()). A121 Timestamp_ms follows the sensor tick clock, "
@@ -289,10 +305,14 @@ def build_trials(pattern_refs: Sequence[str | Path] = DEFAULT_PATTERN_IDS) -> li
     return trials
 
 
-def output_paths(session_dir: Path, trial: Trial, references: Sequence[str] = ("iphone",)) -> dict[str, Path]:
+def output_paths(
+    session_dir: Path, trial: Trial, references: Sequence[str] = ("iphone",), heart_strap: bool = False
+) -> dict[str, Path]:
     paths = {"a121": session_dir / f"{trial.stem}_a121.csv"}
     for reference in references:
         paths[reference] = session_dir / f"{trial.stem}_{reference}.csv"
+    if heart_strap:
+        paths["hr"] = session_dir / f"{trial.stem}_hr.csv"
     paths["cues"] = session_dir / f"{trial.stem}_cues.csv"
     return paths
 
@@ -378,6 +398,9 @@ class SessionSettings:
     references: tuple[str, ...] = ("iphone",)
     belt_device: str | None = None
     belt_scan_timeout_s: float = 10.0
+    heart_strap: bool = False
+    heart_strap_device: str | None = None
+    heart_strap_scan_timeout_s: float = 10.0
 
     @property
     def use_iphone(self) -> bool:
@@ -399,10 +422,13 @@ class SessionSettings:
             setup["phone_placement"] = PHONE_PLACEMENT_NOTE
         if self.use_belt:
             setup["belt_placement"] = BELT_PLACEMENT_NOTE
+        if self.heart_strap:
+            setup["heart_strap_placement"] = HEART_STRAP_PLACEMENT_NOTE
         return setup
 
     def sensors_label(self) -> str:
-        return " + ".join(["A121", *({"iphone": "iPhone", "belt": "pas"}[name] for name in self.references)])
+        names = ["A121", *({"iphone": "iPhone", "belt": "pas"}[name] for name in self.references)]
+        return " + ".join(names + (["pas tętna"] if self.heart_strap else []))
 
 
 def describe_a121_config(config: A121Config) -> str:
@@ -443,7 +469,13 @@ def plan_lines(trials: Sequence[Trial], settings: SessionSettings, *, start_tria
         )
     if settings.use_belt:
         lines.append(f"Pas: {settings.belt_device or STRAIN_BELT_DEVICE_NAME} przez BLE, ok. {BELT_EXPECTED_SAMPLE_RATE_HZ:g} Hz.")
-    files = ", ".join(f"run_XX_<wzorzec>_{key}.csv" for key in ("a121", *settings.references, "cues"))
+    if settings.heart_strap:
+        lines.append(
+            f"Pas tętna: {settings.heart_strap_device or HEART_STRAP_DEFAULT_NAME} przez BLE (tętno i odstępy RR, "
+            "ok. 1 powiadomienie/s); luki nie odrzucają próby."
+        )
+    keys = ("a121", *settings.references, *(("hr",) if settings.heart_strap else ()), "cues")
+    files = ", ".join(f"run_XX_<wzorzec>_{key}.csv" for key in keys)
     lines += [f"Katalog sesji: {settings.session_dir}", f"Pliki próby: {files}; plus manifest.json."]
     return lines
 
@@ -657,6 +689,16 @@ def format_summary(summary: dict[str, Any]) -> str:
             f"{_value(belt_coverage.get('largest_gap_s'), 3, ' s')}; oddech/szum {_value(belt.get('depth_to_noise'), 0, '×')}; "
             f"błędy HX711 {belt.get('hx711_errors', 0)}."
         )
+    heart = summary.get("heart_strap")
+    if heart:
+        window = heart.get("window", {}) or {}
+        lines.append(
+            f"Pas tętna: {window.get('notifications', 0)} powiadomień, {window.get('rr_beats', 0)} uderzeń z RR, "
+            f"mediana tętna {_value(window.get('median_heart_rate_bpm'), 0, '/min')}, pokrycie okna "
+            f"{_value(window.get('coverage_percent'))}%, największa luka {_value(window.get('largest_gap_s'), 2, ' s')}"
+            + (f", bateria {heart['battery_percent']}%" if heart.get("battery_percent") is not None else "")
+            + "."
+        )
     if not iphone:
         lines.extend(f"{name}: {path}" for name, path in summary.get("files", {}).items())
         return "\n".join(lines)
@@ -711,6 +753,17 @@ def new_manifest(trials: Sequence[Trial], settings: SessionSettings) -> dict[str
         "references": list(settings.references),
         **({"phone_placement": PHONE_PLACEMENT_NOTE} if settings.use_iphone else {}),
         **({"belt_placement": BELT_PLACEMENT_NOTE} if settings.use_belt else {}),
+        **(
+            {
+                "heart_strap": {
+                    "device": settings.heart_strap_device or HEART_STRAP_DEFAULT_NAME,
+                    "placement": HEART_STRAP_PLACEMENT_NOTE,
+                    "columns": HEART_STRAP_COLUMNS,
+                }
+            }
+            if settings.heart_strap
+            else {}
+        ),
         "a121_port": settings.a121_port,
         "a121_config": asdict(settings.a121_config),
         **(
@@ -866,11 +919,12 @@ class MeasurementWorker(QObject):
         self.settings = settings
         self.a121_settle_s = max(0.0, float(a121_settle_s))
         self.session_dir = settings.session_dir
-        self.paths = output_paths(settings.session_dir, trial, settings.references)
+        self.paths = output_paths(settings.session_dir, trial, settings.references, settings.heart_strap)
         self.abort_event = threading.Event()
         self.a121: Any | None = None
         self.iphone: Any | None = None
         self.belt: Any | None = None
+        self.heart: Any | None = None
         self.resolved_a121_port: str | None = None
         self.a121_geometry: dict[str, Any] = {}
 
@@ -881,7 +935,7 @@ class MeasurementWorker(QObject):
         delete_trial_outputs(self.paths)
 
     def _stop(self) -> None:
-        for capture in (self.a121, self.iphone, self.belt):
+        for capture in (self.a121, self.iphone, self.belt, self.heart):
             if capture is not None:
                 try:
                     capture.stop()
@@ -1008,6 +1062,19 @@ class MeasurementWorker(QObject):
                 return
             raise RuntimeError("Pas połączył się, ale nie wysyła próbek. Czy jest włączony?")
 
+    def _connect_heart_strap(self) -> None:
+        device = self.settings.heart_strap_device or HEART_STRAP_DEFAULT_NAME
+        self.status_changed.emit(f"Łączenie z pasem tętna ({device}) przez BLE…")
+        self.heart = HeartStrapCapture(output_dir=self.session_dir, scan_timeout_s=self.settings.heart_strap_scan_timeout_s)
+        if not self.heart.connect(device):
+            detail = str(getattr(self.heart, "status", "") or "")
+            raise RuntimeError(
+                f"Nie połączono z pasem tętna {device}: {detail} Zwilż elektrody i załóż pas (bez kontaktu ze skórą "
+                "zwykle nie nadaje)."
+            )
+        if not self._wait_for_rows(self.heart, HEART_STRAP_FIRST_NOTIFICATIONS, HEART_STRAP_FIRST_TIMEOUT_S):
+            raise RuntimeError("Pas tętna połączony, ale nie przysyła tętna. Zwilż elektrody i popraw pas.")
+
     def _arrival_count(self) -> int:
         counter = getattr(self.iphone, "arrival_count", None)
         return int(counter()) if callable(counter) else 0
@@ -1026,7 +1093,11 @@ class MeasurementWorker(QObject):
                 self._abort()
                 return
             settings = self.settings
-            for use, connect in ((settings.use_iphone, self._connect_iphone), (settings.use_belt, self._connect_belt)):
+            for use, connect in (
+                (settings.use_iphone, self._connect_iphone),
+                (settings.use_belt, self._connect_belt),
+                (settings.heart_strap, self._connect_heart_strap),
+            ):
                 if use:
                     connect()
                     if self.abort_event.is_set():
@@ -1077,6 +1148,7 @@ class MeasurementWorker(QObject):
             iphone_counters_before = self.iphone.counter_snapshot() if self.iphone is not None else {}
             arrivals_start = self._arrival_count()
             belt_start = self.belt.data_count() if self.belt is not None else 0
+            heart_start = self.heart.data_count() if self.heart is not None else 0
             start_wall_ms = time.time() * 1000.0
             started = time.monotonic()
             self.status_changed.emit("Nagrywanie — wykonuj komendy trenera oddechu.")
@@ -1111,6 +1183,7 @@ class MeasurementWorker(QObject):
             a121_rows = self.a121.snapshot_data_since(a121_start)
             iphone_rows = self.iphone.snapshot_data_since(iphone_start) if self.iphone is not None else []
             belt_rows = self.belt.snapshot_rows(belt_start) if self.belt is not None else []
+            heart_rows = self.heart.snapshot_rows(heart_start) if self.heart is not None else []
             a121_summary = summarize_a121_rows(
                 a121_rows,
                 window_start_ms=start_wall_ms,
@@ -1172,6 +1245,17 @@ class MeasurementWorker(QObject):
                     "unparsed_packets": int(getattr(self.belt, "invalid", 0)),
                 }
 
+            # The heart strap is a reference for the heart rate only: a gap is reported, it does not reject the trial.
+            heart_summary: dict[str, Any] | None = None
+            if self.heart is not None:
+                window_rows = [row for row in heart_rows if start_wall_ms <= row[0] <= end_wall_ms]
+                heart_summary = {
+                    "device": getattr(self.heart, "device_name", None) or settings.heart_strap_device or HEART_STRAP_DEFAULT_NAME,
+                    "battery_percent": getattr(self.heart, "battery_percent", None),
+                    "window": heart_strap_summary(window_rows, duration_s) if window_rows else {"notifications": 0},
+                    "unparsed_packets": int(getattr(self.heart, "invalid", 0)),
+                }
+
             pd.DataFrame([list(row) for row in a121_rows], columns=A121_CAPTURE_COLUMNS).to_csv(
                 self.paths["a121"], index=False
             )
@@ -1179,6 +1263,8 @@ class MeasurementWorker(QObject):
                 pd.DataFrame(iphone_rows, columns=IMU_COLUMNS).to_csv(self.paths["iphone"], index=False)
             if self.belt is not None:
                 pd.DataFrame(belt_rows, columns=STRAIN_BELT_COLUMNS).to_csv(self.paths["belt"], index=False)
+            if self.heart is not None:
+                pd.DataFrame(heart_rows, columns=HEART_STRAP_COLUMNS).to_csv(self.paths["hr"], index=False)
             pd.DataFrame(cue_rows(self.trial.pattern, start_wall_ms), columns=CUE_COLUMNS).to_csv(
                 self.paths["cues"], index=False
             )
@@ -1205,6 +1291,8 @@ class MeasurementWorker(QObject):
                 summary["iphone"] = iphone_summary
             if belt_summary is not None:
                 summary["belt"] = belt_summary
+            if heart_summary is not None:
+                summary["heart_strap"] = heart_summary
             self.finished.emit(summary)
         except Exception as exc:
             self._stop()
@@ -1538,6 +1626,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--belt-device", help="Nazwa lub adres BLE pasa; domyślnie Pas_Tensometryczny.")
     parser.add_argument("--belt-scan-timeout", type=float, default=10.0, help="Czas skanowania BLE pasa [s].")
+    parser.add_argument(
+        "--heart-strap",
+        action="store_true",
+        help="Nagrywaj też pas tętna BLE (tętno i odstępy RR) do run_XX_<wzorzec>_hr.csv; domyślnie Suunto Smart Sensor.",
+    )
+    parser.add_argument("--heart-strap-device", help=f"Nazwa lub adres BLE pasa tętna; domyślnie {HEART_STRAP_DEFAULT_NAME}.")
+    parser.add_argument("--heart-strap-scan-timeout", type=float, default=10.0, help="Czas skanowania BLE pasa tętna [s].")
     parser.add_argument("--a121-port", help="Port A121 Interface A; bez niego wykrywany automatycznie.")
     parser.add_argument("--iphone-device", help="Nazwa lub adres BLE iPhone'a; domyślnie RespiPhoneIMU.")
     parser.add_argument("--iphone-scan-timeout", type=float, default=10.0, help="Czas skanowania BLE [s].")
@@ -1635,6 +1730,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         references=references,
         belt_device=args.belt_device,
         belt_scan_timeout_s=float(args.belt_scan_timeout),
+        heart_strap=bool(args.heart_strap or args.heart_strap_device),
+        heart_strap_device=args.heart_strap_device,
+        heart_strap_scan_timeout_s=float(args.heart_strap_scan_timeout),
     )
     if args.dry_run:
         print("\n".join(plan_lines(trials, settings, start_trial=args.start_trial)))

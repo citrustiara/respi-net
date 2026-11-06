@@ -19,6 +19,7 @@ from .paths import DATA_DIR, IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_I
 from .radar import DEFAULT_RADAR_BAUD, RadarCapture, analyze_radar_csv
 from .serial_utils import list_serial_ports
 from .strain_belt import RAW_STRAIN_BELT_DIR, StrainBeltCapture, discover_strain_belt_devices, probe_strain_belt
+from .heart_strap import RAW_HEART_STRAP_DIR, HeartStrapCapture, discover_heart_straps, heart_strap_summary
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -311,6 +312,63 @@ def capture_iphone_imu(device: str | None, seconds: int | None, scan_timeout: fl
     if plot:
         result = analyze_imu_csv(csv_path)
         click.echo(f"Plot: {result.plot_path}")
+
+
+@cli.command("heart-strap-devices")
+@click.option("--timeout", "timeout_s", default=8.0, show_default=True, type=click.FloatRange(min=0.1), help="BLE scan duration in seconds.")
+@click.option("--all", "include_all", is_flag=True, help="Show every BLE advertisement, not only heart-rate straps.")
+def heart_strap_devices(timeout_s: float, include_all: bool) -> None:
+    """Scan for a heart-rate strap (Suunto Smart Sensor / HR belt, or any with the Heart Rate service)."""
+    try:
+        devices = asyncio.run(discover_heart_straps(timeout_s=timeout_s, include_all=include_all))
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+    if not devices:
+        click.echo("No heart-rate strap found. Wet the electrodes and put the strap on (most only advertise while worn), or rerun with --all.")
+        return
+    for device in devices:
+        rssi = f"  RSSI {device['rssi']}" if device.get("rssi") else ""
+        match = f"  match:{device['matches']}" if device.get("matches") != "no" else ""
+        click.echo(f"{device['name']}  {device['address']}{rssi}{match}")
+
+
+@cli.command("capture-heart-strap")
+@click.option("-d", "--device", help="BLE name fragment or address. Defaults to any strap with the Heart Rate service.")
+@click.option("-s", "--seconds", type=click.IntRange(1), help="Optional capture length. Omit to capture until Ctrl+C.")
+@click.option("--scan-timeout", default=10.0, show_default=True, type=click.FloatRange(min=0.1))
+@click.option("-o", "--output-dir", type=click.Path(file_okay=False, path_type=Path), default=RAW_HEART_STRAP_DIR, show_default=True)
+def capture_heart_strap(device: str | None, seconds: int | None, scan_timeout: float, output_dir: Path) -> None:
+    """Record heart rate and RR intervals from a chest strap over BLE to CSV."""
+    capture = HeartStrapCapture(output_dir=output_dir, scan_timeout_s=scan_timeout)
+    if not capture.connect(device):
+        raise click.ClickException("Could not connect to the heart-rate strap.")
+    battery = f", battery {capture.battery_percent}%" if capture.battery_percent is not None else ""
+    click.echo(f"Connected to {capture.device_name}{battery}.")
+    click.echo("Capturing heart rate. Press Ctrl+C to stop." if seconds is None else f"Capturing heart rate for {seconds}s.")
+    started = time.monotonic()
+    last_report = -1
+    try:
+        while capture.running:
+            elapsed = time.monotonic() - started
+            if seconds is not None and elapsed >= seconds:
+                break
+            if int(elapsed) != last_report:
+                last_report = int(elapsed)
+                rows = capture.snapshot_rows(max(0, capture.data_count() - 1))
+                rr = rows[-1][2] if rows else ""
+                click.echo(f"  {last_report:>4}s | notifications={capture.data_count()} HR={capture.latest_heart_rate()} RR(ms)={rr or '-'}")
+            time.sleep(0.25)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        recorded_s = time.monotonic() - started
+        capture.stop()
+    try:
+        csv_path = capture.save()
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"Saved: {csv_path}")
+    click.echo(f"Summary: {heart_strap_summary(capture.snapshot_rows(), recorded_s)}")
 
 
 @cli.command("strain-belt-devices")

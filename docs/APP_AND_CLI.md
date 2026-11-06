@@ -91,6 +91,24 @@ Time_ms,ax,ay,az,gx,gy,gz
 
 Acceleration is in `g`, gyroscope values are in `deg/s`, and `Time_ms` is aligned to the desktop host clock from the first received phone sample.
 
+### Heart-rate strap over BLE (Suunto Smart Sensor)
+
+Any chest strap with the standard Bluetooth Heart Rate service (0x180D) works; the Suunto Smart Sensor advertises as `Suunto Smart Sensor` and only while worn (wet the electrodes). About once a second it sends the heart rate and the RR intervals of the beats since the last notification, saved as:
+
+```text
+host_time_ms,heart_rate_bpm,rr_ms,sensor_contact,energy_kj,payload_hex
+```
+
+`host_time_ms` is the host arrival time of the notification; `rr_ms` lists that notification's RR intervals separated by `;` (the beats end at or before the arrival). Run BLE commands from your own terminal: on macOS a shell without Bluetooth permission aborts silently.
+
+```bash
+uv run respi heart-strap-devices
+uv run respi capture-heart-strap -d "Suunto Smart Sensor" -s 60
+uv run python tools/a121_iphone_guided_recording.py --reference belt --heart-strap --patterns nn_holds --distance-cm 80
+```
+
+With `--heart-strap` the radar recorder writes `run_XX_<pattern>_hr.csv` next to the radar and belt files; a gap in the strap stream is reported in the trial summary and the manifest, it does not reject the trial.
+
 ## Unified desktop app
 
 Open the app:
