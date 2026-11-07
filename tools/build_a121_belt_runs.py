@@ -10,9 +10,11 @@ folders given:
 2. :func:`detect_phases` (offline, 2 s shortest hold, as
    ``tools/label_strain_belt_runs.py``) labels the belt, holds merged into one;
 3. the labels go onto the radar's time grid (nearest belt sample); the radar's
-   first seconds and anything outside the belt stream are IGNORE.  The
-   belt-to-radar delay is measured from the breathing and reported -- on the
-   first recording it was 0.0 s, so the labels are not shifted;
+   first seconds, belt dropouts and anything outside the belt stream are IGNORE.
+   The belt-to-radar delay is measured from the breathing and reported -- on the
+   first recording it was 0.0 s, so the labels are not shifted; a recording whose
+   radar hardly follows the belt (correlation under
+   :data:`MIN_BELT_RADAR_CORRELATION`) is skipped;
 4. a check: the share of samples in which the radar chest rises, per belt class.
 
 Each run goes to ``data/processed/breath_phases/a121_belt/runs/<run>.npz``
@@ -59,6 +61,10 @@ BELT_MIN_HOLD_S = 2.0  # as tools/label_strain_belt_runs.py
 MIN_DEPTH_TO_NOISE = 50.0  # worn belt ~500, belt on the desk ~13
 WARMUP_S = 3.0  # the radar settles after its session starts
 MAX_LAG_S = 2.0
+# Below this belt-radar correlation (0.05-0.7 Hz) the radar hardly shows the breathing the belt labels: the
+# chest is outside the chosen range or the person moved.  Earlier runs had 0.89-0.98; the 2026-11-07 runs at
+# 1.3 m had 0.45-0.56, and 0.22 in the first minutes, where the radar rose almost as often in holds as in inhales.
+MIN_BELT_RADAR_CORRELATION = 0.3
 BELT_RUN_FS = 20.0  # the grid of every run in the datasets
 
 
@@ -133,6 +139,14 @@ def build_run(folder: Path, out: Path) -> dict[str, object]:
     labels = belt_labels[nearest].astype(np.int8)
     labels[(radar.time_s < max(float(belt.time_s[0]), WARMUP_S)) | (radar.time_s > float(belt.time_s[-1]))] = IGNORE
     lag_s, corr = belt_to_radar_lag_s(radar.time_s, belt.chest[nearest], radar.chest, radar.fs)
+    if abs(corr) < MIN_BELT_RADAR_CORRELATION:
+        # The belt trace is fine on its own: it still goes to pre-training; only the radar run is left out.
+        (out / "runs" / f"{run_id(folder)}.npz").unlink(missing_ok=True)
+        belt_run = belt_trace_run(folder, belt, belt_labels)
+        save_run(belt_run, out / "belt_runs" / f"{belt_run.run_id}.npz")
+        row.update({"status": f"belt trace only: belt-radar correlation {corr:+.2f} below {MIN_BELT_RADAR_CORRELATION}",
+                    "belt_radar_lag_s": round(lag_s, 3), "belt_minutes": round(belt_run.labelled_s / 60.0, 1)})
+        return row
     rising = np.gradient(radar.chest) > 0
     rises = {name: round(float(np.mean(rising[labels == c])), 3) for c, name in enumerate(CLASS_NAMES) if np.any(labels == c)}
     meta = {
