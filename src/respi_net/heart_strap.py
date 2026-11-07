@@ -28,7 +28,7 @@ BATTERY_LEVEL_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
 HEART_STRAP_NAME_KEYWORDS = ("suunto", "movesense", "smart sensor", "hrm", "polar h", "heart", "hr ")
 RAW_HEART_STRAP_DIR = DATA_DIR / "raw" / "heart_strap"
 HEART_STRAP_COLUMNS = ["host_time_ms", "heart_rate_bpm", "rr_ms", "sensor_contact", "energy_kj", "payload_hex"]
-HEART_STRAP_QUALITY_COLUMNS = ["host_time_ms", "heart_rate_bpm", "rr_beats", "rr_artifact_share", "hr_ok", "rr_ok"]
+HEART_STRAP_QUALITY_COLUMNS = ["host_time_ms", "heart_rate_bpm", "rr_beats", "rr_artifact_share", "rr_irregularity", "hr_ok", "rr_ok"]
 # An RR interval is an artefact when it is outside 30-200 /min or more than this far from the rate the strap reports
 # in the same notification: a clean strap stays within ~5% (2026-11-06 test), a loose or flat one (2026-11-07,
 # battery 10%) sends extra short beats.
@@ -41,6 +41,12 @@ RR_MAX_ARTIFACT_SHARE = 0.20
 # while 37-65% of the intervals were artefacts and climbed from 56 to 85 /min, the radar staying at ~55, once
 # 78-100% were.
 HR_MAX_ARTIFACT_SHARE = 0.70
+# A strap can also lock onto the spurious beats completely: on 2026-11-07 it reported 104-126 /min at rest (radar
+# ~55) with RR intervals that agreed with that rate.  Beats at rest are regular, spurious ones are not: the median
+# change between successive intervals over the median interval was 0.02-0.04 on clean minutes, 0.11-0.12 where
+# some beats were spurious but the rate still matched the radar, and 0.19-0.59 on every bad minute.
+RR_MAX_IRREGULARITY = 0.06
+HR_MAX_IRREGULARITY = 0.15
 
 
 @dataclass(frozen=True)
@@ -282,7 +288,9 @@ def heart_strap_quality(source: Any, window_s: float = HEART_QUALITY_WINDOW_S) -
     ``source`` is a heart-strap CSV, a DataFrame with :data:`HEART_STRAP_COLUMNS`, or rows as written to it.  Each
     RR interval is checked against the rate reported with it (:data:`RR_RANGE_MS`, :data:`RR_MAX_DEVIATION`); the
     share of artefacts within ``window_s`` around a notification decides (:data:`RR_MAX_ARTIFACT_SHARE`,
-    :data:`HR_MAX_ARTIFACT_SHARE`).  Lost skin contact or no beats in the window makes both untrusted.
+    :data:`HR_MAX_ARTIFACT_SHARE`), and so does how irregular the beats are (:data:`RR_MAX_IRREGULARITY`,
+    :data:`HR_MAX_IRREGULARITY`), which catches a strap locked onto spurious beats.  Lost skin contact or fewer
+    than 4 beats in the window makes both untrusted.
     """
 
     import numpy as np
@@ -297,7 +305,7 @@ def heart_strap_quality(source: Any, window_s: float = HEART_QUALITY_WINDOW_S) -
     times = pd.to_numeric(frame["host_time_ms"], errors="coerce").to_numpy(dtype=float)
     rates = pd.to_numeric(frame["heart_rate_bpm"], errors="coerce").to_numpy(dtype=float)
     contact = pd.to_numeric(frame.get("sensor_contact", pd.Series(np.nan, index=frame.index)), errors="coerce").to_numpy(dtype=float)
-    beat_times, beat_bad = [], []
+    beat_times, beat_bad, beat_rr = [], [], []
     beats_per_row = []
     for at, rate, cell in zip(times, rates, frame["rr_ms"]):
         values = _rr_values(cell)
@@ -307,6 +315,7 @@ def heart_strap_quality(source: Any, window_s: float = HEART_QUALITY_WINDOW_S) -
             bad = not (RR_RANGE_MS[0] <= rr <= RR_RANGE_MS[1]) or not (rate > 0) or abs(implied - rate) / rate > RR_MAX_DEVIATION
             beat_times.append(at)
             beat_bad.append(bad)
+            beat_rr.append(rr)
     beat_times_arr = np.asarray(beat_times, dtype=float)
     bad_cum = np.concatenate([[0], np.cumsum(np.asarray(beat_bad, dtype=float))])
     half = window_s * 1000.0 / 2.0
@@ -314,15 +323,24 @@ def heart_strap_quality(source: Any, window_s: float = HEART_QUALITY_WINDOW_S) -
     hi = np.searchsorted(beat_times_arr, times + half, side="right")
     count = hi - lo
     share = np.where(count > 0, (bad_cum[hi] - bad_cum[lo]) / np.maximum(count, 1), np.nan)
+    rr_arr = np.asarray(beat_rr, dtype=float)
+    irregularity = np.full(len(times), np.nan)
+    for row, (a, b) in enumerate(zip(lo, hi)):
+        window = rr_arr[a:b]
+        if len(window) >= 4:
+            irregularity[row] = float(np.median(np.abs(np.diff(window))) / np.median(window))
+    regular = np.isfinite(irregularity)
     no_contact = contact == 0
     hr_ok = (count > 0) & (share <= HR_MAX_ARTIFACT_SHARE) & ~no_contact & (rates > 0)
-    rr_ok = hr_ok & (share <= RR_MAX_ARTIFACT_SHARE)
+    hr_ok &= regular & (np.nan_to_num(irregularity, nan=1.0) <= HR_MAX_IRREGULARITY)
+    rr_ok = hr_ok & (share <= RR_MAX_ARTIFACT_SHARE) & (np.nan_to_num(irregularity, nan=1.0) <= RR_MAX_IRREGULARITY)
     return pd.DataFrame(
         {
             "host_time_ms": times,
             "heart_rate_bpm": rates,
             "rr_beats": beats_per_row,
             "rr_artifact_share": np.round(share, 3),
+            "rr_irregularity": np.round(irregularity, 3),
             "hr_ok": hr_ok,
             "rr_ok": rr_ok,
         },

@@ -77,3 +77,19 @@ def test_heart_strap_quality_sidecar(tmp_path):
     write_heart_strap_csv(recording, _strap_rows(30, 70))
     path, quality = write_heart_strap_quality(recording)
     assert path.name == "heart_strap_test_quality.csv" and path.exists() and len(quality) == 30
+
+
+def test_heart_strap_quality_catches_a_strap_locked_onto_spurious_beats():
+    import numpy as np
+
+    from respi_net.heart_strap import heart_strap_quality
+
+    rng = np.random.default_rng(1)
+    rows = []
+    for second in range(120):
+        rr = rng.uniform(250, 700, 2)  # erratic short beats ...
+        rate = round(60000.0 / float(np.mean(rr)))  # ... that the strap reports as its rate
+        rows.append([1.79e12 + second * 1000.0, rate, ";".join(f"{value:.1f}" for value in rr), 1, "", ""])
+    quality = heart_strap_quality(rows)
+    assert not quality["hr_ok"].any() and not quality["rr_ok"].any()
+    assert (quality["rr_irregularity"] > 0.15).all()
