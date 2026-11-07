@@ -41,3 +41,21 @@ def test_existing_light_transition_is_left_unchanged() -> None:
 
     assert bridged == phases
     assert not any(corrected)
+
+
+def test_a121_capture_retries_the_connection(monkeypatch):
+    pytest = __import__("pytest")
+    pytest.importorskip("acconeer.exptool")
+    from respi_net import a121
+
+    answers = iter([False, True])
+    calls = []
+
+    def once(self, client_module, get_distances, port):
+        calls.append(port)
+        return next(answers)
+
+    monkeypatch.setattr(a121.A121Capture, "_connect_once", once)
+    monkeypatch.setattr(a121, "A121_CONNECT_RETRY_PAUSE_S", 0.0)
+    capture = a121.A121Capture(config=a121.A121Config())
+    assert capture.connect("/dev/cu.test") and calls == ["/dev/cu.test", "/dev/cu.test"]

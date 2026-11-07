@@ -54,6 +54,11 @@ class ChestSignal:
     raw: np.ndarray
     echo_db: np.ndarray
     meta: dict[str, Any] = field(default_factory=dict)
+    # Samples backed by data; False where a dropout was bridged (labels there must be ignored).  None = all.
+    valid: np.ndarray | None = None
+
+    def valid_mask(self) -> np.ndarray:
+        return np.ones(len(self.time_s), dtype=bool) if self.valid is None else np.asarray(self.valid, dtype=bool)
 
     def velocity(self) -> np.ndarray:
         """Rate of change of :attr:`chest` per second."""
@@ -304,6 +309,10 @@ def imu_chest_signal(
 # The strain belt's HX711 count rises as the chest expands.
 STRAIN_BELT_CHEST_SIGN = 1.0
 STRAIN_BELT_ERROR_VALUE = -1.0
+# A silence over this long in the belt's arrival times is a dropout (see respi_net.strain_belt.STRAIN_BELT_MAX_GAP_S);
+# the samples bridging it, and this margin on each side where the filters still feel the bridge, are not valid.
+STRAIN_BELT_MAX_GAP_S = 1.0
+STRAIN_BELT_GAP_MARGIN_S = 2.0
 
 
 def _regular_belt_times(host_s: np.ndarray, smooth_samples: int = 21) -> tuple[np.ndarray, float]:
@@ -317,10 +326,19 @@ def _regular_belt_times(host_s: np.ndarray, smooth_samples: int = 21) -> tuple[n
     """
 
     host_s = np.asarray(host_s, dtype=float)
-    k = np.arange(len(host_s), dtype=float)
-    fs = float((len(host_s) - 1) / (host_s[-1] - host_s[0]))
-    offset = pd.Series(host_s - k / fs).rolling(smooth_samples, center=True, min_periods=1).median().to_numpy()
-    return k / fs + offset, fs
+    # A dropout splits the capture: the rate comes from the stretches with data, and each stretch is
+    # evened on its own so the offset does not smear across the gap.
+    cuts = np.flatnonzero(np.diff(host_s) > STRAIN_BELT_MAX_GAP_S) + 1
+    pieces = [piece for piece in np.split(host_s, cuts)]
+    steps = sum(len(piece) - 1 for piece in pieces)
+    span = sum(float(piece[-1] - piece[0]) for piece in pieces)
+    fs = float(steps / span) if span > 0 else float((len(host_s) - 1) / (host_s[-1] - host_s[0]))
+    stamps = []
+    for piece in pieces:
+        k = np.arange(len(piece), dtype=float)
+        offset = pd.Series(piece - k / fs).rolling(smooth_samples, center=True, min_periods=1).median().to_numpy()
+        stamps.append(k / fs + offset)
+    return np.concatenate(stamps), fs
 
 
 def despike(x: np.ndarray, window: int = 7, n_sigmas: float = 6.0) -> tuple[np.ndarray, np.ndarray]:
@@ -437,6 +455,7 @@ def strain_belt_chest_signal(
         origin = float(host_s[0])
     stamp_s, fs_nominal = _regular_belt_times(host_s)
     clean, spikes = despike(raw)
+    gaps = [(float(host_s[i]), float(host_s[i + 1])) for i in np.flatnonzero(np.diff(host_s) > STRAIN_BELT_MAX_GAP_S)]
 
     # Resample onto an exact grid so ``fs`` is the true spacing for filters.
     time_s = np.arange(np.ceil((stamp_s[0] - origin) * fs_nominal), np.floor((stamp_s[-1] - origin) * fs_nominal) + 1) / fs_nominal
@@ -453,10 +472,16 @@ def strain_belt_chest_signal(
     else:
         raise ValueError(f"Unknown drift mode {drift!r}; use troughs, linear or none.")
     chest = chest - baseline
-    depth = float(np.subtract(*np.percentile(chest, [95, 5])))
+    valid = np.ones(len(time_s), dtype=bool)
+    for start, end in gaps:
+        valid &= ~((time_s > start - origin - STRAIN_BELT_GAP_MARGIN_S) & (time_s < end - origin + STRAIN_BELT_GAP_MARGIN_S))
+    if not valid.any():
+        raise ValueError("Strain-belt recording has no stretch without dropouts.")
+    depth = float(np.subtract(*np.percentile(chest[valid], [95, 5])))
     # Sensor noise: what a 2.5 Hz low-pass takes off the raw counts.  Even fast breathing
     # (60/min = 1 Hz) and its first harmonic stay below that.
     residual = values - light_filter(values, fs, 2.5)
+    residual = residual[valid]
     noise = float(1.4826 * np.median(np.abs(residual - np.median(residual)))) or 1.0
     return ChestSignal(
         source=name,
@@ -477,5 +502,9 @@ def strain_belt_chest_signal(
             "noise": noise,
             "depth_to_noise": depth / noise,
             "drift_counts": float(baseline[-1] - baseline[0]),
+            "gaps": len(gaps),
+            "gap_s": float(sum(end - start for start, end in gaps)),
+            "valid_share": float(valid.mean()),
         },
+        valid=valid,
     )

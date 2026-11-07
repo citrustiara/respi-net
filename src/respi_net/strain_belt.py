@@ -33,6 +33,27 @@ STRAIN_BELT_NAME_KEYWORDS = ("esp32", "breath", "oddech", "strain", "tenso", "be
 HX711_ERROR_VALUE = -1.0
 RAW_STRAIN_BELT_DIR = DATA_DIR / "raw" / "strain_belt"
 STRAIN_BELT_COLUMNS = ["host_time_ms", "seq", "device_ts", "raw", "checksum_ok", "payload"]
+# The belt streams ~10 Hz and BLE delivers it in bursts with arrival gaps of up to ~0.35 s.  A longer silence
+# is a dropout: the link fell (a weak signal, about -95 dBm, does it) or the belt stalled.
+STRAIN_BELT_MAX_GAP_S = 1.0
+# Connected but silent this long counts as a dropout too: the capture drops the link and connects again.
+STRAIN_BELT_STALL_S = 5.0
+STRAIN_BELT_RECONNECT_PAUSE_S = 1.0
+# The first connection fails now and then at a weak signal ("disconnected" while connecting); try it this often.
+STRAIN_BELT_CONNECT_ATTEMPTS = 3
+
+
+def strain_belt_gaps(host_time_ms: Any, max_gap_s: float = STRAIN_BELT_MAX_GAP_S) -> list[tuple[float, float]]:
+    """Dropouts of a belt capture: ``(last sample before, first sample after)`` in host ms, longer than ``max_gap_s``."""
+
+    import numpy as np
+
+    stamps = np.asarray(host_time_ms, dtype=float)
+    stamps = stamps[np.isfinite(stamps)]
+    if len(stamps) < 2:
+        return []
+    jumps = np.flatnonzero(np.diff(stamps) > max_gap_s * 1000.0)
+    return [(float(stamps[i]), float(stamps[i + 1])) for i in jumps]
 
 
 @dataclass(frozen=True)
@@ -199,13 +220,42 @@ async def probe_strain_belt(
     return parsed
 
 
+def strain_belt_gap_summary(capture: "StrainBeltCapture", max_gap_s: float = STRAIN_BELT_MAX_GAP_S) -> str:
+    """One line on the dropouts of a finished capture: how many, how long, and the share of time covered."""
+
+    with capture._lock:
+        stamps = [row[0] for row in capture.rows]
+    gaps = strain_belt_gaps(stamps, max_gap_s)
+    if len(stamps) < 2:
+        return "Dropouts: no samples."
+    span_s = (stamps[-1] - stamps[0]) / 1000.0
+    lost_s = sum(end - start for start, end in gaps) / 1000.0
+    if not gaps:
+        return f"Dropouts: none (no silence over {max_gap_s:g} s in {span_s:.0f} s); disconnects {capture.disconnects}."
+    longest = max(end - start for start, end in gaps) / 1000.0
+    covered = 100.0 * (1.0 - lost_s / span_s) if span_s > 0 else 0.0
+    return (f"Dropouts: {len(gaps)} gaps over {max_gap_s:g} s, {lost_s:.1f} s lost (longest {longest:.1f} s), "
+            f"{covered:.1f}% of {span_s:.0f} s covered; disconnects {capture.disconnects}. The analysis leaves the gaps out.")
+
+
 class StrainBeltCapture:
     """Background BLE capture of belt samples; mirrors the connect/stop/save shape of the IMU captures."""
 
-    def __init__(self, output_dir: str | Path = RAW_STRAIN_BELT_DIR, device: str | None = None, scan_timeout_s: float = 10.0) -> None:
+    def __init__(
+        self,
+        output_dir: str | Path = RAW_STRAIN_BELT_DIR,
+        device: str | None = None,
+        scan_timeout_s: float = 10.0,
+        reconnect: bool = True,
+        stall_s: float = STRAIN_BELT_STALL_S,
+    ) -> None:
         self.output_dir = Path(output_dir)
         self.device = device
         self.scan_timeout_s = float(scan_timeout_s)
+        self.reconnect = bool(reconnect)
+        self.stall_s = float(stall_s)
+        self.disconnects = 0
+        self.last_packet_ms: float | None = None
         self.running = False
         self.connected = False
         self.status = "idle"
@@ -230,7 +280,7 @@ class StrainBeltCapture:
         self._connected_event.clear()
         self.read_thread = threading.Thread(target=self._thread_main, daemon=True)
         self.read_thread.start()
-        if not self._connected_event.wait(max(5.0, self.scan_timeout_s + 8.0)):
+        if not self._connected_event.wait(max(5.0, (self.scan_timeout_s + 8.0) * STRAIN_BELT_CONNECT_ATTEMPTS)):
             self.status = self._failed_message or "Timed out while connecting to the strain belt."
             self.stop()
         if not self.connected:
@@ -255,6 +305,13 @@ class StrainBeltCapture:
     def latest_raw(self) -> float | None:
         with self._lock:
             return self.rows[-1][3] if self.rows else None
+
+    def gaps(self, max_gap_s: float = STRAIN_BELT_MAX_GAP_S) -> list[tuple[float, float]]:
+        """Dropouts in the samples so far (see :func:`strain_belt_gaps`)."""
+
+        with self._lock:
+            stamps = [row[0] for row in self.rows]
+        return strain_belt_gaps(stamps, max_gap_s)
 
     def save(self) -> Path:
         with self._lock:
@@ -282,21 +339,61 @@ class StrainBeltCapture:
             self._connected_event.set()
 
     async def _run_ble(self) -> None:
+        """Connect, stream, and -- with ``reconnect`` -- connect again after every dropout until stopped.
+
+        Only the first connection may fail the capture, after :data:`STRAIN_BELT_CONNECT_ATTEMPTS` tries; later ones are retried for as long as it runs, and the
+        silence between shows up as a gap in the samples (:meth:`gaps`) for the analysis to leave out.
+        """
+
         BleakScanner, BleakClient = _load_bleak()
+        first = True
+        attempts = 0
+        while not self._stop_event.is_set():
+            try:
+                await self._stream_once(BleakScanner, BleakClient, first)
+            except Exception as exc:
+                if first and not self.connected:
+                    attempts += 1
+                    if attempts >= STRAIN_BELT_CONNECT_ATTEMPTS:
+                        raise
+                    click_safe_echo(f"Strain belt: connection failed ({exc}); retrying ({attempts + 1}/{STRAIN_BELT_CONNECT_ATTEMPTS})...")
+                    await asyncio.sleep(STRAIN_BELT_RECONNECT_PAUSE_S)
+                    continue
+                self.status = f"reconnecting ({exc})"
+            if self._stop_event.is_set() or not self.reconnect:
+                return
+            if self.connected:
+                self.disconnects += 1
+                lost_at = datetime.fromtimestamp((self.last_packet_ms or time.time() * 1000.0) / 1000.0)
+                click_safe_echo(f"Strain belt: link lost after the sample at {lost_at:%H:%M:%S}; reconnecting...")
+            first = False
+            self.connected = False
+            self.status = "reconnecting"
+            await asyncio.sleep(STRAIN_BELT_RECONNECT_PAUSE_S)
+
+    async def _stream_once(self, BleakScanner: Any, BleakClient: Any, first: bool) -> None:
         device = await _find_belt(BleakScanner, self.device, self.scan_timeout_s)
         if device is None:
             raise RuntimeError(f"Strain belt not found ({self.device or 'service ' + STRAIN_BELT_SERVICE_UUID}).")
         self.status = f"connecting to {getattr(device, 'name', None) or device.address}"
         async with BleakClient(device) as client:
-            self.connected = bool(client.is_connected)
-            if not self.connected:
+            if not client.is_connected:
                 raise RuntimeError("BLE connection failed.")
             await client.start_notify(STRAIN_BELT_DATA_CHARACTERISTIC_UUID, self._on_notification)
+            connected_ms = time.time() * 1000.0
+            self.connected = True
             self.status = "connected"
+            if not first:
+                down_s = (connected_ms - (self.last_packet_ms or connected_ms)) / 1000.0
+                click_safe_echo(f"Strain belt: reconnected, {down_s:.1f} s without samples.")
             self._connected_event.set()
             try:
                 while not self._stop_event.is_set() and client.is_connected:
                     await asyncio.sleep(0.10)
+                    last = max(self.last_packet_ms or 0.0, connected_ms)
+                    if time.time() * 1000.0 - last > self.stall_s * 1000.0:
+                        self.status = "stalled"
+                        break
             finally:
                 try:
                     await client.stop_notify(STRAIN_BELT_DATA_CHARACTERISTIC_UUID)
@@ -323,6 +420,7 @@ class StrainBeltCapture:
                     self.missing += packet.seq - self.last_seq - 1
                 self.last_seq = packet.seq
             self.received += 1
+            self.last_packet_ms = host_ms
             self.rows.append([
                 round(host_ms, 1),
                 "" if packet.seq is None else packet.seq,

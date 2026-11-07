@@ -128,6 +128,7 @@ def build_run(folder: Path, out: Path) -> dict[str, object]:
         return row
     radar = a121_chest_signal(radar_frame, origin_ms=origin_ms)
     belt_labels = merge_holds(detect_phases(belt.chest, belt.fs, causal=False, min_hold_s=BELT_MIN_HOLD_S))
+    belt_labels[~belt.valid_mask()] = IGNORE  # belt dropouts carry no labels
     nearest = np.clip(np.searchsorted(belt.time_s, radar.time_s), 0, len(belt.time_s) - 1)
     labels = belt_labels[nearest].astype(np.int8)
     labels[(radar.time_s < max(float(belt.time_s[0]), WARMUP_S)) | (radar.time_s > float(belt.time_s[-1]))] = IGNORE

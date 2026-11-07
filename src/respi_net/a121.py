@@ -49,6 +49,8 @@ A121_ACCONER_COLUMNS = [
     "AcconeerBreathingRate_BPM",
 ]
 A121_CAPTURE_COLUMNS = A121_COLUMNS + A121_ACCONER_COLUMNS
+A121_CONNECT_ATTEMPTS = 3
+A121_CONNECT_RETRY_PAUSE_S = 2.0
 
 APPROX_BASE_STEP_LENGTH_M = 2.5e-3
 A121_TIME_DRIFT_WARNING_RE = r"Server timestamp was from .* Results needs to be read more often\."
@@ -236,6 +238,17 @@ class A121Capture:
             safe_echo("No A121 serial port found. Select the CH342 Interface A port manually.")
             return False
 
+        # The board often answers only the second time after a previous session (recv timeout on the first try).
+        for attempt in range(1, A121_CONNECT_ATTEMPTS + 1):
+            if self._connect_once(a121, get_distances_m, port):
+                return True
+            if attempt < A121_CONNECT_ATTEMPTS:
+                safe_echo(f"A121: retrying the connection ({attempt + 1}/{A121_CONNECT_ATTEMPTS}) in {A121_CONNECT_RETRY_PAUSE_S:g} s...")
+                time.sleep(A121_CONNECT_RETRY_PAUSE_S)
+        safe_echo(f"A121 did not answer after {A121_CONNECT_ATTEMPTS} attempts; unplug its USB cable for ~5 s and plug it back in.")
+        return False
+
+    def _connect_once(self, a121: Any, get_distances_m: Any, port: str) -> bool:
         try:
             safe_echo(f"Connecting to Acconeer A121 on {port}...")
             open_kwargs: dict[str, Any] = {"serial_port": port}

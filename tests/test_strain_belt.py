@@ -142,3 +142,123 @@ def test_label_tool_reads_a_radar_session_belt_file(tmp_path):
     labels = pd.read_csv(tmp_path / "out" / "labels" / "a121_belt_test__run_01_belt_holds_1m_belt.csv")
     assert set(labels["label"]) >= {0, 1, 2} and 3 not in set(labels["label"])  # one hold
     assert (tmp_path / "out" / "plots" / "a121_belt_test__run_01_belt_holds_1m_belt.png").exists()
+
+
+def test_strain_belt_gaps_finds_only_real_dropouts():
+    from respi_net.strain_belt import strain_belt_gaps
+
+    stamps = [0, 100, 450, 550, 9550, 9650]  # a 0.35 s BLE burst gap is normal, 9 s is a dropout
+    assert strain_belt_gaps(stamps) == [(550.0, 9550.0)]
+    assert strain_belt_gaps(stamps[:2]) == []
+
+
+def test_belt_chest_signal_leaves_a_dropout_out(tmp_path):
+    import numpy as np
+    import pandas as pd
+
+    from respi_net.chest_signal import strain_belt_chest_signal
+
+    path, t, volume = _synthetic_belt_csv(tmp_path)
+    frame = pd.read_csv(path)
+    lost = (frame.host_time_ms - frame.host_time_ms[0] > 20_000) & (frame.host_time_ms - frame.host_time_ms[0] < 35_000)
+    frame[~lost].to_csv(path, index=False)
+    signal = strain_belt_chest_signal(path)
+    assert signal.meta["gaps"] == 1 and 14 < signal.meta["gap_s"] < 16
+    assert abs(signal.fs - 10.0) < 0.05  # the rate comes from the stretches with data, not the span
+    valid = signal.valid_mask()
+    assert not valid[(signal.time_s > 19) & (signal.time_s < 36)].any()
+    assert valid[(signal.time_s > 5) & (signal.time_s < 15)].all() and valid[signal.time_s > 40].all()
+    truth = np.interp(signal.time_s, t, volume)
+    assert np.max(np.abs(signal.chest - truth)[valid][20:-20]) < 900
+
+
+def test_capture_reconnects_after_the_link_drops(monkeypatch, tmp_path):
+    import asyncio
+
+    from respi_net import strain_belt
+
+    sessions = []
+
+    class FakeScanner:
+        @staticmethod
+        async def find_device_by_filter(matches, timeout):
+            return type("Device", (), {"name": strain_belt.STRAIN_BELT_DEVICE_NAME, "address": "AA"})()
+
+    class FakeClient:
+        def __init__(self, device):
+            self.is_connected = False
+
+        async def __aenter__(self):
+            self.is_connected = True
+            sessions.append(self)
+            return self
+
+        async def __aexit__(self, *exc):
+            self.is_connected = False
+
+        async def start_notify(self, uuid, callback):
+            async def stream():
+                for value in range(5):
+                    callback(None, bytearray(str(-5_300_000 + value).encode()))
+                    await asyncio.sleep(0.01)
+                if len(sessions) == 1:
+                    self.is_connected = False  # the first link falls
+            self.task = asyncio.ensure_future(stream())
+
+        async def stop_notify(self, uuid):
+            pass
+
+    monkeypatch.setattr(strain_belt, "_load_bleak", lambda: (FakeScanner, FakeClient))
+    monkeypatch.setattr(strain_belt, "STRAIN_BELT_RECONNECT_PAUSE_S", 0.05)
+    capture = strain_belt.StrainBeltCapture(output_dir=tmp_path)
+    assert capture.connect()
+    for _ in range(100):
+        if len(sessions) >= 2 and capture.data_count() >= 10:
+            break
+        import time
+        time.sleep(0.02)
+    capture.stop()
+    assert len(sessions) == 2 and capture.disconnects == 1
+    assert capture.data_count() == 10
+    assert "disconnects 1" in strain_belt.strain_belt_gap_summary(capture)
+
+
+def test_capture_retries_a_failed_first_connection(monkeypatch, tmp_path):
+    import time
+
+    from respi_net import strain_belt
+
+    tries = []
+
+    class FakeScanner:
+        @staticmethod
+        async def find_device_by_filter(matches, timeout):
+            return type("Device", (), {"name": strain_belt.STRAIN_BELT_DEVICE_NAME, "address": "AA"})()
+
+    class FakeClient:
+        def __init__(self, device):
+            self.is_connected = False
+
+        async def __aenter__(self):
+            tries.append(1)
+            if len(tries) == 1:
+                raise RuntimeError("disconnected")  # what macOS reports at a weak signal
+            self.is_connected = True
+            return self
+
+        async def __aexit__(self, *exc):
+            self.is_connected = False
+
+        async def start_notify(self, uuid, callback):
+            callback(None, bytearray(b"-5300000"))
+
+        async def stop_notify(self, uuid):
+            pass
+
+    monkeypatch.setattr(strain_belt, "_load_bleak", lambda: (FakeScanner, FakeClient))
+    monkeypatch.setattr(strain_belt, "STRAIN_BELT_RECONNECT_PAUSE_S", 0.01)
+    capture = strain_belt.StrainBeltCapture(output_dir=tmp_path)
+    assert capture.connect()
+    time.sleep(0.05)
+    capture.stop()
+    assert len(tries) == 2 and capture.data_count() == 1 and capture.disconnects == 0

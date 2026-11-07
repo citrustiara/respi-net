@@ -127,6 +127,9 @@ def label_run(recording: Path, out: Path, min_hold_s: float) -> dict[str, object
     row["status"] = "labelled"
     labels = detect_phases(signal.chest, signal.fs, causal=False, min_hold_s=min_hold_s)
     live = detect_phases(signal.chest, signal.fs, causal=True, min_hold_s=min_hold_s)
+    # Belt dropouts (bridged by interpolation) carry no labels.
+    labels[~signal.valid_mask()] = IGNORE
+    live[~signal.valid_mask()] = IGNORE
     phase = score_phases(labels, live)
     timing = boundary_errors(labels, live, signal.time_s)
     row.update(
