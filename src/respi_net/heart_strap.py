@@ -28,6 +28,19 @@ BATTERY_LEVEL_UUID = "00002a19-0000-1000-8000-00805f9b34fb"
 HEART_STRAP_NAME_KEYWORDS = ("suunto", "movesense", "smart sensor", "hrm", "polar h", "heart", "hr ")
 RAW_HEART_STRAP_DIR = DATA_DIR / "raw" / "heart_strap"
 HEART_STRAP_COLUMNS = ["host_time_ms", "heart_rate_bpm", "rr_ms", "sensor_contact", "energy_kj", "payload_hex"]
+HEART_STRAP_QUALITY_COLUMNS = ["host_time_ms", "heart_rate_bpm", "rr_beats", "rr_artifact_share", "hr_ok", "rr_ok"]
+# An RR interval is an artefact when it is outside 30-200 /min or more than this far from the rate the strap reports
+# in the same notification: a clean strap stays within ~5% (2026-11-06 test), a loose or flat one (2026-11-07,
+# battery 10%) sends extra short beats.
+RR_RANGE_MS = (300.0, 2000.0)
+RR_MAX_DEVIATION = 0.30
+HEART_QUALITY_WINDOW_S = 60.0
+# Share of artefact RR intervals in the window above which the RR intervals are not used (reported rate still is) ...
+RR_MAX_ARTIFACT_SHARE = 0.20
+# ... and above which the reported rate goes too: on 2026-11-07 it agreed with the radar (54-58 vs 56-59 /min)
+# while 37-65% of the intervals were artefacts and climbed from 56 to 85 /min, the radar staying at ~55, once
+# 78-100% were.
+HR_MAX_ARTIFACT_SHARE = 0.70
 
 
 @dataclass(frozen=True)
@@ -256,6 +269,81 @@ def write_heart_strap_csv(path: Path, rows: list[list[Any]]) -> None:
         writer.writerows(rows)
 
 
+def _rr_values(cell: Any) -> list[float]:
+    text = "" if cell is None else str(cell)
+    if text in ("", "-", "nan"):
+        return []
+    return [float(part) for part in text.split(";") if part]
+
+
+def heart_strap_quality(source: Any, window_s: float = HEART_QUALITY_WINDOW_S) -> "pd.DataFrame":
+    """Per notification: whether the strap's rate (``hr_ok``) and RR intervals (``rr_ok``) can be trusted.
+
+    ``source`` is a heart-strap CSV, a DataFrame with :data:`HEART_STRAP_COLUMNS`, or rows as written to it.  Each
+    RR interval is checked against the rate reported with it (:data:`RR_RANGE_MS`, :data:`RR_MAX_DEVIATION`); the
+    share of artefacts within ``window_s`` around a notification decides (:data:`RR_MAX_ARTIFACT_SHARE`,
+    :data:`HR_MAX_ARTIFACT_SHARE`).  Lost skin contact or no beats in the window makes both untrusted.
+    """
+
+    import numpy as np
+    import pandas as pd
+
+    if isinstance(source, (str, Path)):
+        frame = pd.read_csv(source)
+    elif isinstance(source, pd.DataFrame):
+        frame = source
+    else:
+        frame = pd.DataFrame([list(row) for row in source], columns=HEART_STRAP_COLUMNS)
+    times = pd.to_numeric(frame["host_time_ms"], errors="coerce").to_numpy(dtype=float)
+    rates = pd.to_numeric(frame["heart_rate_bpm"], errors="coerce").to_numpy(dtype=float)
+    contact = pd.to_numeric(frame.get("sensor_contact", pd.Series(np.nan, index=frame.index)), errors="coerce").to_numpy(dtype=float)
+    beat_times, beat_bad = [], []
+    beats_per_row = []
+    for at, rate, cell in zip(times, rates, frame["rr_ms"]):
+        values = _rr_values(cell)
+        beats_per_row.append(len(values))
+        for rr in values:
+            implied = 60000.0 / rr if rr > 0 else np.inf
+            bad = not (RR_RANGE_MS[0] <= rr <= RR_RANGE_MS[1]) or not (rate > 0) or abs(implied - rate) / rate > RR_MAX_DEVIATION
+            beat_times.append(at)
+            beat_bad.append(bad)
+    beat_times_arr = np.asarray(beat_times, dtype=float)
+    bad_cum = np.concatenate([[0], np.cumsum(np.asarray(beat_bad, dtype=float))])
+    half = window_s * 1000.0 / 2.0
+    lo = np.searchsorted(beat_times_arr, times - half, side="left")
+    hi = np.searchsorted(beat_times_arr, times + half, side="right")
+    count = hi - lo
+    share = np.where(count > 0, (bad_cum[hi] - bad_cum[lo]) / np.maximum(count, 1), np.nan)
+    no_contact = contact == 0
+    hr_ok = (count > 0) & (share <= HR_MAX_ARTIFACT_SHARE) & ~no_contact & (rates > 0)
+    rr_ok = hr_ok & (share <= RR_MAX_ARTIFACT_SHARE)
+    return pd.DataFrame(
+        {
+            "host_time_ms": times,
+            "heart_rate_bpm": rates,
+            "rr_beats": beats_per_row,
+            "rr_artifact_share": np.round(share, 3),
+            "hr_ok": hr_ok,
+            "rr_ok": rr_ok,
+        },
+        columns=HEART_STRAP_QUALITY_COLUMNS,
+    )
+
+
+def heart_strap_quality_path(recording: str | Path) -> Path:
+    recording = Path(recording)
+    return recording.with_name(f"{recording.stem}_quality.csv")
+
+
+def write_heart_strap_quality(recording: str | Path) -> tuple[Path, "pd.DataFrame"]:
+    """Flag a saved heart-strap CSV and write the flags beside it as ``<name>_quality.csv``."""
+
+    quality = heart_strap_quality(recording)
+    path = heart_strap_quality_path(recording)
+    quality.to_csv(path, index=False)
+    return path, quality
+
+
 def heart_strap_summary(rows: list[list[Any]], duration_s: float | None = None) -> dict[str, Any]:
     """Notifications, beats, the median rate and how much of the run the strap covered (rows as written to CSV)."""
 
@@ -273,4 +361,12 @@ def heart_strap_summary(rows: list[list[Any]], duration_s: float | None = None) 
         "coverage_percent": round(100.0 * span_s / duration_s, 1) if duration_s else None,
         "largest_gap_s": round(max(gaps), 2) if gaps else None,
         "no_contact_share": round(sum(1 for value in contact if int(value) == 0) / len(contact), 3) if contact else None,
+        **_quality_shares(rows),
     }
+
+
+def _quality_shares(rows: list[list[Any]]) -> dict[str, Any]:
+    if not rows:
+        return {"hr_ok_share": None, "rr_ok_share": None}
+    quality = heart_strap_quality(rows)
+    return {"hr_ok_share": round(float(quality["hr_ok"].mean()), 3), "rr_ok_share": round(float(quality["rr_ok"].mean()), 3)}

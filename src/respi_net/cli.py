@@ -18,8 +18,8 @@ from .iphone_imu import IPhoneIMUBluetoothCapture, discover_iphone_imu_devices, 
 from .paths import DATA_DIR, IMU_PLOTS_DIR, RADAR_PLOTS_DIR, RAW_A121_DIR, RAW_IMU_DIR, RAW_RADAR_DIR, SLEEP_PLOTS_DIR
 from .radar import DEFAULT_RADAR_BAUD, RadarCapture, analyze_radar_csv
 from .serial_utils import list_serial_ports
-from .strain_belt import RAW_STRAIN_BELT_DIR, StrainBeltCapture, discover_strain_belt_devices, probe_strain_belt
-from .heart_strap import RAW_HEART_STRAP_DIR, HeartStrapCapture, discover_heart_straps, heart_strap_summary
+from .strain_belt import RAW_STRAIN_BELT_DIR, StrainBeltCapture, discover_strain_belt_devices, probe_strain_belt, strain_belt_gap_summary
+from .heart_strap import RAW_HEART_STRAP_DIR, HeartStrapCapture, discover_heart_straps, heart_strap_summary, write_heart_strap_quality
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -369,6 +369,29 @@ def capture_heart_strap(device: str | None, seconds: int | None, scan_timeout: f
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Saved: {csv_path}")
     click.echo(f"Summary: {heart_strap_summary(capture.snapshot_rows(), recorded_s)}")
+    _echo_heart_strap_quality(csv_path)
+
+
+def _echo_heart_strap_quality(csv_path: Path) -> None:
+    path, quality = write_heart_strap_quality(csv_path)
+    click.echo(f"Quality flags: {path}")
+    for column, what in (("hr_ok", "heart rate"), ("rr_ok", "RR intervals")):
+        weak = ~quality[column].to_numpy(dtype=bool)
+        if not weak.any():
+            click.echo(f"  {what}: trusted throughout.")
+            continue
+        times = quality["host_time_ms"].to_numpy(dtype=float)
+        start = datetime.fromtimestamp(times[weak][0] / 1000.0)
+        click.echo(f"  {what}: weak for {100.0 * weak.mean():.0f}% of the recording (first from {start:%H:%M:%S}); leave it out where {column} is False.")
+
+
+@cli.command("heart-strap-quality")
+@click.argument("recordings", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def heart_strap_quality_command(recordings: tuple[Path, ...]) -> None:
+    """Flag where a saved heart-strap recording can be trusted; writes <name>_quality.csv beside it."""
+    for recording in recordings:
+        click.echo(recording.name)
+        _echo_heart_strap_quality(recording)
 
 
 @cli.command("strain-belt-devices")
@@ -434,6 +457,7 @@ def capture_strain_belt(device: str | None, seconds: int | None, scan_timeout: f
         raise click.ClickException(str(exc)) from exc
     click.echo(f"Saved: {csv_path}")
     click.echo(f"Packets: {capture.received} ok, {capture.missing} missing, {capture.bad_checksum} bad checksum, {capture.glitches} HX711 errors (-1), {capture.invalid} unparsed")
+    click.echo(strain_belt_gap_summary(capture))
 
 
 def _safe_filename_part(value: str) -> str:

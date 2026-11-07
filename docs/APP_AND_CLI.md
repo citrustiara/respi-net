@@ -109,6 +109,12 @@ uv run python tools/a121_iphone_guided_recording.py --reference belt --heart-str
 
 With `--heart-strap` the radar recorder writes `run_XX_<pattern>_hr.csv` next to the radar and belt files; a gap in the strap stream is reported in the trial summary and the manifest, it does not reject the trial.
 
+A strap that is loose or nearly flat sends spurious short beats, and its reported rate drifts up with them. `capture-heart-strap` therefore writes `<name>_quality.csv` beside each recording, one row per notification with `hr_ok` and `rr_ok`. An RR interval counts as an artefact when it lies outside 300–2000 ms or more than 30% from the rate reported with it. Within ±30 s of a notification, more than 20% artefacts makes the RR intervals untrusted, and more than 70% (or lost skin contact) makes the rate untrusted too. Leave out rows where the flag is False. To flag an older recording:
+
+```bash
+uv run respi heart-strap-quality data/raw/heart_strap/heart_strap_2026-11-07_19-07-42.csv
+```
+
 ## Unified desktop app
 
 Open the app:
