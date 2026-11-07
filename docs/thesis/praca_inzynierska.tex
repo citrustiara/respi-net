@@ -3868,26 +3868,35 @@ zbiory uczący, walidacyjny i~testowy. W~danych sterowanych nie ma pauz po
 wdechu ani fragmentów szumu.
 
 Tabela~\ref{tab:fazy-dane} zestawia oznaczone dane. Rzeczywistych jest
-\SI{159}{min}, w~tym tylko \SI{66.5}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
-i~\SI{45.1}{min} swobodnego oddechu na siedząco, oznaczonego z~pasa
+\SI{213}{min}, w~tym \SI{120}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
+i~\SI{98.8}{min} swobodnego oddechu na siedząco w~14~nagraniach z~6~sesji, oznaczonego z~pasa
 tensometrycznego --- \SI{10}{min} z~radarem z~boku z~\SI{80}{cm},
 \SI{3}{min} z~boku z~\SI{50}{cm}, \SI{5}{min} z~\SI{50}{cm} podczas
-przewijania telefonu, \SI{4}{min} z~\SI{140}{cm} z~inną soczewką
-i~\SI{23}{min} z~około \SI{130}{cm}, nagrywanych na zmianę z~pasem tętna
-(nagranie, w~którym radar prawie nie nadąża za pasem --- korelacja przebiegów
-poniżej 0,3 --- wnosiłoby tylko przebieg pasa) (nagrania IMU bez radaru
+przewijania telefonu, \SI{4}{min} z~\SI{140}{cm} z~inną soczewką,
+\SI{23}{min} z~około \SI{130}{cm} i~\SI{53}{min} z~około \SI{80}{cm} ze słabszą soczewką i~pod
+gorszym kątem (w~tym \SI{27}{min} bez przerwy); w~dwóch ostatnich sesjach pas oddechowy
+nagrywał na zmianę z~pasem tętna, kawałki po \SI{5}--\SI{6}{min}, a~czasy radaru
+wyrównano dla całego nagrania przed pocięciem (nagranie, w~którym radar prawie nie nadąża za pasem --- korelacja przebiegów
+poniżej 0,3 --- wnosiłoby tylko przebieg pasa; wszystkie mają 0,51--0,98) (nagrania IMU bez radaru
 dodają \SI{6.6}{min}: to tylko sześć nagrań po \SI{90}{s} z~kompletnym
 strumieniem, oznaczonych tą samą metodą względem komend, a~wcześniejsze 20~plików
 IMU, łącznie około \SI{15}{min}, nie ma komend i~nie jest oznaczone), dlatego nagrania części
 uczącej uzupełniono danymi sztucznymi (podrozdz.~\ref{sec:sieci-dane-sztuczne}).
 Powstały dwa zbiory, okna co \SI{10}{s}: do wstępnego uczenia --- pas
 z~kopiami, przebiegi pasa z~własnych nagrań z~radarem (te same
-\SI{45}{min} oddechu, z~tymi samymi etykietami co nagrania A121, tylko
-w~części uczącej) z~kopiami i~dane syntetyczne (5323~okien uczących,
-72~walidacyjne i~58~testowych, wszystkie walidacyjne i~testowe z~rzeczywistego
+\SI{99}{min} oddechu, z~tymi samymi etykietami co nagrania A121 i~w~tym samym
+podziale) z~kopiami i~dane syntetyczne (6056~okien uczących,
+127~walidacyjnych i~200~testowych, wszystkie walidacyjne i~testowe z~rzeczywistego
 pasa) --- oraz do dostrajania:
-nagrania A121 z~kopiami (2042, 12 i~12~okien; nagrania z~pasem i~ich kopie
-są wyłącznie w~części uczącej). Kopie nagrań z~pasem powstają z~sygnału bez
+nagrania A121 z~kopiami (2790, 67 i~157~okien). Nagrania z~pasem są jedynymi
+własnymi danymi z~odniesieniem niezależnym od radaru (etykiety nagrań sterowanych
+dociągnięto do punktów zwrotnych radaru), a~zbieranie danych zakończono 7~listopada 2026,
+więc tworzą ostateczny zbiór walidacyjny i~testowy, wydzielony całymi sesjami, nigdy
+kawałkami jednej: testowy to obie sesje z~\SIrange{1.3}{1.4}{m} (\SI{27.3}{min}, inne dni,
+inna soczewka, odległość spoza części uczącej), walidacyjny --- \SI{10}{min} z~boku
+z~\SI{80}{cm}, uczący --- pozostałe \SI{61.5}{min} z~\SIrange{0.5}{0.8}{m}; kopie powstają
+tylko z~części uczącej. W~swobodnym oddechu pauz jest mało (\SI{2.4}{min}), więc klasę
+pauzy niosą głównie nagrania sterowane, pas \cite{szymanski2025} i~dane syntetyczne. Kopie nagrań z~pasem powstają z~sygnału bez
 powolnego dryfu ciała poniżej \SI{0.05}{Hz}: w~nagraniu z~\SI{80}{cm}, przy
 dryfie około \SI{2}{cm}, rozrzut percentyli 5--95 wynosi \SI{19.6}{mm} zamiast
 \SI{4.2}{mm} wielkości oddechu, więc szum i~dryf kopii byłyby kilkakrotnie za duże. Dane sztuczne zwiększają
@@ -3898,8 +3907,9 @@ oddechowych --- tych przybywa tylko z~nowymi nagraniami.
 \centering
 \small
 \caption{Oznaczone dane do uczenia sieci, w~minutach. Akcelerometru iNode ani nagrań IMU bez
-radaru nie włączono do zbiorów uczących. Tabela będzie uzupełniana o~nowe
-nagrania z~radarem i~telefonem.}
+radaru nie włączono do zbiorów uczących. Kopie powstają tylko z~części uczącej
+(nagrania z~pasem: \SI{61.5}{min} z~\SI{98.8}{min}). Zbiór jest zamknięty: ostatnie
+nagrania z~7~listopada 2026.}
 \label{tab:fazy-dane}
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}lrrrrrr@{}}
@@ -3907,16 +3917,16 @@ nagrania z~radarem i~telefonem.}
 Źródło & Osoby & Razem & Wdech & Wydech & Pauza & Szum \\
 \midrule
 A121, nagrania sterowane & 1 & 21,4 & 6,9 & 10,1 & 4,4 & 0,0 \\
-A121 z~pasem, siedząc & 1 & 45,1 & 19,7 & 24,4 & 1,1 & 0,0 \\
-Własny pas, te same nagrania & 1 & 45,3 & 19,8 & 24,5 & 1,1 & 0,0 \\
+A121 z~pasem, siedząc & 1 & 98,8 & 43,0 & 53,4 & 2,4 & 0,0 \\
+Własny pas, te same nagrania & 1 & 99,0 & 43,0 & 53,5 & 2,4 & 0,0 \\
 Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 29,9 & 2,5 \\
 Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 17,2 & 3,2 \\
 LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,9 & 0,0 \\
 iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,4 & 0,0 \\
 \midrule
 Kopie nagrań A121 & -- & 90,2 & 29,4 & 42,1 & 18,7 & 0,0 \\
-Kopie nagrań A121 z~pasem & -- & 277,6 & 121,2 & 149,9 & 6,5 & 0,0 \\
-Kopie przebiegów własnego pasa & -- & 278,8 & 121,5 & 150,7 & 6,5 & 0,0 \\
+Kopie nagrań A121 z~pasem & -- & 378,4 & 164,9 & 205,2 & 8,3 & 0,0 \\
+Kopie przebiegów własnego pasa & -- & 379,0 & 165,2 & 205,6 & 8,3 & 0,0 \\
 Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 164,6 & 13,9 \\
 Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 41,0 & 2,3 \\
 \bottomrule
@@ -4049,7 +4059,8 @@ Najtrudniejsze są pauzy i~momenty zwrotu, a~w~czasie rzeczywistym wyraźnie
 rośnie liczba fałszywych granic. Wartości te są zawyżone przez sposób
 anotacji --- granice wyznaczono na tym samym sygnale --- i~stanowią górne
 ograniczenie tego, co można wykazać na tych danych. Właściwym sprawdzianem
-sieci będzie trudny zbiór testowy z~niezależnym torem odniesienia.
+sieci jest zbiór testowy z~niezależnym torem odniesienia: nagrania radaru oznaczone
+z~pasa w~dwóch sesjach wydzielonych z~uczenia (podrozdz.~\ref{sec:sieci-zbior-uczacy}).
 
 \section{Architektura modelu}
 \label{sec:sieci-architektura}

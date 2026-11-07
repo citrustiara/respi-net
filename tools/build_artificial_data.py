@@ -16,18 +16,20 @@ Two datasets in the nn_dataset format, ready for
 
 * ``dataset_pretrain_v1.npz``: the supervisor's belt recordings (real, split by
   recording as in ``dataset_szymanski_belt_v1.npz``), the belt traces of the
-  own radar + belt recordings (always training), the augmented copies of the
-  training runs and the synthetic runs (training only);
+  own radar + belt recordings (split by session, :data:`BELT_SESSION_SPLITS`),
+  the augmented copies of the training runs and the synthetic runs (training
+  only);
 * ``dataset_finetune_v1.npz``: the own A121 coach runs (real, split as in
   ``dataset_coach_v1.npz``), the A121 runs labelled from the strain belt
-  (``tools/build_a121_belt_runs.py``, always training) and the augmented
-  copies of both (training only).  The belt-labelled runs' copies come from
+  (``tools/build_a121_belt_runs.py``, held out by session: the final
+  validation and test sets with a reference independent of the radar) and the
+  augmented copies of the training runs (training only).  The belt-labelled runs' copies come from
   their own random stream, so adding a recording leaves every other copy and
   synthetic run unchanged.
 
 With ``--enhanced``, ``enhanced_v2/`` holds addition-only v2 datasets and
 ``*_v1_plus_v2.npz`` unions with content deduplication. Existing originals
-and the identical synthetic runs remain in v1 only. All splits are provisional.
+and the identical synthetic runs remain in v1 only.
 
 ``artificial_summary.json`` lists the labelled minutes per source, class and
 split, and ``--thesis-figure`` draws ``docs/thesis/figures/fazy_dane_sztuczne.png``
@@ -101,6 +103,16 @@ TEXT = {
     },
 }
 STRETCH = (0.7, 0.8, 0.9, 1.1, 1.25, 1.4)  # one augmented copy per factor
+# The radar + belt recordings are the only own data with a reference independent of the radar (the coach labels are
+# snapped to the radar's turning points), and recording ended on 2026-11-07, so they give the final validation and
+# test sets -- whole sessions, never pieces of one, and with their belt traces in the same split of pre-training.
+# Test: the two sessions at 1.3-1.4 m (other days, another lens, a range the training runs do not cover); validation:
+# the 10 min side-on run at 80 cm.  Everything else (50-80 cm) trains.
+BELT_SESSION_SPLITS = {
+    "sitting_130cm_alt_2026-11-07": "test",
+    "sitting_140cm_new_lens_2026-10-27": "test",
+    "sitting_side_80cm_free_2026-10-25": "val",
+}
 NOISE_RATIO = (0.03, 0.3)  # noise std over breath size, log-uniform per copy
 FS = 20.0
 
@@ -113,6 +125,10 @@ def reference_splits(path: Path, runs: list[LabelledRun]) -> dict[str, str]:
         if all(run.run_id in known for run in runs):
             return {run.run_id: known[run.run_id] for run in runs}
     return assign_splits(runs)
+
+
+def belt_session_split(run_id: str) -> str:
+    return next((split for session, split in BELT_SESSION_SPLITS.items() if session in run_id), "train")
 
 
 def minutes(runs: list[LabelledRun]) -> dict[str, float]:
@@ -307,11 +323,14 @@ def main() -> int:
     coach_splits = reference_splits(OUT / "dataset_coach_v1.npz", coach)
     belt_splits = reference_splits(OUT / "dataset_szymanski_belt_v1.npz", belt)
     bank = training_noise_bank(coach, coach_splits)
-    # Radar + belt recordings (tools/build_a121_belt_runs.py): training runs, outside the coach split and noise bank.
+    # Radar + belt recordings (tools/build_a121_belt_runs.py), split by session (BELT_SESSION_SPLITS), outside the
+    # coach split and noise bank.  Their belt traces, in the form of the supervisor's belt runs, go to pre-training
+    # in the same split.
     belt_sessions = list(runs_in(BELT_SESSIONS))
-    # Their belt traces, in the form of the supervisor's belt runs, go to pre-training (also training only).
     session_traces = list(runs_in(BELT_SESSION_TRACES))
-    session_splits = {run.run_id: "train" for run in [*belt_sessions, *session_traces]}
+    session_splits = {run.run_id: belt_session_split(run.run_id) for run in [*belt_sessions, *session_traces]}
+    train_sessions = [run for run in belt_sessions if session_splits[run.run_id] == "train"]
+    train_traces = [run for run in session_traces if session_splits[run.run_id] == "train"]
 
     coach_aug = augment(coach, coach_splits, bank, rng)
     belt_aug = augment(belt, belt_splits, bank, rng)
@@ -323,17 +342,17 @@ def main() -> int:
     if args.enhanced:
         coach_aug = enhanced_copies(coach, coach_splits, bank, args.seed + 20261006)
         belt_aug = enhanced_copies(belt, belt_splits, bank, args.seed + 20261007)
-    session_aug = belt_session_copies(belt_sessions, bank, args.seed + 20261025, args.enhanced)
-    trace_aug = belt_session_copies(session_traces, bank, args.seed + 20261027, args.enhanced)
+    session_aug = belt_session_copies(train_sessions, bank, args.seed + 20261025, args.enhanced)
+    trace_aug = belt_session_copies(train_traces, bank, args.seed + 20261027, args.enhanced)
     destination = args.output_dir or (OUT / "enhanced_v2" if args.enhanced else OUT)
     version = "v2" if args.enhanced else "v1"
 
     train_only = {run.run_id: "train" for run in [*coach_aug, *belt_aug, *session_aug, *trace_aug, *synthetic]}
     sets = {
         f"dataset_pretrain_{version}.npz": ([*belt, *belt_aug, *session_traces, *trace_aug, *synthetic], {**belt_splits, **session_splits, **train_only},
-                                    "Belt (Szymanski et al., corrected labels) + own strain-belt traces (training) + augmented copies + synthetic A121; local use only"),
+                                    "Belt (Szymanski et al., corrected labels) + own strain-belt traces (split by session) + augmented copies of the training runs + synthetic A121; local use only"),
         f"dataset_finetune_{version}.npz": ([*coach, *coach_aug, *belt_sessions, *session_aug], {**coach_splits, **session_splits, **train_only},
-                                    "Own A121 coach runs + A121 runs with belt labels (training) + augmented copies of the training runs"),
+                                    "Own A121 coach runs + A121 runs with belt labels (split by session) + augmented copies of the training runs"),
     }
     if args.enhanced:
         # V2 is an addition, not a second complete dataset. Real originals,
@@ -346,7 +365,8 @@ def main() -> int:
         "version": version,
         "relationship_to_v1": "addition_only; real sources and the 60 identical synthetic runs are stored in v1 only" if args.enhanced else "base",
         "seed": args.seed,
-        "split_status": "PROVISIONAL: inherited technical grouping; finalize from the complete acquisition plan before model selection or evaluation",
+        "split_status": "radar + belt sessions: final, held out by session (BELT_SESSION_SPLITS; recording ended 2026-11-07); coach and Szymanski runs: inherited from their own datasets",
+        "belt_session_splits": BELT_SESSION_SPLITS,
         "label_transfer": "Existing source labels and IGNORE masks are inherited; nearest-neighbour time warp only; no detector or re-annotation on artificial signals",
         "enhancements": {"time_varying_extra_noise": bool(args.enhanced), "drift_per_min": [.05, .1, .2, .3, .45, .6] if args.enhanced else [.3], "radar_power_drop_db": [0, 6, 12] if args.enhanced else [], "reduced_power_belt": False},
         "noise_bank_minutes": round(sum(segment.shape[-1] for segment in bank.segments) / FS / 60.0, 1),
@@ -356,9 +376,11 @@ def main() -> int:
             "own_a121_coach": {"people": 1, **minutes(coach), "train": minutes([r for r in coach if coach_splits[r.run_id] == "train"])["labelled"]},
             "szymanski_belt": {"people": 3, **minutes(belt), "train": minutes([r for r in belt if belt_splits[r.run_id] == "train"])["labelled"]},
             "augmented_own_a121": {"copies_per_run": 9 if args.enhanced else len(STRETCH), "runs": len(coach_aug), **minutes(coach_aug)},
-            "own_a121_belt_labels": {"people": 1, "runs": len(belt_sessions), **minutes(belt_sessions), "train": minutes(belt_sessions)["labelled"]},
+            "own_a121_belt_labels": {"people": 1, "runs": len(belt_sessions), **minutes(belt_sessions),
+                                     **{part: minutes([r for r in belt_sessions if session_splits[r.run_id] == part])["labelled"] for part in ("train", "val", "test")}},
             "augmented_own_a121_belt_labels": {"copies_per_run": 9 if args.enhanced else len(STRETCH), "runs": len(session_aug), **minutes(session_aug)},
-            "own_strain_belt": {"people": 1, "runs": len(session_traces), **minutes(session_traces), "train": minutes(session_traces)["labelled"]},
+            "own_strain_belt": {"people": 1, "runs": len(session_traces), **minutes(session_traces),
+                                **{part: minutes([r for r in session_traces if session_splits[r.run_id] == part])["labelled"] for part in ("train", "val", "test")}},
             "augmented_own_strain_belt": {"copies_per_run": len(STRETCH), "runs": len(trace_aug), **minutes(trace_aug)},
             "augmented_belt": {"copies_per_run": len(STRETCH), "runs": len(belt_aug), **minutes(belt_aug)},
             "synthetic_a121": {"runs": 0 if args.enhanced else count, **minutes([] if args.enhanced else synthetic)},
