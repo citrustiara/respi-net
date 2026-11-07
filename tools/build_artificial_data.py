@@ -106,12 +106,14 @@ STRETCH = (0.7, 0.8, 0.9, 1.1, 1.25, 1.4)  # one augmented copy per factor
 # The radar + belt recordings are the only own data with a reference independent of the radar (the coach labels are
 # snapped to the radar's turning points), and recording ended on 2026-11-07, so they give the final validation and
 # test sets -- whole sessions, never pieces of one, and with their belt traces in the same split of pre-training.
-# Test: the two sessions at 1.3-1.4 m (other days, another lens, a range the training runs do not cover); validation:
-# the 10 min side-on run at 80 cm.  Everything else (50-80 cm) trains.
+# The network is calibrated to one person, the author (S01; supervisor's advice), so validation and test are his
+# sessions only.  Test: side-on at 80 cm and the 140 cm run with the new lens (other days, 0.8 and 1.4 m);
+# validation: side-on at 50 cm.  His 50 cm run while scrolling the phone and every session of his father (S02,
+# 2026-11-07, 0.8-1.3 m) train: more breathing to learn from, not a check of another person.
 BELT_SESSION_SPLITS = {
-    "sitting_130cm_alt_2026-11-07": "test",
+    "sitting_side_80cm_free_2026-10-25": "test",
     "sitting_140cm_new_lens_2026-10-27": "test",
-    "sitting_side_80cm_free_2026-10-25": "val",
+    "sitting_side_50cm_free_2026-10-26": "val",
 }
 NOISE_RATIO = (0.03, 0.3)  # noise std over breath size, log-uniform per copy
 FS = 20.0
@@ -376,10 +378,13 @@ def main() -> int:
             "own_a121_coach": {"people": 1, **minutes(coach), "train": minutes([r for r in coach if coach_splits[r.run_id] == "train"])["labelled"]},
             "szymanski_belt": {"people": 3, **minutes(belt), "train": minutes([r for r in belt if belt_splits[r.run_id] == "train"])["labelled"]},
             "augmented_own_a121": {"copies_per_run": 9 if args.enhanced else len(STRETCH), "runs": len(coach_aug), **minutes(coach_aug)},
-            "own_a121_belt_labels": {"people": 1, "runs": len(belt_sessions), **minutes(belt_sessions),
+            "own_a121_belt_labels": {"people": len({r.subject for r in belt_sessions}), "runs": len(belt_sessions), **minutes(belt_sessions),
+                                     "by_subject": {sub: minutes([r for r in belt_sessions if r.subject == sub])["labelled"] for sub in sorted({r.subject for r in belt_sessions})},
+                                     "by_subject_and_split": {f"{sub}/{part}": minutes([r for r in belt_sessions if r.subject == sub and session_splits[r.run_id] == part])["labelled"]
+                                                              for sub in sorted({r.subject for r in belt_sessions}) for part in ("train", "val", "test")},
                                      **{part: minutes([r for r in belt_sessions if session_splits[r.run_id] == part])["labelled"] for part in ("train", "val", "test")}},
             "augmented_own_a121_belt_labels": {"copies_per_run": 9 if args.enhanced else len(STRETCH), "runs": len(session_aug), **minutes(session_aug)},
-            "own_strain_belt": {"people": 1, "runs": len(session_traces), **minutes(session_traces),
+            "own_strain_belt": {"people": len({r.subject for r in session_traces}), "runs": len(session_traces), **minutes(session_traces),
                                 **{part: minutes([r for r in session_traces if session_splits[r.run_id] == part])["labelled"] for part in ("train", "val", "test")}},
             "augmented_own_strain_belt": {"copies_per_run": len(STRETCH), "runs": len(trace_aug), **minutes(trace_aug)},
             "augmented_belt": {"copies_per_run": len(STRETCH), "runs": len(belt_aug), **minutes(belt_aug)},

@@ -18,7 +18,7 @@ folders given:
 4. a check: the share of samples in which the radar chest rises, per belt class.
 
 Each run goes to ``data/processed/breath_phases/a121_belt/runs/<run>.npz``
-(nn_dataset format, subject S01), where ``tools/build_artificial_data.py``
+(nn_dataset format, subject from :func:`subject_of`), where ``tools/build_artificial_data.py``
 takes it into the fine-tuning sets as a training run with its copies.
 ``plots/<run>.png`` shows the radar with the belt labels.
 
@@ -66,12 +66,20 @@ MAX_LAG_S = 2.0
 # 1.3 m had 0.45-0.56, and 0.22 in the first minutes, where the radar rose almost as often in holds as in inhales.
 MIN_BELT_RADAR_CORRELATION = 0.3
 BELT_RUN_FS = 20.0  # the grid of every run in the datasets
+# Who sat in front of the radar.  S01 is the author, the person the network is calibrated to; S02 his father, who
+# did every session of 2026-11-07.  All earlier sessions are taken as S01.
+SESSION_SUBJECTS = {"2026-11-07": "S02"}
+DEFAULT_SUBJECT = "S01"
 
 
 def recording_dirs(paths: list[Path]) -> list[Path]:
     if paths:
         return paths
     return sorted(p for p in RAW_DIR.iterdir() if (p / "a121.csv").exists() and (p / "belt.csv").exists())
+
+
+def subject_of(folder: Path) -> str:
+    return next((subject for day, subject in SESSION_SUBJECTS.items() if day in folder.name), DEFAULT_SUBJECT)
 
 
 def run_id(folder: Path) -> str:
@@ -106,7 +114,7 @@ def belt_trace_run(folder: Path, belt: ChestSignal, belt_labels: np.ndarray):
     name = f"{run_id(folder)}__belt"
     meta = {"dataset": "a121_belt", "sensor": "strain_belt", "recording": str(folder.relative_to(ROOT)) if folder.is_relative_to(ROOT) else str(folder),
             "label_origin": f"strain belt, offline detect_phases (min hold {BELT_MIN_HOLD_S:g} s), holds merged"}
-    return labelled_run(name, signal, belt_labels[nearest], group=name, meta=meta)
+    return labelled_run(name, signal, belt_labels[nearest], group=name, subject=subject_of(folder), meta=meta)
 
 
 def plot_run(path: Path, time_s: np.ndarray, chest: np.ndarray, labels: np.ndarray, title: str) -> None:
@@ -128,7 +136,7 @@ def build_run(folder: Path, out: Path) -> dict[str, object]:
     radar_frame = pd.read_csv(folder / "a121.csv")
     origin_ms = float(radar_frame["Timestamp_ms"].iloc[0])
     belt = strain_belt_chest_signal(folder / "belt.csv", origin_ms=origin_ms)
-    row: dict[str, object] = {"run": run_id(folder), "depth_to_noise": belt.meta.get("depth_to_noise")}
+    row: dict[str, object] = {"run": run_id(folder), "subject": subject_of(folder), "depth_to_noise": belt.meta.get("depth_to_noise")}
     if belt.meta["depth_to_noise"] < MIN_DEPTH_TO_NOISE:
         row["status"] = "skipped: no breathing above belt noise"
         return row
@@ -157,7 +165,7 @@ def build_run(folder: Path, out: Path) -> dict[str, object]:
         "belt_radar_band_correlation": round(corr, 3),
         "radar_rising_share_by_belt_class": rises,
     }
-    run = labelled_run(run_id(folder), radar, labels, group=run_id(folder), meta=meta)
+    run = labelled_run(run_id(folder), radar, labels, group=run_id(folder), subject=subject_of(folder), meta=meta)
     save_run(run, out / "runs" / f"{run.run_id}.npz")
     belt_run = belt_trace_run(folder, belt, belt_labels)
     save_run(belt_run, out / "belt_runs" / f"{belt_run.run_id}.npz")
