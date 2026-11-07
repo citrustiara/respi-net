@@ -160,10 +160,13 @@ def main() -> int:
     parser.add_argument("--only", action="append", default=[], help="only recordings whose name contains this (repeatable)")
     parser.add_argument("--skip", action="append", default=[], help="leave out recordings whose name contains this")
     parser.add_argument("--polarity-margin", type=float, help=f"try another POLARITY_MARGIN (default {a121_range.POLARITY_MARGIN}; inf: no polarity)")
+    parser.add_argument("--keep-old-fraction", type=float, help=f"try another KEEP_OLD_FRACTION (default {a121_range.KEEP_OLD_FRACTION})")
     parser.add_argument("--csv", type=Path, help="also write the table here")
     args = parser.parse_args()
     if args.polarity_margin is not None:
         a121_range.POLARITY_MARGIN = args.polarity_margin
+    if args.keep_old_fraction is not None:
+        a121_range.KEEP_OLD_FRACTION = args.keep_old_fraction
     rows = []
     for recording in recordings([]):
         if (args.only and not any(part in recording.name for part in args.only)) or any(part in recording.name for part in args.skip):

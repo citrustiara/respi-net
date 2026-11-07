@@ -2972,7 +2972,8 @@ i~poruszają się zgodnie z~nią, ważone jak dotąd medianą echa.
 Offline całe nagranie ocenia się raz, a~dotychczasowy wybór zostaje, dopóki
 najlepsza grupa nie jest od niego wyraźnie lepsza. Gdy oba przebiegi
 oddychają w~tę samą stronę (korelacja w~paśmie oddechu nieujemna), wynik
-dotychczasowego musi być mniejszy niż połowa wyniku grupy. Gdy poruszają się
+dotychczasowego musi być mniejszy niż 0,65 wyniku grupy (wcześniej połowa, zob.
+niżej). Gdy poruszają się
 w~przeciwfazie, jeden z~nich jest odwrócony, a~wynik nie mówi który:
 w~trzech nagraniach z~\SI{2}{m} najwyżej ocenione było odbicie
 w~przeciwfazie ($r=-0{,}85$), na którym wdech staje się wydechem
@@ -3045,8 +3046,15 @@ grupy w~\SIrange{0.59}{0.62}{m}), więc wybór się nie zmienia: zgodność dete
 z~pasem wynosi 88,5\%, a~korelacja z~pasem po filtrze \SIrange{0.05}{0.7}{Hz}
 0,89. Wariant, który zawsze bierze lepszą grupę, zmienia 26~nagrań
 i~poprawia średnio zgodność z~pasem, telefonem i~oznaczeniami ręcznymi, ale nie
-z~komendami, dlatego domyślnie zostaje próg połowy; biegunowość chroni w~nim
-nagrania z~\SI{2}{m} tak samo jak dawny warunek kierunku. Na żywo
+z~komendami, dlatego nie przyjęto go; biegunowość chroni nagrania z~\SI{2}{m}
+tak samo jak dawny warunek kierunku. Po dołożeniu nagrań z~około \SI{130}{cm}, w~których
+dotychczasowy wybór oddychał płytko, a~lepsza grupa leżała \SIrange{10}{20}{cm} bliżej (wynik 3,5 wobec 7,0),
+próg podniesiono z~połowy do 0,65: na 38~nagraniach z~odniesieniem zmienia on 7, zgodność z~komendami
+rośnie z~90,9 do 93,8\% (3, najgorzej $-2{,}4$~pkt), z~telefonem z~83,2 do 91,3\% (2), z~oznaczeniami
+ręcznymi z~79,6 do 88,6\% (2), a~z~pasem z~66,0 do 78,8\% (2, korelacja 0,29 $\rightarrow$ 0,62);
+próg 0,8 dokłada tylko nagrania bez wyraźnej zmiany albo bez odniesienia. Na żywo przy progu 0,65
+bramka odchodzi od wyboru Acconeera w~20 z~38 nagrań, zgodność z~pasem rośnie w~nich z~74,6 do 83,6\%
+(8, żadne nie traci), ale bramka zmienia się 47 razy zamiast 31. Na żywo
 (\texttt{tools/replay\_a121\_live\_range\_selection.py}: 33~nagrania
 odtworzone ramka po ramce z~celem Acconeera) bramka odeszła od wyboru Acconeera
 w~11, a~biegunowość zmieniła w~nich jedną decyzję (w~30-minutowym nagraniu
@@ -3076,10 +3084,12 @@ się przebieg z~\texttt{A121LiveTraceProcessor}.}
 Wariant & zmiany & zgodność w~zmienionych nagraniach \\
 \midrule
 Offline: próg połowy, warunek kierunku (poprzednio) & 2/33 & telefon 76 $\rightarrow$ 93\% (1), pas 89,0 $\rightarrow$ 96,0\% (1); nagranie z~boku z~\SI{50}{cm} zostaje odwrócone (pas 67,2\%) \\
-Offline: próg połowy, biegunowość (domyślnie) & 3/33 & jw. oraz pas 67,2 $\rightarrow$ 94,0\% (1, korelacja $-0{,}48 \rightarrow +0{,}98$) \\
+Offline: próg połowy, biegunowość (do 11.2026) & 3/33 & jw. oraz pas 67,2 $\rightarrow$ 94,0\% (1, korelacja $-0{,}48 \rightarrow +0{,}98$) \\
 Offline: zawsze lepsza grupa, biegunowość & 26/33 & komendy 92,7 $\rightarrow$ 92,9\% (17, najgorzej $-3{,}4$~pkt), telefon 70,1 $\rightarrow$ 76,1\% (5), oznaczenia ręczne 79,5 $\rightarrow$ 88,7\% (2), pas 81,6 $\rightarrow$ 94,0\% (3) \\
 Offline: zawsze lepsza grupa, bez kierunku i~biegunowości & 28/33 & jw., lecz komendy 92,5 $\rightarrow$ 89,9\% (19), w~tym dwa nagrania w~przeciwfazie: 91,5 $\rightarrow$ 63,8\% i~89,8 $\rightarrow$ 64,8\% \\
-Na żywo: reguła domyślna, zamrożenie w~pauzach & 11/33 & pas $+1{,}3$ do $+21{,}9$~pkt (3), telefon $+1{,}9$ do $+11{,}7$~pkt (3), oznaczenia ręczne $+2{,}1$ i~$+13{,}7$~pkt (2), komendy $-0{,}1$ i~$-1{,}5$~pkt (2) \\
+Offline: próg 0,65, biegunowość (domyślnie) & 10/38 & względem progu połowy: komendy 90,9 $\rightarrow$ 93,8\% (3), telefon 83,2 $\rightarrow$ 91,3\% (2), oznaczenia ręczne 79,6 $\rightarrow$ 88,6\% (2), pas 66,0 $\rightarrow$ 78,8\% (2) \\
+Na żywo: próg 0,65, zamrożenie w~pauzach & 20/38 & pas 74,6 $\rightarrow$ 83,6\% (8, najgorzej $+0{,}2$~pkt), telefon 72,6 $\rightarrow$ 81,2\% (3), komendy 91,0 $\rightarrow$ 91,3\% (6) \\
+Na żywo: próg połowy, zamrożenie w~pauzach (do 11.2026) & 11/33 & pas $+1{,}3$ do $+21{,}9$~pkt (3), telefon $+1{,}9$ do $+11{,}7$~pkt (3), oznaczenia ręczne $+2{,}1$ i~$+13{,}7$~pkt (2), komendy $-0{,}1$ i~$-1{,}5$~pkt (2) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -3793,13 +3803,13 @@ sterowanych A121 (średnie po nagraniach).}
 \toprule
 Miara & pas & iNode & A121 \\
 \midrule
-Dokładność offline, pauza od \SI{4}{s}, etykiety sprowadzone do reguły \SI{4}{s} & 87,1\% & 83,9\% & 97,3\% \\
-Makro-F1 (wdech, wydech, pauza), jw. & 0,855 & 0,819 & 0,971 \\
-Dokładność offline, pauza od \SI{4}{s}, etykiety jak w zbiorze & 72,2\% & 70,3\% & 97,3\% \\
-Dokładność offline, dawny próg \SI{2}{s}, etykiety jak w zbiorze & 80,6\% & 77,7\% & 95,3\% \\
-Dokładność w~czasie rzeczywistym & 59,4\% & 48,9\% & 87,0\% \\
-\quad po usunięciu opóźnienia & 81,0\% & 68,6\% & 95,2\% \\
-Opóźnienie granic w~czasie rzeczywistym & \SI{0.40}{s} & \SI{0.32}{s} & \SI{0.37}{s} \\
+Dokładność offline, pauza od \SI{4}{s}, etykiety sprowadzone do reguły \SI{4}{s} & 87,1\% & 83,9\% & 97,8\% \\
+Makro-F1 (wdech, wydech, pauza), jw. & 0,855 & 0,819 & 0,976 \\
+Dokładność offline, pauza od \SI{4}{s}, etykiety jak w zbiorze & 72,2\% & 70,3\% & 97,8\% \\
+Dokładność offline, dawny próg \SI{2}{s}, etykiety jak w zbiorze & 80,6\% & 77,7\% & 96,2\% \\
+Dokładność w~czasie rzeczywistym & 59,4\% & 48,9\% & 87,6\% \\
+\quad po usunięciu opóźnienia & 81,0\% & 68,6\% & 96,3\% \\
+Opóźnienie granic w~czasie rzeczywistym & \SI{0.40}{s} & \SI{0.32}{s} & \SI{0.38}{s} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -3858,14 +3868,14 @@ zbiory uczący, walidacyjny i~testowy. W~danych sterowanych nie ma pauz po
 wdechu ani fragmentów szumu.
 
 Tabela~\ref{tab:fazy-dane} zestawia oznaczone dane. Rzeczywistych jest
-\SI{154}{min}, w~tym tylko \SI{61.2}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
-i~\SI{39.8}{min} swobodnego oddechu na siedząco, oznaczonego z~pasa
+\SI{159}{min}, w~tym tylko \SI{66.5}{min} z~radaru: \SI{21.4}{min} nagrań sterowanych
+i~\SI{45.1}{min} swobodnego oddechu na siedząco, oznaczonego z~pasa
 tensometrycznego --- \SI{10}{min} z~radarem z~boku z~\SI{80}{cm},
 \SI{3}{min} z~boku z~\SI{50}{cm}, \SI{5}{min} z~\SI{50}{cm} podczas
 przewijania telefonu, \SI{4}{min} z~\SI{140}{cm} z~inną soczewką
-i~\SI{18}{min} z~około \SI{130}{cm}, nagrywanych na zmianę z~pasem tętna
-(nagranie, w~którym radar prawie nie nadążał za pasem --- korelacja przebiegów
-poniżej 0,3 --- wnosi tylko przebieg pasa) (nagrania IMU bez radaru
+i~\SI{23}{min} z~około \SI{130}{cm}, nagrywanych na zmianę z~pasem tętna
+(nagranie, w~którym radar prawie nie nadąża za pasem --- korelacja przebiegów
+poniżej 0,3 --- wnosiłoby tylko przebieg pasa) (nagrania IMU bez radaru
 dodają \SI{6.6}{min}: to tylko sześć nagrań po \SI{90}{s} z~kompletnym
 strumieniem, oznaczonych tą samą metodą względem komend, a~wcześniejsze 20~plików
 IMU, łącznie około \SI{15}{min}, nie ma komend i~nie jest oznaczone), dlatego nagrania części
@@ -3876,7 +3886,7 @@ z~kopiami, przebiegi pasa z~własnych nagrań z~radarem (te same
 w~części uczącej) z~kopiami i~dane syntetyczne (5323~okien uczących,
 72~walidacyjne i~58~testowych, wszystkie walidacyjne i~testowe z~rzeczywistego
 pasa) --- oraz do dostrajania:
-nagrania A121 z~kopiami (1827, 12 i~12~okien; nagrania z~pasem i~ich kopie
+nagrania A121 z~kopiami (2042, 12 i~12~okien; nagrania z~pasem i~ich kopie
 są wyłącznie w~części uczącej). Kopie nagrań z~pasem powstają z~sygnału bez
 powolnego dryfu ciała poniżej \SI{0.05}{Hz}: w~nagraniu z~\SI{80}{cm}, przy
 dryfie około \SI{2}{cm}, rozrzut percentyli 5--95 wynosi \SI{19.6}{mm} zamiast
@@ -3897,15 +3907,15 @@ nagrania z~radarem i~telefonem.}
 Źródło & Osoby & Razem & Wdech & Wydech & Pauza & Szum \\
 \midrule
 A121, nagrania sterowane & 1 & 21,4 & 6,9 & 10,1 & 4,4 & 0,0 \\
-A121 z~pasem, siedząc & 1 & 39,8 & 17,6 & 21,8 & 0,5 & 0,0 \\
+A121 z~pasem, siedząc & 1 & 45,1 & 19,7 & 24,4 & 1,1 & 0,0 \\
 Własny pas, te same nagrania & 1 & 45,3 & 19,8 & 24,5 & 1,1 & 0,0 \\
 Pas \cite{szymanski2025} & 3 & 92,7 & 28,9 & 31,4 & 29,9 & 2,5 \\
 Akcelerometr iNode \cite{szymanski2025} & 3 & 59,8 & 18,5 & 20,9 & 17,2 & 3,2 \\
 LSM6DS3 na klatce, bez radaru & 1 & 4,4 & 1,7 & 1,9 & 0,9 & 0,0 \\
 iPhone na klatce, bez radaru & 1 & 2,2 & 0,6 & 1,1 & 0,4 & 0,0 \\
 \midrule
-Kopie nagrań A121 & -- & 90,1 & 29,3 & 42,1 & 18,7 & 0,0 \\
-Kopie nagrań A121 z~pasem & -- & 245,0 & 108,0 & 133,9 & 3,1 & 0,0 \\
+Kopie nagrań A121 & -- & 90,2 & 29,4 & 42,1 & 18,7 & 0,0 \\
+Kopie nagrań A121 z~pasem & -- & 277,6 & 121,2 & 149,9 & 6,5 & 0,0 \\
 Kopie przebiegów własnego pasa & -- & 278,8 & 121,5 & 150,7 & 6,5 & 0,0 \\
 Kopie nagrań pasa & -- & 398,2 & 106,0 & 113,7 & 164,6 & 13,9 \\
 Dane syntetyczne A121 & -- & 300,0 & 104,6 & 152,2 & 41,0 & 2,3 \\
@@ -4024,13 +4034,13 @@ sterowanych (średnie po nagraniach).}
 \toprule
 Miara & offline & czas rzeczywisty \\
 \midrule
-Dokładność & 97,3\% & 87,0\% \\
-Makro-F1 & 0,971 & 0,869 \\
-F1: wdech / wydech & 0,969 / 0,979 & 0,836 / 0,885 \\
-F1: pauza & 0,965 & 0,886 \\
-Wykryte granice & 94,5\% & 81\% \\
+Dokładność & 97,8\% & 87,6\% \\
+Makro-F1 & 0,976 & 0,877 \\
+F1: wdech / wydech & 0,976 / 0,984 & 0,840 / 0,888 \\
+F1: pauza & 0,969 & 0,903 \\
+Wykryte granice & 95,1\% & 83\% \\
 Mediana błędu granicy & \SI{0.09}{s} & \SI{0.38}{s} \\
-Fałszywe granice & 0,6/min & 7,4/min \\
+Fałszywe granice & 0,6/min & 6,1/min \\
 \bottomrule
 \end{tabular}
 \end{table}

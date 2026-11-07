@@ -33,7 +33,7 @@ recordings with cues or a belt this held for every trace it decided; where breat
 
 Offline (:func:`choose_chest_range`) the whole recording is scored once and the old choice -- Acconeer's range,
 else its target, else the strongest echo -- stays unless the best group of bins is :func:`clearly_better`: moving
-in the same direction, the old trace scores under half of it and the group is not upside down; moving against
+in the same direction, the old trace scores under :data:`KEEP_OLD_FRACTION` of it and the group is not upside down; moving against
 it, the group is right way up and the old trace is not (from the side at 50 cm Acconeer's range was upside down
 against the belt, the bins in front of it right way up; on the 2 m retest the best bins were an upside-down
 reflection three times).  Live (:class:`LiveRangeSelector`) the last :data:`LIVE_WINDOW_S` are rescored every
@@ -69,7 +69,12 @@ GROUP_HALF_WIDTH = 1
 GROUP_FRACTION = 0.7
 GROUP_MIN_CORRELATION = 0.5
 # The old choice stays unless its trace scores below this share of the best group's (both moving the same way).
-KEEP_OLD_FRACTION = 0.5
+# 0.65 rather than 0.5 (2026-11-07, tools/compare_a121_range_selection.py --keep-old-fraction on 38 recordings with
+# a reference): 7 recordings change offline, 6 for the better (e.g. belt agreement 0.57 -> 0.74 at 1.3 m, phone
+# 0.79 -> 0.90, cues 0.88 -> 0.96 at 2 m) and one even (cues 0.94 -> 0.91, cue correlation 0.72 -> 0.79); 0.8 adds
+# only even or unscored ones.  Live (tools/replay_a121_live_range_selection.py) the belt agreement where the
+# selection moved goes 0.81 -> 0.84 with no recording worse, at 47 switches over the 38 runs instead of 31.
+KEEP_OLD_FRACTION = 0.65
 
 # Polarity -- which way up a trace breathes -- from the shape of the breath, with no other sensor: inhaling is active
 # and quicker than the passive exhale, so a chest trace that rises on inhale rises for less of the time than it
