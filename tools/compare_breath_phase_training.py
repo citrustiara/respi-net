@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 import json
 import math
 import os
@@ -80,39 +81,52 @@ COMMON = ["--augment"]  # random depth and small shifts on every variant alike
 SCORED_SPLITS = ("val", "test")
 
 
+@dataclass(frozen=True)
+class Setup:
+    """Which datasets the runs train on and where they go; one per fold of cross-validation."""
+
+    pretrain: Path = PRETRAIN
+    finetune: Path = FINETUNE
+    out_dir: Path = OUT_DIR
+
+
+DEFAULT = Setup()
+
+
 # ------------------------------------------------------------------- jobs
 
 
-def run_dir(stage: str, model: str, seed: int) -> Path:
-    return OUT_DIR / f"{stage}_{model}_s{seed}"
+def run_dir(stage: str, model: str, seed: int, setup: Setup = DEFAULT) -> Path:
+    return setup.out_dir / f"{stage}_{model}_s{seed}"
 
 
-def train_command(stage: str, model: str, seed: int) -> list[str]:
-    dataset = PRETRAIN if stage == "pre" else FINETUNE
+def train_command(stage: str, model: str, seed: int, setup: Setup = DEFAULT) -> list[str]:
+    dataset = setup.pretrain if stage == "pre" else setup.finetune
     command = [sys.executable, str(TRAIN_SCRIPT), str(dataset), "--model", model, "--seed", str(seed),
-               "--device", DEVICE[model], "--out-dir", str(OUT_DIR), "--name", run_dir(stage, model, seed).name,
+               "--device", DEVICE[model], "--out-dir", str(setup.out_dir), "--name", run_dir(stage, model, seed, setup).name,
                "--overwrite", *COMMON]
     command += EXTRA_ARGS.get(stage, [])
     if stage == "pretrain":
-        command += ["--init", str(run_dir("pre", model, seed) / "model.pt")]
+        command += ["--init", str(run_dir("pre", model, seed, setup) / "model.pt")]
     return command
 
 
-def run_job(stage: str, model: str, seed: int, threads: int, lock: threading.Lock) -> Path:
-    folder = run_dir(stage, model, seed)
+def run_job(stage: str, model: str, seed: int, threads: int, lock: threading.Lock, setup: Setup = DEFAULT) -> Path:
+    folder = run_dir(stage, model, seed, setup)
     if (folder / "model.pt").exists():
         return folder
     folder.parent.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "OMP_NUM_THREADS": str(threads), "MKL_NUM_THREADS": str(threads), "PYTHONUNBUFFERED": "1"}
     started = time.perf_counter()
+    label = folder.name if setup == DEFAULT else f"{setup.out_dir.name}/{folder.name}"
     with lock:
-        print(f"[{time.strftime('%H:%M:%S')}] start {folder.name}", flush=True)
-    log = OUT_DIR / f"{folder.name}.log"
+        print(f"[{time.strftime('%H:%M:%S')}] start {label}", flush=True)
+    log = setup.out_dir / f"{folder.name}.log"
     with log.open("w", encoding="utf-8") as handle:
-        result = subprocess.run(train_command(stage, model, seed), cwd=ROOT, env=env, stdout=handle, stderr=subprocess.STDOUT)
+        result = subprocess.run(train_command(stage, model, seed, setup), cwd=ROOT, env=env, stdout=handle, stderr=subprocess.STDOUT)
     with lock:
         status = "done" if result.returncode == 0 else f"FAILED ({result.returncode}), see {log}"
-        print(f"[{time.strftime('%H:%M:%S')}] {status} {folder.name} in {(time.perf_counter() - started) / 60:.1f} min", flush=True)
+        print(f"[{time.strftime('%H:%M:%S')}] {status} {label} in {(time.perf_counter() - started) / 60:.1f} min", flush=True)
     if result.returncode:
         raise RuntimeError(f"{folder.name} failed; see {log}")
     return folder

@@ -129,8 +129,9 @@ def reference_splits(path: Path, runs: list[LabelledRun]) -> dict[str, str]:
     return assign_splits(runs)
 
 
-def belt_session_split(run_id: str) -> str:
-    return next((split for session, split in BELT_SESSION_SPLITS.items() if session in run_id), "train")
+def belt_session_split(run_id: str, session_splits: dict[str, str] | None = None) -> str:
+    chosen = BELT_SESSION_SPLITS if session_splits is None else session_splits
+    return next((split for session, split in chosen.items() if session in run_id), "train")
 
 
 def minutes(runs: list[LabelledRun]) -> dict[str, float]:
@@ -314,9 +315,19 @@ def main() -> int:
     parser.add_argument("--enhanced", action="store_true", help="v2: time-varying noise, wider drift and reduced-power A121 replays")
     parser.add_argument("--output-dir", type=Path, default=None, help="defaults to a separate enhanced_v2 directory with --enhanced")
     parser.add_argument("--summary-path", type=Path, default=None, help="also save the aggregate summary at this path")
+    parser.add_argument("--belt-split", action="append", default=None, metavar="SESSION=SPLIT",
+                        help="replace BELT_SESSION_SPLITS (repeat; sessions not named train), e.g. for one fold of cross-validation")
     parser.add_argument("--own-examples-dir", type=Path, default=None, help="save small own-radar examples (never belt files)")
     args = parser.parse_args()
     rng = np.random.default_rng(args.seed)
+    belt_session_splits = dict(BELT_SESSION_SPLITS)
+    if args.belt_split:
+        belt_session_splits = {}
+        for item in args.belt_split:
+            session, _, part = item.partition("=")
+            if not session or part not in ("train", "val", "test"):
+                raise SystemExit(f"--belt-split wants SESSION=train|val|test, not {item!r}")
+            belt_session_splits[session] = part
 
     coach = list(runs_in(OUT / "runs"))
     belt = [to_labelled_run(recording) for recording in recordings() if recording.sensor == "tensometer"]
@@ -330,7 +341,7 @@ def main() -> int:
     # in the same split.
     belt_sessions = list(runs_in(BELT_SESSIONS))
     session_traces = list(runs_in(BELT_SESSION_TRACES))
-    session_splits = {run.run_id: belt_session_split(run.run_id) for run in [*belt_sessions, *session_traces]}
+    session_splits = {run.run_id: belt_session_split(run.run_id, belt_session_splits) for run in [*belt_sessions, *session_traces]}
     train_sessions = [run for run in belt_sessions if session_splits[run.run_id] == "train"]
     train_traces = [run for run in session_traces if session_splits[run.run_id] == "train"]
 
@@ -368,7 +379,7 @@ def main() -> int:
         "relationship_to_v1": "addition_only; real sources and the 60 identical synthetic runs are stored in v1 only" if args.enhanced else "base",
         "seed": args.seed,
         "split_status": "radar + belt sessions: final, held out by session (BELT_SESSION_SPLITS; recording ended 2026-11-07); coach and Szymanski runs: inherited from their own datasets",
-        "belt_session_splits": BELT_SESSION_SPLITS,
+        "belt_session_splits": belt_session_splits,
         "label_transfer": "Existing source labels and IGNORE masks are inherited; nearest-neighbour time warp only; no detector or re-annotation on artificial signals",
         "enhancements": {"time_varying_extra_noise": bool(args.enhanced), "drift_per_min": [.05, .1, .2, .3, .45, .6] if args.enhanced else [.3], "radar_power_drop_db": [0, 6, 12] if args.enhanced else [], "reduced_power_belt": False},
         "noise_bank_minutes": round(sum(segment.shape[-1] for segment in bank.segments) / FS / 60.0, 1),

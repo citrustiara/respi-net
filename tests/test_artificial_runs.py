@@ -137,3 +137,35 @@ def test_combined_export_deduplicates_contents_and_rejects_group_leakage(tmp_pat
         np.savez_compressed(tmp_path / "bad.npz", **fields, meta=np.array(json.dumps(meta)))
     with pytest.raises(ValueError, match="source group"):
         merge_window_datasets(source, tmp_path / "bad.npz", tmp_path / "bad_combined.npz")
+
+
+def test_belt_split_override_replaces_the_fixed_session_split() -> None:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from build_artificial_data import BELT_SESSION_SPLITS, belt_session_split
+
+    run = "a121_belt_sitting_side_80cm_free_2026-10-25__belt"
+    assert belt_session_split(run) == BELT_SESSION_SPLITS["sitting_side_80cm_free_2026-10-25"] == "test"
+    # A fold that names other sessions sends this one to training, and leaves the father's sessions there too.
+    fold = {"sitting_50cm_phone_scrolling_2026-10-27": "test", "sitting_side_50cm_free_2026-10-26": "val"}
+    assert belt_session_split(run, fold) == "train"
+    assert belt_session_split("a121_belt_sitting_50cm_phone_scrolling_2026-10-27", fold) == "test"
+    assert belt_session_split("a121_belt_sitting_130cm_alt_2026-11-07_19-26", fold) == "train"
+
+
+def test_cross_validation_holds_out_each_author_session_once() -> None:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    from build_artificial_data import BELT_SESSION_SPLITS
+    from crossval_breath_phase_training import FOLDS
+
+    tests = [test for test, _ in FOLDS.values()]
+    assert len(set(tests)) == len(tests) == 4
+    assert set(BELT_SESSION_SPLITS) <= set(tests)
+    for test, val in FOLDS.values():
+        assert val != test and val in tests  # validation is another of the author's sessions
+        assert "2026-11-07" not in test + val  # the father's sessions only ever train

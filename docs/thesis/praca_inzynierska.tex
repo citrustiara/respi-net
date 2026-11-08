@@ -140,7 +140,8 @@ parametrów) rozpoznające fazy oddechu z~radaru A121 na żywo, uczone na nagran
 oznaczonych z~pasa tensometrycznego, ich kopiach i~danych syntetycznych. Na nagraniach
 testowych autora najlepsza sieć osiągnęła 81,9\% zgodności faz wobec 72,5\%
 deterministycznego detektora działającego w~czasie rzeczywistym, przy około 40\% mniejszej
-liczbie fałszywych granic faz (7,6 zamiast 12,4 na minutę).
+liczbie fałszywych granic faz (7,6 zamiast 12,4 na minutę). W~walidacji krzyżowej po
+czterech sesjach autora sieć wygrała z~detektorem w~każdej sesji (łącznie 86,3\% wobec 71,7\%).
 
 \paragraph{Słowa kluczowe:} radar dopplerowski, radar impulsowo-koherentny,
 rytm oddechowy, parametry witalne, HB100, Acconeer A121, analiza snu, sieci
@@ -3906,7 +3907,8 @@ trafia jego nagranie z~\SI{50}{cm} podczas przewijania telefonu (\SI{5}{min}) i~
 sesje ojca (\SI{76.9}{min}, \SIrange{0.8}{1.3}{m}): więcej oddechu do nauki, a~nie sprawdzian
 innej osoby, którego ta praca nie obejmuje. Kopie powstają tylko z~części uczącej. Zbiór
 walidacyjny jest mały (25~okien), więc do wyboru modelu służy raczej jako kontrola niż
-dokładna miara. W~swobodnym oddechu pauz jest mało (\SI{2.4}{min}), więc klasę
+dokładna miara; wariant uczenia wybrano dlatego walidacją krzyżową po sesjach
+(podrozdz.~\ref{sec:sieci-walidacja-krzyzowa}). W~swobodnym oddechu pauz jest mało (\SI{2.4}{min}), więc klasę
 pauzy niosą głównie nagrania sterowane, pas \cite{szymanski2025} i~dane syntetyczne. Kopie nagrań z~pasem powstają z~sygnału bez
 powolnego dryfu ciała poniżej \SI{0.05}{Hz}: w~nagraniu z~\SI{80}{cm}, przy
 dryfie około \SI{2}{cm}, rozrzut percentyli 5--95 wynosi \SI{19.6}{mm} zamiast
@@ -4248,17 +4250,76 @@ również jego konwencje. Na zbiorze walidacyjnym (25~okien, jedna sesja i~trzy 
 sterowane) wszystkie sieci mają w~czasie rzeczywistym 85--91\% dokładności wobec 77,6\%
 detektora, co zgadza się z~kierunkiem wyników testu.
 
-Na model docelowy wybrano TCN po wstępnym uczeniu i~dostrojeniu: ma najwyższą
-dokładność, najdokładniejsze granice i~mały rozrzut między ziarnami. Różnice
-między wariantami rzędu 1--2~punktów procentowych nie są jednak rozstrzygające przy
-86~oknach testowych, które pochodzą z~dwóch sesji jednej osoby i~trzech nagrań sterowanych.
+\subsection{Walidacja krzyżowa po sesjach}
+\label{sec:sieci-walidacja-krzyzowa}
+Stały podział ma dwie słabości: walidację stanowi jedna krótka sesja, na której wszystkie
+warianty wypadają podobnie (85--91\%), a~wariant wybierano, patrząc na wyniki testu.
+Porównanie TCN powtórzono więc walidacją krzyżową z~pominięciem jednej sesji. Każda z~czterech
+sesji autora z~pasem (z~boku z~\SI{80}{cm}, z~\SI{140}{cm} z~nową soczewką, z~boku
+z~\SI{50}{cm} i~z~\SI{50}{cm} podczas przewijania telefonu) jest raz zbiorem testowym,
+inna jego sesja walidacyjnym (z~boku z~\SI{50}{cm}, a~gdy to ona jest testem --- z~boku
+z~\SI{80}{cm}), a~pozostałe dwie i~wszystkie sesje ojca uczącym. Dla każdego podziału oba
+zbiory buduje się od nowa, więc sesja testowa wypada również ze wstępnego uczenia, a~kopie
+powstają tylko z~sesji uczących. Nagrania sterowane zostają w~swoim podziale, a~ocenia się
+tylko sesję testową. GRU pominięto, bo w~stałym podziale wypadła gorzej. Wariant wybiera
+średnie makro-F1 wygładzacza na zbiorach walidacyjnych czterech podziałów, a~nie wynik testu:
+0,896 po wstępnym uczeniu i~dostrojeniu wobec 0,883 samego radaru i~0,882 radaru z~kopiami.
+Wskazuje to ten sam wariant, który wybrano wcześniej. Wyniki testu wszystkich czterech sesji
+razem (112~okien, każda sesja raz) zestawia tab.~\ref{tab:sieci-walidacja-krzyzowa}.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Walidacja krzyżowa po sesjach autora, TCN w~czasie rzeczywistym: cztery sesje
+testowe razem, średnia z~trzech ziaren, oraz dokładność osobno dla każdej sesji (w~nawiasie
+liczba okien). Kolumny $\pm$: odchylenie standardowe dokładności między ziarnami i~między
+sesjami. Wszystkie 6~pauz swobodnego oddechu leży w~dwóch pierwszych sesjach.}
+\label{tab:sieci-walidacja-krzyzowa}
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lrrrrrrrrrrr@{}}
+\toprule
+& \multicolumn{7}{c}{cztery sesje razem} & \multicolumn{4}{c}{dokładność w~sesji [\%]} \\
+\cmidrule(lr){2-8}\cmidrule(l){9-12}
+Wariant & Dokł. [\%] & $\pm$ ziarna & $\pm$ sesje & Makro-F1 & F1 pauza & Błąd gr. [s] & Fałsz. gr. [1/min]
+& \shortstack{bok \SI{80}{cm}\\(55)} & \shortstack{\SI{140}{cm}\\(19)} & \shortstack{bok \SI{50}{cm}\\(13)} & \shortstack{telefon\\(25)} \\
+\midrule
+tylko radar & 84,3 & 0,8 & 3,1 & 0,646 & 0,22 & 0,22 & 5,8 & \textbf{81,0} & 85,1 & 87,7 & 89,2 \\
+radar z~kopiami & 84,3 & 0,7 & 4,9 & 0,623 & 0,15 & 0,22 & 4,9 & 79,7 & 83,9 & 90,4 & 91,6 \\
+wstępne + dostr. & \textbf{86,3} & 0,6 & 4,6 & \textbf{0,711} & \textbf{0,38} & \textbf{0,19} & \textbf{4,5} & 80,9 & \textbf{90,3} & \textbf{90,6} & \textbf{92,9} \\
+\midrule
+detektor & 71,7 & -- & 2,7 & 0,586 & 0,29 & 0,44 & 11,5 & 69,3 & 75,5 & 70,5 & 75,0 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Sieć przewyższa detektor czasu rzeczywistego w~każdej z~czterech sesji i~w~każdym wariancie,
+o~10--20~punktów procentowych. Łącznie TCN po wstępnym uczeniu i~dostrojeniu ma 86,3\%
+dokładności wobec 71,7\% detektora i~daje 2,6~raza mniej fałszywych granic (4,5 zamiast 11,5
+na minutę). Przewaga wstępnego uczenia jest tu wyraźniejsza niż w~stałym podziale: wobec
+radaru z~kopiami jest dodatnia w~każdej sesji (0,2--6,4~punktu), choć największa w~sesji
+z~\SI{140}{cm}, a~makro-F1 rośnie z~0,62--0,65 do 0,71. Rozrzut między sesjami (3--5~punktów)
+jest kilka razy większy niż między ziarnami (poniżej 1~punktu): wynik zależy bardziej od
+nagrania --- odległości i~ustawienia --- niż od losowości uczenia. Najtrudniejsza jest
+najdłuższa sesja, z~boku z~\SI{80}{cm} (około 81\%, tyle co oba nagrania z~pasem w~stałym
+teście, 80,8\%). Łączna dokładność jest wyższa niż w~stałym podziale, bo w~każdym podziale
+uczą też dwie inne sesje autora, a~obie sesje z~\SI{50}{cm} okazały się łatwiejsze.
+Walidacja krzyżowa nie dodaje pauz swobodnego oddechu: model po wstępnym uczeniu znajduje 2--3
+z~6, detektor 5, więc ten problem pozostaje otwarty. Po dekodowaniu Viterbiego sieci osiągają
+86,6--88,5\%, a~detektor offline 90,8\%, z~tym samym zastrzeżeniem co wyżej.
+
+Na model docelowy wybrano TCN po wstępnym uczeniu i~dostrojeniu. Wskazują ją zbiory
+walidacyjne walidacji krzyżowej, niezależnie od testu, a~w~obu ocenach ma ona najwyższą dokładność
+i~makro-F1 oraz najdokładniejsze granice. Różnice między wariantami (1--2~punkty) są jednak
+małe wobec rozrzutu między sesjami jednej osoby. Pewny jest natomiast wniosek, że sieć
+przewyższa w~czasie rzeczywistym detektor --- w~każdej sesji testowej.
 
 \section{Dyskusja i dalsze kroki}
 \label{sec:sieci-dyskusja}
 Sieć uczona na około \SI{2}{h} rzeczywistego radaru i~danych sztucznych przewyższa
 w~czasie rzeczywistym detektor deterministyczny, co uzasadnia jej użycie na żywo; po fakcie
-wystarcza detektor. Ograniczenia wyników: test to dwie sesje jednej osoby i~trzy nagrania
-sterowane; etykiety swobodnego oddechu wyznaczył detektor na przebiegu pasa, więc nie są
+wystarcza detektor. Ograniczenia wyników: test to sesje jednej osoby --- dwie i~trzy nagrania
+sterowane w~stałym podziale, cztery w~walidacji krzyżowej; etykiety swobodnego oddechu wyznaczył detektor na przebiegu pasa, więc nie są
 niezależne od metody porównawczej, a~etykiety nagrań sterowanych dociągnięto do sygnału
 samego radaru; w~swobodnym oddechu jest mało pauz, a~we własnych danych nie ma fragmentów
 szumu (ma je zbiór \cite{szymanski2025}); wszystko nagrano na siedząco, w~dzień, do
@@ -5122,6 +5183,8 @@ Najważniejsze ustalenia inżynierskie uzyskane dotychczas:
   syntetycznych i~dostrojona na radarze, rozpoznaje fazy oddechu z~A121 na żywo
   z~dokładnością 81,9\% wobec 72,5\% detektora deterministycznego, z~mniejszą
   liczbą fałszywych granic faz (7,6 zamiast 12,4 na minutę) i~średnim błędem granicy \SI{0.25}{s} zamiast \SI{0.44}{s}.
+  W~walidacji krzyżowej po czterech sesjach autora przewaga utrzymuje się w~każdej sesji
+  (łącznie 86,3\% wobec 71,7\%), a~ten sam wariant wskazuje walidacja, nie test.
   Pauzy na komendę rozpoznaje w~około 90\%, krótkie zatrzymania swobodnego oddechu
   pozostają trudne dla wszystkich metod.
 \end{itemize}
