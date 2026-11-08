@@ -341,3 +341,18 @@ def test_exclude_runs_drops_matching_training_windows_only(tmp_path: Path) -> No
     metrics = json.loads((tmp_path / "real" / "metrics.json").read_text())
     assert (metrics["train_windows"], metrics["excluded_train_windows"]) == (1, 1)
     assert metrics["splits"]["val"]["windows"] == 1  # validation keeps its '__x'-named window
+
+
+def test_class_scale_multiplies_one_class_weight(tmp_path: Path) -> None:
+    dataset = tmp_path / "tiny.npz"
+    _write_tiny_dataset(dataset)
+    common = ["--epochs", "1", "--tcn-channels", "8", "--dilations", "1", "--out-dir", str(tmp_path)]
+    assert trainer.main([str(dataset), *common, "--name", "plain"]) == 0
+    assert trainer.main([str(dataset), *common, "--name", "hold3", "--class-scale", "hold=3"]) == 0
+
+    plain = json.loads((tmp_path / "plain" / "metrics.json").read_text())["class_weights"]
+    scaled = json.loads((tmp_path / "hold3" / "metrics.json").read_text())["class_weights"]
+    assert scaled["hold"] == pytest.approx(3 * plain["hold"])
+    assert scaled["inhale"] == pytest.approx(plain["inhale"])
+    with pytest.raises(SystemExit, match="CLASS=FACTOR"):
+        trainer.main([str(dataset), *common, "--name", "bad", "--class-scale", "pause=2"])

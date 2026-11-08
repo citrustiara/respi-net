@@ -704,6 +704,11 @@ def fit_and_save(
     decoding = decoding_from(args)
     transitions = transition_log_matrix(math.log(decoding["switch_prob"]))
     weight = class_weights(data.y[train_index], power=args.class_weight_power)
+    for item in getattr(args, "class_scale", None) or []:
+        name, _, factor = item.partition("=")
+        if name not in CLASS_NAMES or not factor:
+            raise SystemExit(f"--class-scale wants CLASS=FACTOR with CLASS in {list(CLASS_NAMES)}, not {item!r}")
+        weight[CLASS_NAMES.index(name)] *= float(factor)
     width = data.X.shape[-1]
 
     log(f"dataset {source}: {len(data.X)} windows of {width / data.fs:.1f} s at {data.fs:g} Hz, inputs {inputs}")
@@ -868,6 +873,8 @@ def build_parser() -> argparse.ArgumentParser:
     training.add_argument("--grad-clip", type=float, default=1.0, help="max gradient norm, 0 = off")
     training.add_argument("--class-weight-power", type=float, default=1.0,
                           help="1 = inverse class frequency (default), 0.5 = its square root, 0 = unweighted")
+    training.add_argument("--class-scale", action="append", default=None, metavar="CLASS=FACTOR",
+                          help="multiply one class weight after the inverse-frequency weighting, e.g. hold=2 (repeatable)")
     training.add_argument("--exclude-runs", default=None, metavar="REGEX",
                           help="leave out training windows whose run_id matches (e.g. '__x' = augmented copies)")
     training.add_argument("--augment", action="store_true", help="random chest/velocity scaling and small time shifts")

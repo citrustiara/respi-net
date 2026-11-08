@@ -4191,22 +4191,30 @@ granice.
 \small
 \caption{Wyniki w~czasie rzeczywistym osobno dla nagrań sterowanych (pauzy na komendę,
 35\% oznaczonych próbek to pauzy; 12~okien) i~dla swobodnego oddechu oznaczonego z~pasa
-(3\% to pauzy; 74~okna); średnie z~trzech ziaren.}
+(3\% to pauzy; 74~okna); średnie z~trzech ziaren. Ostatnia kolumna: ile z~6~różnych pauz
+swobodnego oddechu w~zbiorze testowym znalazł model z~każdego ziarna (pauzę uznaje się za
+znalezioną, gdy co najmniej połowę jej próbek oznaczono jako pauzę w~większości zawierających
+ją okien). Trzy ostatnie warianty sieci sprawdzono tylko dla TCN.}
 \label{tab:sieci-wyniki-rodzaje}
-\begin{tabular}{@{}llrrrr@{}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llrrrrr@{}}
 \toprule
-& & \multicolumn{2}{c}{nagrania sterowane} & \multicolumn{2}{c}{swobodny oddech} \\
-\cmidrule(lr){3-4}\cmidrule(l){5-6}
-Wariant & Sieć & Dokładność & F1 pauza & Dokładność & F1 pauza \\
+& & \multicolumn{2}{c}{nagrania sterowane} & \multicolumn{3}{c}{swobodny oddech} \\
+\cmidrule(lr){3-4}\cmidrule(l){5-7}
+Wariant & Sieć & Dokładność & F1 pauza & Dokładność & F1 pauza & Pauzy (z~6) \\
 \midrule
-tylko radar & TCN & 88,2\% & 0,89 & 77,5\% & 0,37 \\
-tylko radar & GRU & 88,8\% & 0,90 & 77,6\% & 0,37 \\
-radar z~kopiami & TCN & 88,5\% & 0,90 & 80,9\% & 0,11 \\
-radar z~kopiami & GRU & 83,4\% & 0,85 & 72,5\% & 0,25 \\
-wstępne + dostr. & TCN & 89,6\% & 0,90 & 80,8\% & 0,26 \\
-wstępne + dostr. & GRU & 87,9\% & 0,90 & 75,2\% & 0,18 \\
+tylko radar & TCN & 88,2\% & 0,89 & 77,5\% & 0,37 & 3, 4, 4 \\
+tylko radar & GRU & 88,8\% & 0,90 & 77,6\% & 0,37 & 3, 4, 6 \\
+radar z~kopiami & TCN & 88,5\% & 0,90 & 80,9\% & 0,11 & 1, 2, 1 \\
+radar z~kopiami & GRU & 83,4\% & 0,85 & 72,5\% & 0,25 & 3, 2, 2 \\
+wstępne + dostr. & TCN & 89,6\% & 0,90 & 80,8\% & 0,26 & 2, 2, 6 \\
+wstępne + dostr. & GRU & 87,9\% & 0,90 & 75,2\% & 0,18 & 2, 2, 4 \\
 \midrule
-detektor & -- & 84,5\% & 0,89 & 70,9\% & 0,35 \\
+kopie 0,8--1,25 raza & TCN & 87,6\% & 0,88 & 78,4\% & 0,18 & 2, 2, 4 \\
+kopie 0,9--1,1 raza & TCN & 85,4\% & 0,83 & 79,9\% & 0,10 & 1, 1, 3 \\
+kopie, waga pauzy $\times 2$ & TCN & 89,7\% & 0,91 & 80,7\% & 0,14 & 2, 2, 2 \\
+\midrule
+detektor & -- & 84,5\% & 0,89 & 70,9\% & 0,35 & 5 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -4216,10 +4224,21 @@ się słaby średni wynik pauzy. Pauzy na komendę wszystkie sieci rozpoznają r
 jak detektor (F1 0,85--0,90). Trudne są krótkie, niejednoznaczne zatrzymania
 w~swobodnym oddechu, które stanowią tylko 3\% etykiet; tam F1 pauzy nie przekracza 0,37
 u~żadnej metody. Dane sztuczne podnoszą dokładność wdechu i~wydechu w~swobodnym oddechu
-(TCN: z~77,5\% do 80,9\%), ale pogarszają te krótkie pauzy (F1 z~0,37 do 0,11). Prawdopodobną
-przyczyną jest rozciąganie kopii w~czasie: krótka pauza po skróceniu 0,7 raza staje się
-krótsza od najkrótszej fazy, a~kopie nagrań z~pasem stanowią większość okien uczących;
-nie sprawdzano tego osobnym eksperymentem.
+(TCN: z~77,5\% do 80,9\%), ale pogarszają te krótkie pauzy (F1 z~0,37 do 0,11).
+
+Sprawdzono dwa wyjaśnienia. Pierwsze --- że kopie skrócone 0,7 raza zamieniają krótkie
+pauzy w~punkty zwrotu --- nie potwierdziło się: mediana pauzy swobodnego oddechu w~danych
+uczących wynosi \SI{2.1}{s}, w~najkrótszych kopiach \SI{1.5}{s}, a~udział pauz we wszystkich
+kopiach jest ten sam (2,5\%). Kopie tylko 0,8--1,25 raza ani tylko 0,9--1,1 raza nie poprawiły
+pauz, za to obniżyły dokładność. Drugie --- że pauza ma za małą wagę --- również nie: waga pauzy
+jest już 6,3~raza większa niż wdechu i~wydechu, a~jej podwojenie nie zmieniło wyniku
+(tab.~\ref{tab:sieci-wyniki-rodzaje}). Wynik pauz w~swobodnym oddechu opiera się przy tym na
+6~pauzach (łącznie \SI{23}{s}) z~dwóch sesji testowych, a~zbiór walidacyjny nie ma ich wcale,
+więc różnica jednej pauzy zmienia go o~17~punktów procentowych, a~wybór epoki nie może go
+uwzględnić. Modele uczone tylko na radarze znajdują średnio 3,7 i~4,3 z~6~pauz, z~kopiami
+1,3--2,3, po wstępnym uczeniu i~dostrojeniu 2,7--3,3, detektor 5. Tendencja jest spójna, ale do jej wyjaśnienia potrzeba więcej pauz
+swobodnego oddechu z~niezależnym odniesieniem; danych sztucznych nie da się tu dostroić
+na podstawie tego testu.
 
 Po dekodowaniu Viterbiego, które patrzy w~przód w~obrębie okna, sieci osiągają
 79,6--85,2\% dokładności, a~detektor w~trybie offline 89,2\% (makro-F1 0,879). To
@@ -4244,9 +4263,9 @@ niezależne od metody porównawczej, a~etykiety nagrań sterowanych dociągnięt
 samego radaru; w~swobodnym oddechu jest mało pauz, a~we własnych danych nie ma fragmentów
 szumu (ma je zbiór \cite{szymanski2025}); wszystko nagrano na siedząco, w~dzień, do
 \SI{2}{m}. Wynik nie mówi więc nic o~innych osobach, pozycjach ciała ani o~oddechu we śnie.
-Najbliższe usprawnienia: kopie rozciągane w~węższym zakresie lub z~zachowaniem długości
-pauz, osobna waga klasy pauzy dla swobodnego oddechu i~mniejszy udział kopii nagrań
-z~pasem. Dalsze kroki, poza zakresem tej pracy:
+Węższy zakres kopii ani większa waga pauzy nie poprawiły krótkich pauz swobodnego oddechu;
+do tego potrzeba przede wszystkim więcej takich pauz w~zbiorze walidacyjnym i~testowym.
+Dalsze kroki, poza zakresem tej pracy:
 \begin{enumerate}
   \item odniesienie niezależne od detektora: sesja z~pasem oddechowym na klatce i~na brzuchu
   oraz czujnikiem przepływu powietrza przy nosie, z~pauzami obu rodzajów po \SI{4}{s}, \SI{8}{s}
