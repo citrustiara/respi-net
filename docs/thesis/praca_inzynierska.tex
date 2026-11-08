@@ -135,7 +135,12 @@ kontrolowany eksperyment porównujący trzy soczewki dielektryczne
 na klatkę piersiową (36 nagrań). W części eksperymentalnej system zastosowano
 do całonocnego monitoringu snu, porównując wyniki z zegarkiem Garmin~Fenix~7.
 
-\todo{Uzupełnić streszczenie o wyniki końcowe sieci neuronowych, gdy powstaną.}
+Przygotowano też przyczynowe sieci neuronowe (TCN i~GRU, około 40~tys.
+parametrów) rozpoznające fazy oddechu z~radaru A121 na żywo, uczone na nagraniach
+oznaczonych z~pasa tensometrycznego, ich kopiach i~danych syntetycznych. Na nagraniach
+testowych autora najlepsza sieć osiągnęła 81,9\% zgodności faz wobec 72,5\%
+deterministycznego detektora działającego w~czasie rzeczywistym, przy około 40\% mniejszej
+liczbie fałszywych granic faz (7,6 zamiast 12,4 na minutę).
 
 \paragraph{Słowa kluczowe:} radar dopplerowski, radar impulsowo-koherentny,
 rytm oddechowy, parametry witalne, HB100, Acconeer A121, analiza snu, sieci
@@ -2815,10 +2820,10 @@ końcowy aplikacji nie powinien zastępować analizy całego przebiegu.
 \chapter{Sieci neuronowe do analizy faz oddechu}
 \label{chap:sieci}
 
-\todo{Model nie został jeszcze wytrenowany. Rozdział opisuje przygotowany
-potok: klasy, sygnał wejściowy, korektę etykiet, zbiór uczący, metodę
-porównawczą i~plan uczenia. Wyniki sieci zostaną dopisane po zebraniu danych
-z~niezależnym torem odniesienia.}
+Rozdział opisuje kolejno: klasy i~sygnał wejściowy, korektę etykiet, zbiór uczący
+i~dane sztuczne, detektor deterministyczny jako punkt odniesienia, architektury
+sieci, sposób uczenia oraz porównanie trzech wariantów uczenia na nagraniach
+testowych oznaczonych z~pasa (podrozdz.~\ref{sec:sieci-wyniki}).
 
 \section{Sformułowanie zadania}
 \label{sec:sieci-zadanie}
@@ -4116,49 +4121,142 @@ radarze do 0,82; w~badaniu ablacyjnym tych samych autorów model uczony od
 zera przy innych ustawieniach osiągał 0,77, więc zysk zależy od sposobu
 uczenia \cite{lu2026}.
 
-Plan walidacji: z~nagrań z~telefonem jako torem odniesienia po jednej sesji
-każdej pozycji ciała, nagranej innego dnia, zostanie odłożone do testu
-i~nie będzie używane do strojenia; później dojdzie trudny zbiór testowy
-(oddech płytki, szybki, wolny i~nieregularny, ruch, odległości
-do \SI{7}{m}), a~nagrania innych osób --- jako opcjonalne sprawdzenie uogólnienia, bo system jest
-kalibrowany dla jednej osoby. Porównane zostaną: detektor
-deterministyczny, sieć uczona tylko na danych rzeczywistych, tylko na
-syntetycznych, wstępnie na syntetycznych i~dostrojona na rzeczywistych oraz
-na mieszance --- każdy wariant z~kilku ziaren losowych.
+Porównano trzy sposoby wykorzystania danych, każdy na obu architekturach i~z~trzech
+ziaren losowych (0, 1, 2), przy tych samych ustawieniach:
+\begin{itemize}
+  \item \textbf{tylko radar} --- zbiór do dostrajania bez kopii, czyli same
+  rzeczywiste nagrania A121 (506~okien uczących);
+  \item \textbf{radar z~kopiami} --- cały zbiór do dostrajania (3592~okna);
+  \item \textbf{wstępne uczenie i~dostrajanie} --- najpierw zbiór do wstępnego uczenia
+  (pas \cite{szymanski2025}, przebiegi własnego pasa, ich kopie i~dane syntetyczne;
+  6835~okien, epokę wybiera makro-F1 na rzeczywistym pasie), potem cały zbiór do
+  dostrajania, zaczynając od otrzymanych wag; dostrajane są wszystkie warstwy.
+\end{itemize}
+Wszystkie warianty uczy optymalizator AdamW (krok $10^{-3}$, osłabianie wag $10^{-2}$,
+paczki po 32~okna, najwyżej 60~epok, zatrzymanie po 10~epokach bez poprawy), z~losowym
+skalowaniem głębokości oddechu o~0,7--1,4 raza i~przesunięciem okna do \SI{1}{s}. W~danych
+pasa nie ma kanału echa, więc ma on tam wartość zero. Uczenie zajmuje na komputerze Mac
+\SIrange{1}{2}{min} dla samego radaru, \SIrange{5}{8}{min} z~kopiami i~\SIrange{11}{22}{min}
+wstępnego uczenia oraz \SIrange{5}{9}{min} dostrajania. Wariantu uczonego wyłącznie na danych
+syntetycznych nie sprawdzano: wstępne uczenie obejmuje je razem z~rzeczywistym pasem.
 
 \section{Wyniki}
-\todo{Wyniki sieci po zebraniu danych z~niezależnym torem odniesienia.
-Tymczasowym punktem odniesienia jest tab.~\ref{tab:fazy-baseline}.}
+\label{sec:sieci-wyniki}
+
+Wszystkie warianty oceniono na tym samym zbiorze testowym: dwóch sesjach autora
+oznaczonych z~pasa (74~okna, \SI{13.9}{min}) i~trzech nagraniach sterowanych
+(12~okien), bez kopii i~danych syntetycznych. Na tych samych oknach uruchomiono
+detektor deterministyczny (podrozdz.~\ref{sec:sieci-baseline}), także od zimnego startu
+w~każdym oknie, jak sieć. Sieć działa na żywo, dlatego głównym porównaniem jest
+wygładzacz czasu rzeczywistego (podrozdz.~\ref{sec:sieci-architektura}) wobec detektora
+w~trybie czasu rzeczywistego (tab.~\ref{tab:sieci-wyniki}).
+
+\begin{table}[H]
+\centering
+\small
+\caption{Wyniki na zbiorze testowym w~czasie rzeczywistym: średnia z~trzech ziaren
+losowych (dokładność $\pm$ odchylenie standardowe). Błąd granicy to średni błąd bezwzględny
+wykrytych granic.}
+\label{tab:sieci-wyniki}
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llrrrrrrr@{}}
+\toprule
+Wariant & Sieć & Dokładność & Makro-F1 & F1 wdech/wydech & F1 pauza & Wykryte gr. & Błąd gr. [s] & Fałszywe gr. [1/min] \\
+\midrule
+tylko radar & TCN & 78,8 $\pm$ 3,8\% & 0,743 & 0,76 / 0,83 & 0,63 & 83\% & 0,34 & 6,1 \\
+tylko radar & GRU & 79,0 $\pm$ 1,1\% & 0,739 & 0,75 / 0,84 & 0,62 & 84\% & 0,36 & 5,9 \\
+radar z~kopiami & TCN & 81,8 $\pm$ 0,8\% & 0,743 & 0,81 / 0,87 & 0,55 & 88\% & 0,26 & 6,7 \\
+radar z~kopiami & GRU & 73,8 $\pm$ 1,9\% & 0,683 & 0,70 / 0,80 & 0,55 & 80\% & 0,43 & 5,1 \\
+wstępne + dostr. & TCN & \textbf{81,9 $\pm$ 1,7\%} & \textbf{0,750} & 0,80 / 0,87 & 0,57 & 83\% & \textbf{0,25} & 7,6 \\
+wstępne + dostr. & GRU & 76,7 $\pm$ 3,2\% & 0,692 & 0,73 / 0,84 & 0,50 & 78\% & 0,33 & 7,4 \\
+\midrule
+detektor & -- & 72,5\% & 0,683 & 0,68 / 0,79 & 0,58 & 70\% & 0,44 & 12,4 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Każdy wariant sieci przewyższa detektor czasu rzeczywistego pod względem dokładności
+(o~1--9~punktów procentowych) i~niemal każdy pod względem makro-F1, a~fałszywych granic
+daje od 1,6 do 2,4 raza mniej. Sieć może bowiem nauczyć się kształtu zwrotu oddechu
+i~nie musi czekać, aż bezruch potrwa odpowiednio długo. Najlepsza jest TCN po wstępnym
+uczeniu i~dostrojeniu: najwyższa dokładność i~makro-F1 oraz najmniejszy błąd granicy
+(\SI{0.25}{s} wobec \SI{0.44}{s} detektora). Przewaga nad TCN uczoną z~kopiami mieści się
+jednak w~rozrzucie między ziarnami, więc wstępne uczenie pomaga tu najwyżej nieznacznie.
+GRU na danych sztucznych traci, a~TCN zyskuje około 3~punktów dokładności i~dokładniejsze
+granice.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Wyniki w~czasie rzeczywistym osobno dla nagrań sterowanych (pauzy na komendę,
+35\% oznaczonych próbek to pauzy; 12~okien) i~dla swobodnego oddechu oznaczonego z~pasa
+(3\% to pauzy; 74~okna); średnie z~trzech ziaren.}
+\label{tab:sieci-wyniki-rodzaje}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+& & \multicolumn{2}{c}{nagrania sterowane} & \multicolumn{2}{c}{swobodny oddech} \\
+\cmidrule(lr){3-4}\cmidrule(l){5-6}
+Wariant & Sieć & Dokładność & F1 pauza & Dokładność & F1 pauza \\
+\midrule
+tylko radar & TCN & 88,2\% & 0,89 & 77,5\% & 0,37 \\
+tylko radar & GRU & 88,8\% & 0,90 & 77,6\% & 0,37 \\
+radar z~kopiami & TCN & 88,5\% & 0,90 & 80,9\% & 0,11 \\
+radar z~kopiami & GRU & 83,4\% & 0,85 & 72,5\% & 0,25 \\
+wstępne + dostr. & TCN & 89,6\% & 0,90 & 80,8\% & 0,26 \\
+wstępne + dostr. & GRU & 87,9\% & 0,90 & 75,2\% & 0,18 \\
+\midrule
+detektor & -- & 84,5\% & 0,89 & 70,9\% & 0,35 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Rozbicie na rodzaje nagrań (tab.~\ref{tab:sieci-wyniki-rodzaje}) pokazuje, skąd bierze
+się słaby średni wynik pauzy. Pauzy na komendę wszystkie sieci rozpoznają równie dobrze
+jak detektor (F1 0,85--0,90). Trudne są krótkie, niejednoznaczne zatrzymania
+w~swobodnym oddechu, które stanowią tylko 3\% etykiet; tam F1 pauzy nie przekracza 0,37
+u~żadnej metody. Dane sztuczne podnoszą dokładność wdechu i~wydechu w~swobodnym oddechu
+(TCN: z~77,5\% do 80,9\%), ale pogarszają te krótkie pauzy (F1 z~0,37 do 0,11). Prawdopodobną
+przyczyną jest rozciąganie kopii w~czasie: krótka pauza po skróceniu 0,7 raza staje się
+krótsza od najkrótszej fazy, a~kopie nagrań z~pasem stanowią większość okien uczących;
+nie sprawdzano tego osobnym eksperymentem.
+
+Po dekodowaniu Viterbiego, które patrzy w~przód w~obrębie okna, sieci osiągają
+79,6--85,2\% dokładności, a~detektor w~trybie offline 89,2\% (makro-F1 0,879). To
+porównanie faworyzuje detektor: etykiety zbioru testowego wyznaczył ten sam algorytm
+w~trybie offline, tylko na przebiegu pasa, więc detektor offline na radarze powtarza
+również jego konwencje. Na zbiorze walidacyjnym (25~okien, jedna sesja i~trzy nagrania
+sterowane) wszystkie sieci mają w~czasie rzeczywistym 85--91\% dokładności wobec 77,6\%
+detektora, co zgadza się z~kierunkiem wyników testu.
+
+Na model docelowy wybrano TCN po wstępnym uczeniu i~dostrojeniu: ma najwyższą
+dokładność, najdokładniejsze granice i~mały rozrzut między ziarnami. Różnice
+między wariantami rzędu 1--2~punktów procentowych nie są jednak rozstrzygające przy
+86~oknach testowych, które pochodzą z~dwóch sesji jednej osoby i~trzech nagrań sterowanych.
 
 \section{Dyskusja i dalsze kroki}
 \label{sec:sieci-dyskusja}
-Ograniczenia obecnego etapu są jasne: jeden badany, etykiety nagrań sterowanych wyznaczone na
-sygnale samego radaru, brak pauz po wdechu i~fragmentów szumu we własnych danych oznaczonych
-(ma je zbiór \cite{szymanski2025}) oraz odniesienie z~telefonu, które nie zostało zweryfikowane
-niezależnie i~ma opisane w~podrozdz.~\ref{sec:sieci-oznaczanie-reczne} ograniczenie wokół głębokich oddechów
-przed pauzą. Kolejne kroki:
+Sieć uczona na około \SI{2}{h} rzeczywistego radaru i~danych sztucznych przewyższa
+w~czasie rzeczywistym detektor deterministyczny, co uzasadnia jej użycie na żywo; po fakcie
+wystarcza detektor. Ograniczenia wyników: test to dwie sesje jednej osoby i~trzy nagrania
+sterowane; etykiety swobodnego oddechu wyznaczył detektor na przebiegu pasa, więc nie są
+niezależne od metody porównawczej, a~etykiety nagrań sterowanych dociągnięto do sygnału
+samego radaru; w~swobodnym oddechu jest mało pauz, a~we własnych danych nie ma fragmentów
+szumu (ma je zbiór \cite{szymanski2025}); wszystko nagrano na siedząco, w~dzień, do
+\SI{2}{m}. Wynik nie mówi więc nic o~innych osobach, pozycjach ciała ani o~oddechu we śnie.
+Najbliższe usprawnienia: kopie rozciągane w~węższym zakresie lub z~zachowaniem długości
+pauz, osobna waga klasy pauzy dla swobodnego oddechu i~mniejszy udział kopii nagrań
+z~pasem. Dalsze kroki, poza zakresem tej pracy:
 \begin{enumerate}
-  \item niezależna weryfikacja odniesienia: jedna sesja (około \SIrange{20}{30}{min}) z~telefonem, pasem
-  oddechowym (najlepiej dwa pasy, na klatce i~na brzuchu, oraz czujnik przepływu powietrza przy nosie)
-  i~radarem z~bliska, z~pauzami obu rodzajów po \SI{4}{s}, \SI{8}{s} i~\SI{12}{s}, przerwanymi wydechami
-  i~znacznikami synchronizacji na początku i~na końcu; przetwarzanie zamraża się przed drugą częścią sesji,
-  oznaczenia z~przepływu powstają bez wiedzy o~wyjściu algorytmów, a~wynik ocenia się bez marginesów
-  (przyjęte kryterium: co najmniej 95\% poprawnie znalezionych końców pauz i~90.~percentyl błędu granicy
-  nie większy niż \SI{0.3}{s}); aplikacja ma przy tym zapisywać pełną orientację telefonu i~wektor
-  grawitacji, a~nie tylko rzut przyspieszenia;
-  \item dopiero po tej weryfikacji równoczesne nagrania A121 i~telefonu jako toru odniesienia, bez
-  przewodnika: 12-minutowe sesje obejmujące oddech spokojny, wolny, szybki
-  i~bardzo płytki, pauzy obu rodzajów, oddech nieregularny i~ruch, w~pięciu
-  pozycjach ciała (łącznie około \SIrange{2.5}{3}{h}, z~sesjami testowymi
-  z~osobnych dni); telefon przymocowany do ciała poza wiązką radaru, bo silnie
-  odbija fale \SI{60}{GHz}; jeśli okaże się niewystarczający --- pas
-  oddechowy lub bliski drugi radar jako nauczyciel;
-  \item trudny zbiór testowy (odległości do \SI{7}{m}, oddech płytki i~szybki); nagrania innych osób
-  jako opcjonalne, późniejsze sprawdzenie uogólnienia (system kalibrowany dla jednej osoby);
-  \item wybór jednej definicji pauzy dla danych własnych i~zbioru
-  \cite{szymanski2025} (podrozdz.~\ref{sec:sieci-zbior-szymanski}), a~potem
-  wstępne uczenie na pasie i~dostrajanie na radarze;
-  \item uczenie i~porównanie wariantów opisanych wyżej.
+  \item odniesienie niezależne od detektora: sesja z~pasem oddechowym na klatce i~na brzuchu
+  oraz czujnikiem przepływu powietrza przy nosie, z~pauzami obu rodzajów po \SI{4}{s}, \SI{8}{s}
+  i~\SI{12}{s}, oznaczona bez wiedzy o~wyjściu algorytmów (kryterium: co najmniej 95\% poprawnie
+  znalezionych końców pauz i~90.~percentyl błędu granicy nie większy niż \SI{0.3}{s});
+  \item nagrania w~leżeniu i~w~nocy, w~kilku pozycjach ciała, oraz trudny zbiór testowy
+  (odległości do \SI{7}{m}, oddech płytki, szybki i~nieregularny, ruch);
+  \item nagrania innych osób jako sprawdzenie uogólnienia (system kalibrowany dla jednej osoby);
+  \item uruchomienie wybranego modelu w~aplikacji na żywo i~porównanie z~detektorem na tych
+  samych nagraniach.
 \end{enumerate}
 
 Tętno będzie osobnym modelem. Etykiety da EKG z~modułu AD8232 podłączonego do
@@ -5001,11 +5099,17 @@ Najważniejsze ustalenia inżynierskie uzyskane dotychczas:
   Rozbieżności w~fazach snu wskazują na ograniczenia heurystycznego
   klasyfikatora i~motywują jego dalszą walidację lub zastąpienie modelem
   uczonym.
+  \item Przyczynowa sieć TCN (44~tys. parametrów), wstępnie uczona na pasie i~danych
+  syntetycznych i~dostrojona na radarze, rozpoznaje fazy oddechu z~A121 na żywo
+  z~dokładnością 81,9\% wobec 72,5\% detektora deterministycznego, z~mniejszą
+  liczbą fałszywych granic faz (7,6 zamiast 12,4 na minutę) i~średnim błędem granicy \SI{0.25}{s} zamiast \SI{0.44}{s}.
+  Pauzy na komendę rozpoznaje w~około 90\%, krótkie zatrzymania swobodnego oddechu
+  pozostają trudne dla wszystkich metod.
 \end{itemize}
 
 \section{Kierunki dalszych prac}
-\miejsce{Sieci neuronowe do klasyfikacji faz oddechu
-(rozdział~\ref{chap:sieci}), rozszerzenie badania na wielu uczestników,
+\miejsce{Sieć faz oddechu: lepsze rozpoznawanie krótkich pauz w~swobodnym oddechu,
+nagrania w~nocy (rozdział~\ref{chap:sieci}); rozszerzenie badania na wielu uczestników,
 walidacja względem polisomnografii.}
 
 % =====================================================================

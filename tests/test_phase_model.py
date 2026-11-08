@@ -296,3 +296,48 @@ def test_evaluate_refuses_a_dataset_at_another_sample_rate(tmp_path: Path) -> No
 
     with pytest.raises(SystemExit, match="20 Hz"):
         trainer.main(["--evaluate", str(tmp_path / "model.pt"), str(dataset), "--out", str(tmp_path / "eval.json")])
+
+
+def test_init_starts_fine_tuning_from_a_saved_model(tmp_path: Path) -> None:
+    dataset = tmp_path / "tiny.npz"
+    _write_tiny_dataset(dataset)
+    torch.manual_seed(0)
+    start = build_model("tcn", 3, channels=8, dilations=(1, 2))
+    save_checkpoint(tmp_path / "pre.pt", start, channels=["chest", "velocity", "echo_db"], fs=FS)
+
+    # --model gru is ignored: the architecture comes from the checkpoint.
+    args = [str(dataset), "--init", str(tmp_path / "pre.pt"), "--model", "gru", "--epochs", "1",
+            "--out-dir", str(tmp_path), "--name", "fine"]
+    assert trainer.main(args) == 0
+
+    metrics = json.loads((tmp_path / "fine" / "metrics.json").read_text())
+    assert metrics["model_name"] == "tcn"
+    assert metrics["model_config"]["channels"] == 8
+    assert metrics["init"] == str(tmp_path / "pre.pt")
+
+
+def test_init_refuses_a_checkpoint_with_other_inputs(tmp_path: Path) -> None:
+    dataset = tmp_path / "tiny.npz"
+    _write_tiny_dataset(dataset)
+    save_checkpoint(tmp_path / "pre.pt", build_model("tcn", 2, channels=8, dilations=(1,)), channels=["chest", "velocity"], fs=FS)
+
+    with pytest.raises(SystemExit, match="channels"):
+        trainer.main([str(dataset), "--init", str(tmp_path / "pre.pt"), "--epochs", "1", "--out-dir", str(tmp_path)])
+
+
+def test_exclude_runs_drops_matching_training_windows_only(tmp_path: Path) -> None:
+    dataset = tmp_path / "tiny.npz"
+    _write_tiny_dataset(dataset)
+    with np.load(dataset) as data:
+        arrays = dict(data)
+    arrays["split"] = np.array(["train", "train", "val", "test"])
+    arrays["run_id"] = np.array(["a", "a__x0.8", "b__x0.8", "c"])
+    np.savez(dataset, **arrays)
+
+    args = [str(dataset), "--exclude-runs", "__x", "--epochs", "1", "--tcn-channels", "8", "--dilations", "1,2",
+            "--out-dir", str(tmp_path), "--name", "real"]
+    assert trainer.main(args) == 0
+
+    metrics = json.loads((tmp_path / "real" / "metrics.json").read_text())
+    assert (metrics["train_windows"], metrics["excluded_train_windows"]) == (1, 1)
+    assert metrics["splits"]["val"]["windows"] == 1  # validation keeps its '__x'-named window

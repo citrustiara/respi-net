@@ -14,7 +14,16 @@ Run from the repository root with the ``ml`` extra::
     uv run --extra ml python tools/train_breath_phase_model.py DATASET.npz --model tcn --name tcn_v1
     uv run --extra ml python tools/train_breath_phase_model.py DATASET.npz --model gru --augment --device auto
     uv run --extra ml python tools/train_breath_phase_model.py --evaluate runs/breath_phase/tcn_v1/model.pt DATASET.npz
+    uv run --extra ml python tools/train_breath_phase_model.py FINETUNE.npz --init runs/breath_phase/pre/model.pt --name fine
+    uv run --extra ml python tools/train_breath_phase_model.py FINETUNE.npz --exclude-runs '__x' --name real_only
     uv run --extra ml python tools/train_breath_phase_model.py --smoke
+
+``--init`` starts from a saved model's weights (pretraining, then fine-tuning):
+the model is rebuilt from that checkpoint, so ``--model`` and its size options
+are ignored, and the dataset must give the checkpoint's input channels.
+``--exclude-runs`` drops the training windows whose ``run_id`` matches a
+regular expression (``__x`` = the time-stretched copies); validation and test
+are never filtered.
 
 ``--smoke`` needs no files: it builds a few cartoon windows in memory, takes
 three optimiser steps, saves the checkpoint to a temporary directory, scores
@@ -28,6 +37,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import sys
 import tempfile
 import time
@@ -428,6 +438,7 @@ def score_split(
         "online": {
             "accuracy": online.accuracy,
             "macro_f1": online.macro_f1,
+            "per_class": online.per_class,
             # Labelled frames before the smoother's first decision are not scored at all.
             "undecided_samples": int(np.sum((y != IGNORE) & (online_path == IGNORE))),
             "boundary": pooled_boundaries(y, online_path, start_s, fs),
@@ -667,6 +678,12 @@ def fit_and_save(
     inputs = [name for name in (args.inputs or "").split(",") if name] or data.channels
     X = select_channels(data, inputs)
     train_index, val_index = data.indices("train"), data.indices("val")
+    excluded = 0
+    if getattr(args, "exclude_runs", None):
+        pattern = re.compile(args.exclude_runs)
+        keep = np.array([pattern.search(str(run)) is None for run in data.run_id[train_index]], dtype=bool)
+        excluded = int((~keep).sum())
+        train_index = train_index[keep]
     if not len(train_index):
         raise SystemExit("The dataset has no 'train' windows.")
     if not len(val_index):
@@ -674,7 +691,16 @@ def fit_and_save(
         val_index = train_index
     device = pick_device(args.device)
     torch.manual_seed(settings.seed)  # the initial weights too, not just the batches
-    model = build_model(args.model, len(inputs), **model_kwargs(args)).to(device)
+    init = getattr(args, "init", None)
+    if init:
+        model, init_info = load_checkpoint(init, map_location=device)
+        if list(init_info["channels"]) != inputs:
+            raise SystemExit(f"{init} takes channels {init_info['channels']}, not {inputs}; pass --inputs to match.")
+        if not math.isclose(float(init_info["fs"]), data.fs, rel_tol=1e-6):
+            raise SystemExit(f"{init} was trained at {init_info['fs']:g} Hz but the dataset is at {data.fs:g} Hz.")
+        model.train()
+    else:
+        model = build_model(args.model, len(inputs), **model_kwargs(args)).to(device)
     decoding = decoding_from(args)
     transitions = transition_log_matrix(math.log(decoding["switch_prob"]))
     weight = class_weights(data.y[train_index], power=args.class_weight_power)
@@ -682,7 +708,11 @@ def fit_and_save(
 
     log(f"dataset {source}: {len(data.X)} windows of {width / data.fs:.1f} s at {data.fs:g} Hz, inputs {inputs}")
     log("windows per split: " + ", ".join(f"{name} {len(data.indices(name))}" for name in SPLITS))
-    log(f"model {args.model}: {count_parameters(model):,} parameters on {device}")
+    if excluded:
+        log(f"--exclude-runs {args.exclude_runs!r}: {excluded} training windows left out, {len(train_index)} kept")
+    if init:
+        log(f"initial weights from {init}")
+    log(f"model {model.model_name}: {count_parameters(model):,} parameters on {device}")
     if hasattr(model, "receptive_field_samples"):
         field = model.receptive_field_samples()
         log(f"receptive field {field} samples = {field / data.fs:.1f} s")
@@ -717,6 +747,9 @@ def fit_and_save(
         "epochs_run": len(history),
         "window_s": width / data.fs,
         "class_weights": dict(zip(CLASS_NAMES, weight.tolist())),
+        "train_windows": int(len(train_index)),
+        "excluded_train_windows": excluded,
+        "init": str(init) if init else None,
         "train_settings": asdict(settings),
         "args": vars(args),
     }
@@ -729,7 +762,7 @@ def fit_and_save(
         run=_jsonable(run_info),
     )
     metrics = {
-        "model_name": args.model,
+        "model_name": model.model_name,
         "model_config": dict(model.config),
         "parameters": count_parameters(model),
         "receptive_field_samples": getattr(model, "receptive_field_samples", lambda: None)(),
@@ -816,6 +849,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     model = parser.add_argument_group("model")
     model.add_argument("--model", choices=sorted(MODELS), default="tcn")
+    model.add_argument("--init", type=Path, default=None,
+                       help="start from this model.pt's weights (its architecture; --model and size options ignored)")
     model.add_argument("--inputs", default=None, help="comma-separated dataset channels to use (default: all)")
     model.add_argument("--tcn-channels", type=int, default=32, help="TCN width")
     model.add_argument("--kernel-size", type=int, default=5)
@@ -833,6 +868,8 @@ def build_parser() -> argparse.ArgumentParser:
     training.add_argument("--grad-clip", type=float, default=1.0, help="max gradient norm, 0 = off")
     training.add_argument("--class-weight-power", type=float, default=1.0,
                           help="1 = inverse class frequency (default), 0.5 = its square root, 0 = unweighted")
+    training.add_argument("--exclude-runs", default=None, metavar="REGEX",
+                          help="leave out training windows whose run_id matches (e.g. '__x' = augmented copies)")
     training.add_argument("--augment", action="store_true", help="random chest/velocity scaling and small time shifts")
     training.add_argument("--aug-scale", type=float, nargs=2, default=(0.7, 1.4), metavar=("LOW", "HIGH"))
     training.add_argument("--aug-shift-s", type=float, default=1.0, help="largest time shift in seconds")
