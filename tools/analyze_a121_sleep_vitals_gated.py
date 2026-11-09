@@ -8,6 +8,12 @@ Rules implemented for sleep vitals:
 - long movement/no-presence gaps stay as breaks
 
 The script intentionally does not classify sleep phases.
+
+``--range-selection breathing`` chooses the chest range of every analysis window by how well each range bin
+breathes (:func:`respi_net.a121_range.choose_chest_range`, the selection of the breathing-phase chapter) instead of
+following Acconeer's recorded target; the heart rate is then searched around that range.  The breathing rate
+does not change: ``rr_bpm`` is Acconeer's recorded rate, and the analyzer's own estimate (``rr_bpm_analyzer_raw``)
+also takes that recorded rate whenever there is one.
 """
 
 from __future__ import annotations
@@ -36,7 +42,12 @@ import numpy as np
 import pandas as pd
 
 import respi_net.a121_vitals as a121_vitals
+from respi_net.a121_range import choose_chest_range
+from respi_net.a121 import parse_json_array
 from respi_net.a121_vitals import analyze_a121_vitals, sample_rate_from_ms
+from respi_net.chest_signal import _a121_gate, _load_matrix
+
+RANGE_SELECTIONS = ("acconeer", "breathing")
 
 STATE_NO_PRESENCE = 0
 STATE_MOVEMENT = 1
@@ -400,6 +411,28 @@ def _finite_summary(values: np.ndarray) -> str:
     )
 
 
+def breathing_target(work: pd.DataFrame, fs: float) -> tuple[float | None, str, list[float]]:
+    """(chest distance in m, source, chosen range in m) of one window, by how well each bin breathes.
+
+    The recorded choice (Acconeer's range, else its target, else the strongest echo) stays unless the best
+    breathing group of bins is clearly better; ``None`` when the window has no complex bins.
+    """
+
+    distances = parse_json_array(work["Distances_m"].iloc[-1])
+    real, imag = _load_matrix(work["Real"]), _load_matrix(work["Imag"])
+    width = min(len(distances), real.shape[1], imag.shape[1])
+    if width == 0 or len(work) < 8:
+        return None, "none", []
+    distances = np.asarray(distances[:width], dtype=float)
+    profile = real[:, :width] + 1j * imag[:, :width]
+    amplitude = np.median(np.abs(profile), axis=0)
+    gate, source = _a121_gate(work, distances, amplitude)
+    choice = choose_chest_range(profile, fs, distances, amplitude, gate, source)
+    weight = np.maximum(amplitude[choice.gate], 1e-12)
+    target = float(np.sum(distances[choice.gate] * weight) / np.sum(weight))
+    return target, choice.source, [float(distances[choice.gate[0]]), float(distances[choice.gate[-1]])]
+
+
 def analyze(
     csv_path: Path,
     output_dir: Path,
@@ -413,7 +446,11 @@ def analyze(
     hr_min_bpm: float = 42.0,
     hr_max_bpm: float = 120.0,
     dpi: int = 140,
+    range_selection: str = "acconeer",
+    output_suffix: str = "",
 ) -> tuple[Path, Path]:
+    if range_selection not in RANGE_SELECTIONS:
+        raise ValueError(f"range_selection must be one of {RANGE_SELECTIONS}, not {range_selection!r}")
     output_dir.mkdir(parents=True, exist_ok=True)
     hr_min_bpm = float(hr_min_bpm)
     hr_max_bpm = float(hr_max_bpm)
@@ -484,6 +521,9 @@ def analyze(
                 analysis_quality = math.nan
                 candidate_bins = 0
                 rr_source = "none"
+                rr_analyzer = math.nan
+                range_source = "acconeer"
+                range_m: list[float] = []
 
                 if plan.allowed:
                     win_rows = [
@@ -496,13 +536,19 @@ def analyze(
                         if last_valid_hr_s is None or plan.end_s - last_valid_hr_s > max(600.0, 4.0 * window_s):
                             prior_hr_hz = None
                         work = pd.DataFrame(win_rows)
+                        chosen_target: float | None = None
+                        if range_selection == "breathing":
+                            chosen_target, range_source, range_m = breathing_target(work, fs)
                         analysis = analyze_a121_vitals(
                             work,
                             max_frames=len(work),
+                            target_distance_m=chosen_target,
                             heart_window_s=window_s,
                             heart_prior_hz=prior_hr_hz,
                             heart_prior_std_hz=0.20 if prior_hr_hz is not None else None,
                         )
+                        if 6.0 <= analysis.resp_bpm <= 30.0 and analysis.resp_confidence >= 4.0:
+                            rr_analyzer = float(analysis.resp_bpm)
                         hr_conf = float(analysis.heart_confidence)
                         rr_conf = float(analysis.resp_confidence)
                         analysis_target_m = float(analysis.target_distance_m)
@@ -553,6 +599,11 @@ def analyze(
                         "analysis_target_distance_m": analysis_target_m,
                         "signal_quality": analysis_quality,
                         "candidate_bins": candidate_bins,
+                        "rr_bpm_analyzer_raw": rr_analyzer,
+                        "range_selection": range_selection,
+                        "range_source": range_source,
+                        "range_start_m": range_m[0] if range_m else math.nan,
+                        "range_end_m": range_m[-1] if range_m else math.nan,
                     }
                 )
                 next_plan += 1
@@ -588,7 +639,7 @@ def analyze(
     trend["hr_interpolated_plot"] = hr_plot_interpolated
     trend["rr_interpolated_short_movement"] = rr_interpolated
 
-    csv_out = output_dir / f"{csv_path.stem}_gated_sleep_vitals.csv"
+    csv_out = output_dir / f"{csv_path.stem}{output_suffix}_gated_sleep_vitals.csv"
     trend.to_csv(csv_out, index=False)
 
     # Plot.
@@ -673,7 +724,7 @@ def analyze(
     )
     fig.text(0.5, 0.895, summary, ha="center", va="top", fontsize=9, bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.82})
 
-    png_out = output_dir / f"{csv_path.stem}_gated_sleep_vitals.png"
+    png_out = output_dir / f"{csv_path.stem}{output_suffix}_gated_sleep_vitals.png"
     fig.savefig(png_out, bbox_inches="tight")
     plt.close(fig)
 
@@ -711,6 +762,9 @@ def main() -> None:
     parser.add_argument("--hr-min-bpm", type=float, default=42.0, help="Minimum HR accepted/analyzed, in BPM")
     parser.add_argument("--hr-max-bpm", type=float, default=120.0, help="Maximum HR accepted/analyzed, in BPM")
     parser.add_argument("--dpi", type=int, default=140)
+    parser.add_argument("--range-selection", choices=RANGE_SELECTIONS, default="acconeer",
+                        help="follow Acconeer's target (default) or choose the chest range by breathing in every window")
+    parser.add_argument("--output-suffix", default="", help="added to the output names, e.g. _breathing")
     args = parser.parse_args()
     analyze(
         args.csv_path,
@@ -724,6 +778,8 @@ def main() -> None:
         hr_min_bpm=args.hr_min_bpm,
         hr_max_bpm=args.hr_max_bpm,
         dpi=args.dpi,
+        range_selection=args.range_selection,
+        output_suffix=args.output_suffix,
     )
 
 

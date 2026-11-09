@@ -80,6 +80,11 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
   | noc 4 | `sleep-night-5-real_2026-06-15_02-41-38` | 0,37 m | tylko fazy snu (`garmin_2026-06-15`, pobrane 2026-11-09) |
   | noc 5 | `sleep-night-7-real_2026-06-16_03-55-01` | 0,39 m | tylko fazy snu (`garmin_2026-06-16`, pobrane 2026-11-09) |
 
+  Pliki FIT nocy 1, 2 i pilotażu wypakowano z archiwum do `data/raw/a121/garmin_2026-06-0{8,9}` i
+  `garmin_2026-06-10`. Podrozdział „Wybór odległości według oddechu” odtwarza:
+  `tools/analyze_a121_sleep_vitals_gated.py <noc>.csv --output-dir data/processed/a121_sleep_range
+  --range-selection {acconeer,breathing} --output-suffix _{acconeer,breathing}` dla pięciu nocy z tętnem
+  Garmina (surowe pliki z archiwum, po jednej naraz), potem `tools/compare_a121_sleep_range_selection.py`.
   Noce z października (`a121_sleep_noc-2026-10-1{1,2,3}_*`) są tylko z radaru: zegarek
   zsynchronizowano dopiero 2026-11-08 i dni 4–24 października zostały na nim nadpisane.
 - Porównanie oceny snu i faz z Garminem (noc 1): archiwum pomiarowe

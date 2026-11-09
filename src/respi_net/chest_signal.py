@@ -137,9 +137,9 @@ def _a121_gate(df: pd.DataFrame, distances: np.ndarray, median_amplitude: np.nda
     """The chest range bins: Acconeer's own selection when it was recorded."""
 
     width = len(distances)
-    starts = pd.to_numeric(df.get("AcconeerRangeStartIndex"), errors="coerce")
-    ends = pd.to_numeric(df.get("AcconeerRangeEndIndex"), errors="coerce")
-    if starts is not None and ends is not None:
+    if {"AcconeerRangeStartIndex", "AcconeerRangeEndIndex"}.issubset(df.columns):
+        starts = pd.to_numeric(df["AcconeerRangeStartIndex"], errors="coerce")
+        ends = pd.to_numeric(df["AcconeerRangeEndIndex"], errors="coerce")
         pairs = [
             (int(start), int(end))
             for start, end in zip(starts, ends, strict=True)
@@ -148,8 +148,8 @@ def _a121_gate(df: pd.DataFrame, distances: np.ndarray, median_amplitude: np.nda
         if pairs:
             (start, end), _ = Counter(pairs).most_common(1)[0]
             return np.arange(start, end, dtype=int), "acconeer-range"
-    target = pd.to_numeric(df.get("AcconeerTargetDistance_m"), errors="coerce")
-    if target is not None:
+    if "AcconeerTargetDistance_m" in df.columns:
+        target = pd.to_numeric(df["AcconeerTargetDistance_m"], errors="coerce")
         target = target[np.isfinite(target) & (target > 0)]
         if len(target):
             centre = int(np.argmin(np.abs(distances - float(np.median(target)))))
