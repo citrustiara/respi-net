@@ -67,6 +67,20 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
   pełnych nocy z płaską pokrywą nad łóżkiem odtwarza
   `tools/plot_a121_sleep_thesis.py` z plików `*_gated_sleep_vitals.csv` w
   lokalnym archiwum. Skrypt celowo nie łączy długich luk odrzuconych estymat.
+- Numeracja nocy w pracy różni się od nazw plików (sprawdzone medianą
+  `target_distance_m` z `*_gated_sleep_vitals.csv`):
+
+  | w pracy | plik | odległość | FIT Garmina |
+  |---|---|---|---|
+  | noc 1 | `sleep-night-1_1-real_2026-06-08_02-50-10` | 0,37 m | tak |
+  | noc 2 | `sleep-night-2-real_2026-06-09_02-18-14` | 0,44 m | tak |
+  | pilotaż (niepełny) | `sleep-night-3-real-flatcover_2026-06-10_02-35-45` | 0,22 m | tak |
+  | nieudana geometria | `sleep-night-4-real_2026-06-11_02-49-31` | 1,62 m | tak |
+  | noc 3 | `sleep-night-5-real_2026-06-13_02-58-40` | 0,30 m | tak |
+  | noc 4 | `sleep-night-5-real_2026-06-15_02-41-38` | 0,37 m | nie |
+  | noc 5 | `sleep-night-7-real_2026-06-16_03-55-01` | 0,39 m | nie |
+
+  Noce z października (`a121_sleep_noc-2026-10-1{1,2,3}_*`) są tylko z radaru.
 - Porównanie oceny snu i faz z Garminem (noc 1): archiwum pomiarowe
   `data/archive/measurements_2026-07-14/` (nie w gicie, 12,4 GiB) —
   `e_drive/a121/garmin_reference_*/Sleep.csv` (podsumowanie z Garmin Connect)
