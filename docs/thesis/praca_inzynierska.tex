@@ -4382,9 +4382,10 @@ dostępne są jednocześnie dane A121 i~Garmina:
 
 Niepełnego zapisu pilotażowego nie użyto w~wynikach, ponieważ tę samą
 konfigurację płaskiej pokrywy reprezentuje pełna i~lepiej udokumentowana
-noc~3. Dla dodatkowych pełnych nocy~4 i~5 zachowały się
-dane radarowe, lecz w~archiwum nie ma odpowiadających im eksportów FIT;
-wykorzystano je wyłącznie do oceny powtarzalności stanowiska. Noce~1--5 nagrano
+noc~3. Dla dodatkowych pełnych nocy~4 i~5 eksport z~Garmin~Connect, pobrany
+później, zawiera tylko fazy snu: tętna ani częstości oddechu z~tych godzin zegarek
+nie przesłał (w~nocy~4 kończą się przed startem radaru). Noce te służą więc do oceny
+powtarzalności stanowiska i~do porównania faz snu, ale nie tętna i~oddechu. Noce~1--5 nagrano
 odpowiednio 8, 9, 13, 15 i~16~czerwca 2026 (daty pobudki), zapis pilotażowy 10~czerwca,
 a~noc z~nieudaną geometrią, opisaną niżej, 11~czerwca.
 
@@ -4871,9 +4872,9 @@ pokrywa obejmuje szerszy obszar i~przy małych odległościach może być bardzi
 odporna na takie przesunięcie, mimo mniejszego zysku. Ponieważ każdy wariant
 soczewki badano innej nocy, zebrane dane nie pozwalają oddzielić wpływu
 soczewki od wpływu ułożenia ciała i~mocowania; jest to interpretacja, a~nie
-wykazany związek przyczynowy. Dla nocy~4 i~5 eksport zegarka nie
-był dostępny, dlatego
-nie dopisano im pozornej ,,referencji'' i~pokazano jedynie przebiegi radarowe.
+wykazany związek przyczynowy. Dla nocy~4 i~5 zegarek nie zachował tętna
+ani częstości oddechu, dlatego w~ich panelach tętna i~oddechu pokazano jedynie przebiegi
+radarowe; ich fazy snu porównano z~Garminem w~tab.~\ref{tab:fazy}.
 
 \section{Wyniki: porównanie częstości oddechu}
 
@@ -4915,7 +4916,9 @@ Różnica ,,radar $-$ Garmin'' mierzy więc rozbieżność dwóch przybliżeń.
 \centering
 \caption{Sumaryczny czas trwania faz snu. Różnica dodatnia oznacza, że radar
 przypisał danej fazie więcej czasu niż Garmin. Obie kolumny są estymatami ---
-żadna z~nich nie jest odniesieniem polisomnograficznym.}
+żadna z~nich nie jest odniesieniem polisomnograficznym. Noce~1--3 to główne
+porównanie, noce~4 i~5 --- dodatkowe noce z~płaską pokrywą; w~nocy~4 Garmin nie
+przypisał fazy 12~minutom, które pominięto.}
 \label{tab:fazy}
 \small
 \begin{tabular}{@{}llrrrr@{}}
@@ -4934,13 +4937,23 @@ Noc 2 & Różnica  & $+13{,}0$ & $-4{,}0$ & $+32{,}0$ & $-31{,}5$ \\
 Noc 3 & Radar   & 14,5 & 245,5 & 120,5 & 119,0 \\
 Noc 3 & Garmin  & 51,0 & 284,0 & 31,0  & 115,0 \\
 Noc 3 & Różnica & $-36{,}5$ & $-38{,}5$ & $+89{,}5$ & $+4{,}0$ \\
+\midrule
+Noc 4 & Radar   & 54,0 & 197,0 & 127,5 & 130,0 \\
+Noc 4 & Garmin  & 17,0 & 200,0 & 62,0  & 142,0 \\
+Noc 4 & Różnica & $+37{,}0$ & $-3{,}0$ & $+65{,}5$ & $-12{,}0$ \\
+\midrule
+Noc 5 & Radar   & 13,5 & 272,0 & 110,5 & 168,5 \\
+Noc 5 & Garmin  & 140,0 & 238,0 & 58,0 & 98,0 \\
+Noc 5 & Różnica & $-126{,}5$ & $+34{,}0$ & $+52{,}5$ & $+70{,}5$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Względem strumienia FIT radar przypisywał więcej czasu fazie snu głębokiego
-we wszystkich trzech nocach (o~13,5, 32 i~89,5~minuty). Największa rozbieżność
-wystąpiła właśnie w~nocy~3, mimo dobrej ciągłości HR/RR. Pokazuje to, że
+we wszystkich pięciu nocach (o~13,5, 32, 89,5, 65,5 i~52,5~minuty). Największa rozbieżność
+wystąpiła w~nocy~3, mimo dobrej ciągłości HR/RR. Czuwanie rozchodzi się w~obie strony:
+w~nocy~5 Garmin uznał za czuwanie 140~minut, radar 13,5. Radar może nie odróżniać
+spokojnego leżenia bez snu od snu, ale równie dobrze może mylić się zegarek. Pokazuje to, że
 stabilny pomiar parametrów życiowych nie jest równoznaczny z~poprawnym
 rozpoznaniem stadiów. Wniosek trzeba dodatkowo osłabić: jak
 pokazano w~tabeli~\ref{tab:score-garmin}, \emph{drugi} eksport z~tego samego
@@ -4994,9 +5007,9 @@ Jest to naprawa niespójności reguł, nie dowód poprawności pozostałych etyk
     \centering
     \includegraphics[width=\textwidth]{sen_flat_nad_lozkiem_fazy.png}
     \caption[Fazy snu z płaską pokrywą nad łóżkiem]{Trzy pełne noce z~płaską
-    pokrywą i~radarem na wysięgniku nad łóżkiem. Dla nocy~3 dostępna jest
-    estymata faz Garmina; dwa pozostałe panele są radarowe i~nie powinny być
-    interpretowane jako zweryfikowane stadia snu.}
+    pokrywą i~radarem na wysięgniku nad łóżkiem, z~estymatą faz Garmina
+    (linia przerywana; dla nocy~4 i~5 z~późniejszego eksportu, bez tętna i~oddechu).
+    Żadna z~linii nie jest zweryfikowanym stadium snu.}
     \label{fig:sen-flat-fazy}
 \end{figure}
 
@@ -5017,7 +5030,7 @@ Jest to naprawa niespójności reguł, nie dowód poprawności pozostałych etyk
     \caption[Częstość oddechu z płaską pokrywą nad łóżkiem]{Częstość oddechu
     w~trzech pełnych nocach z~płaską pokrywą. Estymata była dostępna w~około
     92--98\% okien i~przez większość czasu pozostawała w~spójnym zakresie;
-    tylko dla nocy~3 zachował się równoległy eksport Garmina.}
+    tylko dla nocy~3 zachowała się częstość oddechu z~Garmina.}
     \label{fig:sen-flat-rr}
 \end{figure}
 
@@ -5086,7 +5099,7 @@ przewagę \emph{konkretnej pary} szeroka wiązka--tolerancyjna geometria, a~nie
 uniwersalny ranking elementów optycznych.
 
 Najważniejsze ograniczenia badania to jedna osoba, różne ustawienia między
-nocami, brak eksportu Garmina dla dwóch z~trzech pełnych nocy nad łóżkiem oraz
+nocami, brak tętna i~oddechu z~Garmina dla dwóch z~trzech pełnych nocy nad łóżkiem oraz
 brak polisomnografii. Garmin jest konsumenckim źródłem porównania, a~nie
 złotym standardem. Z~tego powodu wyników nie należy interpretować jako
 rankingu soczewek ani walidacji klinicznej algorytmu snu. Noc z~soczewką

@@ -77,10 +77,11 @@ fragmenty do uzupełnienia — usunąć definicje przed oddaniem pracy.
   | pilotaż (niepełny) | `sleep-night-3-real-flatcover_2026-06-10_02-35-45` | 0,22 m | tak |
   | nieudana geometria | `sleep-night-4-real_2026-06-11_02-49-31` | 1,62 m | tak |
   | noc 3 | `sleep-night-5-real_2026-06-13_02-58-40` | 0,30 m | tak |
-  | noc 4 | `sleep-night-5-real_2026-06-15_02-41-38` | 0,37 m | nie |
-  | noc 5 | `sleep-night-7-real_2026-06-16_03-55-01` | 0,39 m | nie |
+  | noc 4 | `sleep-night-5-real_2026-06-15_02-41-38` | 0,37 m | tylko fazy snu (`garmin_2026-06-15`, pobrane 2026-11-09) |
+  | noc 5 | `sleep-night-7-real_2026-06-16_03-55-01` | 0,39 m | tylko fazy snu (`garmin_2026-06-16`, pobrane 2026-11-09) |
 
-  Noce z października (`a121_sleep_noc-2026-10-1{1,2,3}_*`) są tylko z radaru.
+  Noce z października (`a121_sleep_noc-2026-10-1{1,2,3}_*`) są tylko z radaru: zegarek
+  zsynchronizowano dopiero 2026-11-08 i dni 4–24 października zostały na nim nadpisane.
 - Porównanie oceny snu i faz z Garminem (noc 1): archiwum pomiarowe
   `data/archive/measurements_2026-07-14/` (nie w gicie, 12,4 GiB) —
   `e_drive/a121/garmin_reference_*/Sleep.csv` (podsumowanie z Garmin Connect)
