@@ -65,3 +65,17 @@ def test_validation_is_the_end_of_every_training_night_with_a_gap() -> None:
     train, val = split_train_val(nights)
     assert len(val.label) == 40 and len(train.label) == 2 * (80 - 6)
     assert train.label[train.label < 1000].max() == 73 and val.label[val.label < 1000].min() == 80
+
+
+def test_heart_variability_recovers_beat_to_beat_jitter() -> None:
+    from build_sleep_epochs import heart_variability
+
+    fs, rng = 20.0, np.random.default_rng(0)
+    ibi = 1.0 + rng.normal(0, 0.04, 70)  # 60 bpm with 40 ms beat-to-beat scatter
+    beats = np.cumsum(ibi)
+    t = np.arange(int(beats[-1] * fs)) / fs
+    chest = sum(0.05 * np.exp(-0.5 * ((t - b) / 0.12) ** 2) for b in beats)
+    out = heart_variability(chest, fs, 60.0)
+    assert out["radar_beats"] >= 50
+    assert 30 < out["radar_sdnn_ms"] < 60
+    assert 40 < out["radar_rmssd_ms"] < 80  # RMSSD of white jitter is about sqrt(2) x its SD

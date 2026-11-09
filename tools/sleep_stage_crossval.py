@@ -43,7 +43,10 @@ import torch
 from build_sleep_epochs import OUT as EPOCHS, STAGES, feature_columns
 
 OUT_DIR = ROOT / "runs" / "sleep_stages"
-MODELS = ("majority", "time", "heuristic", "breathing", "heart", "movement", "all", "all+time")
+MODELS = ("majority", "time", "heuristic", "breathing", "heart", "hrv", "movement", "all", "all+time")
+# ``--watch``: only the nights with the watch's heart rate, stress and HRV, and models on those signals -- which of
+# its own measurements the watch's stages follow.
+WATCH_MODELS = ("watch_hr", "watch_rr", "watch_hrv", "watch_all", "watch_all+time")
 WEIGHT_DECAY = 1e-2
 STEPS = 400
 
@@ -51,8 +54,8 @@ STEPS = 400
 def columns_for(model: str) -> list[str]:
     if model == "time":
         return ["hours_since_start", "hours_since_start_sq"]
-    if model == "all+time":
-        return feature_columns("all") + ["hours_since_start", "hours_since_start_sq"]
+    if model.endswith("+time"):
+        return feature_columns(model[: -len("+time")]) + ["hours_since_start", "hours_since_start_sq"]
     return feature_columns(model)
 
 
@@ -115,14 +118,17 @@ def scores(y: np.ndarray, p: np.ndarray) -> dict[str, Any]:
     return {"accuracy": float(np.mean(y == p)), "kappa": kappa(y, p, k), "macro_f1": float(np.mean(list(f1.values()))), "f1": f1}
 
 
-def crossval(epochs: pd.DataFrame) -> dict[str, Any]:
+def crossval(epochs: pd.DataFrame, models: tuple[str, ...] = MODELS) -> dict[str, Any]:
     data = epochs[epochs["garmin_stage"].isin(STAGES)].copy()
+    if any(model.startswith("watch") for model in models):
+        with_watch = data.groupby("night")["garmin_hrv_ms"].count()
+        data = data[data["night"].isin(with_watch[with_watch > 0].index)]
     data["hours_since_start"] = data["hours_since_start"] / 10.0  # about 0-1 over a night, like the scaled features
     data["hours_since_start_sq"] = data["hours_since_start"] ** 2
     data["y"] = data["garmin_stage"].map({s: i for i, s in enumerate(STAGES)}).astype(int)
     nights = sorted(data["night"].unique())
     k = len(STAGES)
-    predictions: dict[str, list[np.ndarray]] = {model: [] for model in MODELS}
+    predictions: dict[str, list[np.ndarray]] = {model: [] for model in models}
     truth: list[np.ndarray] = []
     per_night: dict[str, dict[str, Any]] = {}
     for held in nights:
@@ -132,7 +138,7 @@ def crossval(epochs: pd.DataFrame) -> dict[str, Any]:
         prior = np.bincount(train["y"], minlength=k) / len(train)
         transitions = transition_log([g.sort_values("elapsed_s")["y"].to_numpy() for _, g in train.groupby("night")], k)
         per_night[held] = {"epochs": int(len(test)), "garmin_minutes": {s: float(np.sum(y_test == i)) / 2 for i, s in enumerate(STAGES)}}
-        for model in MODELS:
+        for model in models:
             if model == "majority":
                 pred = np.full(len(test), int(np.argmax(prior)))
             elif model == "heuristic":
@@ -169,12 +175,15 @@ def markdown(result: dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--epochs", type=Path, default=EPOCHS)
+    parser.add_argument("--watch", action="store_true", help="the nights with the watch's HRV only, adding models on its signals")
     args = parser.parse_args()
-    result = crossval(pd.read_csv(args.epochs, low_memory=False))
+    models = (*MODELS, *WATCH_MODELS) if args.watch else MODELS
+    result = crossval(pd.read_csv(args.epochs, low_memory=False), models)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUT_DIR / "summary.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    tag = "_watch" if args.watch else ""
+    (OUT_DIR / f"summary{tag}.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     table = markdown(result)
-    (OUT_DIR / "summary.md").write_text(table, encoding="utf-8")
+    (OUT_DIR / f"summary{tag}.md").write_text(table, encoding="utf-8")
     print(table)
     return 0
 

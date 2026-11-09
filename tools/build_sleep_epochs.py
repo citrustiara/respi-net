@@ -39,6 +39,7 @@ from scipy.signal import butter, find_peaks, sosfiltfilt
 
 from respi_net.a121_sleep import _garmin_sleep_bounds, _merge_garmin_nearest, classify_radar_sleep, load_garmin_reference
 from respi_net.chest_signal import A121_CHEST_SIGN, PHASE_TO_MM
+from respi_net.garmin_fit import fit_datetime_local_naive, fit_paths_from_sources, parse_fit_files
 from respi_net.phase_baseline import window_rhythm
 
 NIGHT_DIR = ROOT / "data" / "processed" / "a121_nights"
@@ -71,10 +72,21 @@ NIGHTS = (
     Night("2026-10-13", "a121_sleep_noc-2026-10-13_2026-10-13_03-45-56", None, "October"),
 )
 BASE_FEATURES = ("hr_bpm", "rr_bpm", "breath_amp_mm", "breath_regularity", "breath_interval_cv", "breath_depth_cv",
-                 "motion_energy", "movement_fraction", "no_presence_fraction")
+                 "motion_energy", "movement_fraction", "no_presence_fraction", "radar_rmssd_ms", "radar_sdnn_ms")
+# The watch's own signals, to see which of them its sleep stages follow: heart rate and breathing rate every minute,
+# its stress level every minute (Firstbeat's index from heart-rate variability, 0-100; negative = not measured) and
+# the overnight heart-rate variability every 5 min (RMSSD, FIT message 371, ms x 128).
+WATCH_FEATURES = ("garmin_hr_bpm", "garmin_rr_bpm", "garmin_stress", "garmin_hrv_ms")
+WATCH_SETS = {
+    "watch_hr": ("garmin_hr_bpm",),
+    "watch_rr": ("garmin_rr_bpm",),
+    "watch_hrv": ("garmin_stress", "garmin_hrv_ms"),
+    "watch_all": WATCH_FEATURES,
+}
 FEATURE_SETS = {
     "breathing": ("rr_bpm", "breath_amp_mm", "breath_regularity", "breath_interval_cv", "breath_depth_cv"),
     "heart": ("hr_bpm",),
+    "hrv": ("radar_rmssd_ms", "radar_sdnn_ms"),
     "movement": ("motion_energy", "movement_fraction", "no_presence_fraction", "minutes_since_movement"),
 }
 
@@ -115,6 +127,39 @@ def breathing_features(chest_mm: np.ndarray, fs: float) -> dict[str, float]:
     }
 
 
+def heart_variability(chest_mm: np.ndarray, fs: float, hr_bpm: float) -> dict[str, float]:
+    """Beat-to-beat variability from the radar's cardiac band: RMSSD and SDNN of the intervals between beats.
+
+    The chest displacement is band-passed around the heart rate (0.8-2.5 Hz), beats are its peaks at least 60% of
+    a beat apart, refined to sub-frame time with a parabola through the three samples around each peak (frames are
+    50 ms apart; the variability sought is tens of ms).  Intervals more than 30% off the window's median, or off
+    the pipeline's heart rate when it has one, are dropped; fewer than 20 left gives NaN.
+    """
+
+    nan = {"radar_rmssd_ms": math.nan, "radar_sdnn_ms": math.nan, "radar_beats": 0.0}
+    if len(chest_mm) < int(30 * fs) or not np.all(np.isfinite(chest_mm)):
+        return nan
+    sos = butter(2, (0.8, 2.5), "bandpass", fs=fs, output="sos")
+    cardiac = sosfiltfilt(sos, chest_mm - np.mean(chest_mm))
+    beat_s = 60.0 / hr_bpm if np.isfinite(hr_bpm) and hr_bpm > 0 else 1.0
+    peaks, _ = find_peaks(cardiac, distance=max(1, int(0.6 * beat_s * fs)))
+    peaks = peaks[(peaks > 0) & (peaks < len(cardiac) - 1)]
+    if len(peaks) < 5:
+        return nan
+    a, b, c = cardiac[peaks - 1], cardiac[peaks], cardiac[peaks + 1]
+    denom = a - 2 * b + c
+    shift = np.where(np.abs(denom) > 1e-12, 0.5 * (a - c) / denom, 0.0).clip(-0.5, 0.5)
+    times = (peaks + shift) / fs
+    ibi = np.diff(times) * 1000.0
+    centre = np.median(ibi) if not np.isfinite(hr_bpm) else 60000.0 / hr_bpm
+    good = np.abs(ibi - centre) <= 0.3 * centre
+    if good.sum() < 20:
+        return {**nan, "radar_beats": float(good.sum())}
+    successive = np.diff(ibi)[good[1:] & good[:-1]]
+    return {"radar_rmssd_ms": float(np.sqrt(np.mean(successive**2))) if len(successive) >= 10 else math.nan,
+            "radar_sdnn_ms": float(np.std(ibi[good])), "radar_beats": float(good.sum())}
+
+
 def garmin_stage_at(times: pd.Series, garmin) -> pd.Series:
     levels = garmin.sleep_levels
     if levels.empty:
@@ -133,6 +178,29 @@ def garmin_stage_at(times: pd.Series, garmin) -> pd.Series:
     return pd.Series([s if ok else None for s, ok in zip(stage, inside)], index=times.index, dtype=object)
 
 
+def garmin_stress_hrv(folder: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(stress every minute, RMSSD every 5 min) from a watch export, as local time and value."""
+
+    stress, hrv = [], []
+    for message in parse_fit_files(fit_paths_from_sources(folder)):
+        fields = message.fields
+        if message.global_num == 227 and fields.get(1) is not None and fields.get(0) is not None and fields[0] >= 0:
+            stress.append((fit_datetime_local_naive(fields[1]), float(fields[0])))
+        elif message.global_num == 371 and fields.get(253) is not None and fields.get(0) is not None:
+            hrv.append((fit_datetime_local_naive(fields[253]), float(fields[0]) / 128.0))
+    to_frame = lambda rows, name: pd.DataFrame(rows, columns=["local_time", name]).drop_duplicates("local_time").sort_values("local_time")
+    return to_frame(stress, "garmin_stress"), to_frame(hrv, "garmin_hrv_ms")
+
+
+def _nearest(times: pd.Series, frame: pd.DataFrame, column: str, tolerance: str) -> np.ndarray:
+    if frame.empty:
+        return np.full(len(times), np.nan)
+    left = pd.DataFrame({"local_time": pd.to_datetime(times).astype("datetime64[us]"), "order": np.arange(len(times))}).sort_values("local_time")
+    right = frame.assign(local_time=pd.to_datetime(frame["local_time"]).astype("datetime64[us]"))
+    merged = pd.merge_asof(left, right, on="local_time", tolerance=pd.Timedelta(tolerance), direction="nearest")
+    return merged.sort_values("order")[column].to_numpy(dtype=float)
+
+
 def _robust_scale(values: pd.Series) -> pd.Series:
     q1, median, q3 = values.quantile([0.25, 0.5, 0.75])
     spread = (q3 - q1) if np.isfinite(q3 - q1) and q3 - q1 > 0 else 1.0
@@ -146,12 +214,13 @@ def night_epochs(night: Night, night_dir: Path = NIGHT_DIR, garmin_dir: Path = G
     t_s = (timestamps - timestamps[0]) / 1000.0
     fs = float(1.0 / np.median(np.diff(t_s)))
     rows = []
-    for start_s, end_s in zip(trend["window_start_s"], trend["elapsed_s"]):
+    for start_s, end_s, hr in zip(trend["window_start_s"], trend["elapsed_s"], pd.to_numeric(trend["hr_bpm"], errors="coerce")):
         lo, hi = np.searchsorted(t_s, [start_s, end_s])
         if hi - lo < int(30 * fs):
-            rows.append(breathing_features(np.zeros(0), fs))
+            rows.append({**breathing_features(np.zeros(0), fs), **heart_variability(np.zeros(0), fs, hr)})
             continue
-        rows.append(breathing_features(chest_displacement(iq[lo:hi], distances, target[lo:hi]), fs))
+        chest = chest_displacement(iq[lo:hi], distances, target[lo:hi])
+        rows.append({**breathing_features(chest, fs), **heart_variability(chest, fs, hr)})
     epochs = pd.concat([trend.reset_index(drop=True), pd.DataFrame(rows)], axis=1)
     epochs["night"], epochs["setup"] = night.name, night.setup
     epochs["clock_time_dt"] = pd.to_datetime(epochs["clock_time"])
@@ -161,32 +230,36 @@ def night_epochs(night: Night, night_dir: Path = NIGHT_DIR, garmin_dir: Path = G
     last = epochs["elapsed_s"].where(moving).ffill()
     epochs["minutes_since_movement"] = ((epochs["elapsed_s"] - last) / 60.0).fillna(60.0).clip(upper=60.0)
     epochs["heuristic_stage"] = classify_radar_sleep(trend).frame["radar_sleep_phase"].to_numpy()
-    for feature in BASE_FEATURES:
-        values = pd.to_numeric(epochs[feature], errors="coerce")
-        epochs[f"{feature}_med10"] = values.rolling(CONTEXT_EPOCHS, center=True, min_periods=3).median()
-        epochs[f"{feature}_sd10"] = values.rolling(CONTEXT_EPOCHS, center=True, min_periods=3).std()
-    for column in [c for c in epochs.columns if c.startswith(BASE_FEATURES) or c == "minutes_since_movement"]:
-        epochs[f"z_{column}"] = _robust_scale(pd.to_numeric(epochs[column], errors="coerce"))
     epochs["garmin_stage"] = None
-    epochs["garmin_hr_bpm"] = np.nan
-    epochs["garmin_rr_bpm"] = np.nan
+    for column in WATCH_FEATURES:
+        epochs[column] = np.nan
     if night.garmin is not None:
         garmin = load_garmin_reference(garmin_dir / night.garmin)
         epochs["garmin_stage"] = garmin_stage_at(epochs["centre_time"], garmin)
         merged = _merge_garmin_nearest(epochs[["clock_time_dt"]].copy(), garmin)
         epochs["garmin_hr_bpm"] = merged["garmin_hr_bpm"].to_numpy()
         epochs["garmin_rr_bpm"] = merged["garmin_rr_bpm"].to_numpy()
+        stress, hrv = garmin_stress_hrv(garmin_dir / night.garmin)
+        epochs["garmin_stress"] = _nearest(epochs["centre_time"], stress, "garmin_stress", "2min")
+        epochs["garmin_hrv_ms"] = _nearest(epochs["centre_time"], hrv, "garmin_hrv_ms", "3min")
+    for feature in (*BASE_FEATURES, *WATCH_FEATURES):
+        values = pd.to_numeric(epochs[feature], errors="coerce")
+        epochs[f"{feature}_med10"] = values.rolling(CONTEXT_EPOCHS, center=True, min_periods=3).median()
+        epochs[f"{feature}_sd10"] = values.rolling(CONTEXT_EPOCHS, center=True, min_periods=3).std()
+    for column in [c for c in epochs.columns if c.startswith((*BASE_FEATURES, *WATCH_FEATURES)) or c == "minutes_since_movement"]:
+        epochs[f"z_{column}"] = _robust_scale(pd.to_numeric(epochs[column], errors="coerce"))
     return epochs
 
 
 def feature_columns(feature_set: str) -> list[str]:
     """Scaled columns of one set ("breathing", "heart", "movement", "all"), with their 10-minute context."""
 
-    names = [n for s in FEATURE_SETS.values() for n in s] if feature_set == "all" else list(FEATURE_SETS[feature_set])
+    sets = {**FEATURE_SETS, **WATCH_SETS}
+    names = list(dict.fromkeys(n for s in FEATURE_SETS.values() for n in s)) if feature_set == "all" else list(sets[feature_set])
     columns = []
     for name in names:
         columns.append(f"z_{name}")
-        if name in BASE_FEATURES:
+        if name in BASE_FEATURES or name in WATCH_FEATURES:
             columns += [f"z_{name}_med10", f"z_{name}_sd10"]
     return columns
 

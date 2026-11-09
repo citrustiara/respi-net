@@ -8,7 +8,7 @@ Targets are soft (a Gaussian of 2 bpm around the label: the watch itself is a fe
 
 Labels: the Garmin watch's heart rate at the window centre (interpolated between its readings, only within 2 min of
 one) on the nights with a watch export, and the chest strap's median heart rate (with good contact) on the strap
-sessions (every reading with skin contact).  Only still windows count (no movement or absence by the night pipeline's rules).
+sessions (readings that pass its quality check).  Only still windows count (no movement or absence by the night pipeline's rules).
 
 Two architectures:
 
@@ -67,11 +67,14 @@ PAD = int(6 * FS)  # extra samples on each side for the time stretch
 STRETCH = (0.9, 1.1)
 TRAIN_STEP_S = 10.0
 LABEL_SIGMA = 2.0
-STRAP_SESSIONS = (  # radar recording stem, strap file stems (same Mac, same clock)
+# Radar recordings made with the strap on (same Mac, same clock).  The 20:16 session is left out: its strap pieces
+# fail the quality check (0% of readings in three of four pieces, the last one at an implausible 122 bpm while the
+# radar shows about 51 bpm).
+STRAP_SESSIONS = (
     "a121_sleep_radar-pas-hr-2m-2026-11-07_2026-11-07_18-43-04",
     "a121_sleep_radar-belt-hr-alt-2026-11-07_2026-11-07_19-26-08",
-    "a121_sleep_radar-belt-hr-alt-1m-weaker-lens-2026-11-07_2026-11-07_20-16-18",
 )
+STRAP_MIN_OK_SHARE = 0.5  # a strap piece counts only when at least half of its readings pass the quality check
 ARCHS = ("time", "spectral")
 VARIANTS = ("time", "spectral", "time-nostretch", "spectral-nostretch")
 
@@ -147,16 +150,15 @@ def garmin_labels(centre_ms: np.ndarray, garmin_folder: str) -> np.ndarray:
 
 
 def strap_labels(centre_ms: np.ndarray) -> np.ndarray:
-    """Median strap heart rate in the window, from every reading with skin contact (the strap is taken as the
-    reference as it is; its RR-based quality flags are stricter than its heart rate needs)."""
+    """Median strap heart rate in the window, from the readings that pass the strap's quality check (``hr_ok`` in
+    ``*_quality.csv``), in pieces where at least :data:`STRAP_MIN_OK_SHARE` of the readings pass."""
 
     frames = []
-    for path in sorted(STRAP_DIR.glob("heart_strap_*.csv")):
-        if path.stem.endswith("_quality"):
-            continue
-        raw = pd.read_csv(path)
-        contact = pd.to_numeric(raw.get("sensor_contact", 1), errors="coerce").fillna(1) > 0
-        frames.append(raw[contact & (raw["heart_rate_bpm"] > 0)][["host_time_ms", "heart_rate_bpm"]])
+    for path in sorted(STRAP_DIR.glob("heart_strap_*_quality.csv")):
+        quality = pd.read_csv(path)
+        ok = quality["hr_ok"].astype(bool) & (quality["heart_rate_bpm"] > 0)
+        if len(quality) and ok.mean() >= STRAP_MIN_OK_SHARE:
+            frames.append(quality[ok][["host_time_ms", "heart_rate_bpm"]])
     strap = pd.concat(frames).sort_values("host_time_ms") if frames else pd.DataFrame(columns=["host_time_ms", "heart_rate_bpm"])
     t, hr = strap["host_time_ms"].to_numpy(dtype=float), strap["heart_rate_bpm"].to_numpy(dtype=float)
     out = np.full(len(centre_ms), np.nan)
@@ -383,6 +385,8 @@ def run(seeds: list[int], variants: list[str], device: torch.device, summary_onl
             w = recording_windows(stem, trend["elapsed_s"].to_numpy(), still_mask(trend))
             w.label = strap_labels(w.centre_ms)
             keep = np.isfinite(w.label)
+            if not keep.any():
+                continue
             hr = trend.set_index("elapsed_s")["hr_bpm"].reindex(w.end_s[keep]).to_numpy()
             strap.append((Windows(w.x[keep], w.label[keep], w.centre_ms[keep], w.end_s[keep], stem), hr))
     print(f"strap: {sum(len(s[0].label) for s in strap)} windows", flush=True)
