@@ -330,3 +330,27 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
 - **For the thesis:** the open sets with PSG remain the main evidence that the signals carry stage information
   (SLEEPBRL: radar breathing 0.475); the own nights vs Garmin are an agreement check with a consumer device, not a
   validation.
+
+## 2026-11-11 -- Heart-rate network with an even heart-rate spread in training (does it flatten less?)
+
+- **Idea:** the fine-tuning labels sit at 50-60 bpm; if the network learns "it is nearly always ~55", it pulls the
+  peaks down.  Variant ``shared-pre-bal``: every training window resampled so its heart rate is drawn evenly from
+  40-90 bpm (factor 0.7-1.4 of the true rate, padding 12 s per side to allow it) instead of 0.9-1.1x.
+- **Run:** 6 watch nights held out in turn, **one seed**, against ``shared-pre`` with the same padding.
+- **Result** (`runs/sleep_heart_rate/flattening_balanced_s0.md`, means over nights):
+
+  | estimate | MAE (all windows) | slope on watch | SD ratio | error in peaks | error elsewhere | r 10 min | validation MAE |
+  |---|---|---|---|---|---|---|---|
+  | pipeline (66% of windows) | 4.04 | 0.25 | 0.64 | -6.7 | -0.4 | 0.41 | - |
+  | shared-pre | 3.90 | 0.48 | 0.78 | -3.1 | +1.3 | 0.64 | 3.79 |
+  | shared-pre-bal | 3.72 | 0.50 | 0.68 | -4.2 | +0.1 | 0.72 | 4.11 |
+
+- **Reading:** the even spread does **not** reduce the flattening -- the slope stays at ~0.5, the 10-minute spread
+  is smaller and the peaks are under-read by more (worse on 4 of 6 nights).  So the flattening is not the label prior:
+  at the peaks the chest signal itself does not carry the faster rhythm (movement, arousals).  What the spread does
+  do is remove the large night offsets of single seeds (11 and 13 June: +5.1 and +3.8 bpm outside the peaks with the
+  old variant, +1.7 and +0.7 with the new), hence the lower MAE and higher r -- but with one seed, a validation MAE
+  that prefers the old variant (3.79 vs 4.11) and a worse strap score (2.5 vs 1.5 bpm), that is not a reason to switch.
+  The thesis keeps ``shared-pre``; the peaks are reported as a limitation of the radar signal during movement.
+- **Reproduce:** `tools/train_sleep_heart_rate.py --variants shared-pre,shared-pre-bal --seeds 0 --pad-s 12 --tag
+  _balanced_s0`, then `tools/hr_flattening_compare.py --tag _balanced_s0`.

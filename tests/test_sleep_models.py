@@ -48,6 +48,20 @@ def test_time_stretch_scales_the_rhythm_and_the_label_together() -> None:
     assert torch.all(torch.abs(peaks.float() - label) <= 1.0)
 
 
+def test_balanced_stretch_spreads_the_heart_rate_and_keeps_the_rhythm_true() -> None:
+    from train_sleep_heart_rate import BALANCED_BPM, BINS, FS, SPEC_MIN, WINDOW, crop_and_stretch, spectral_input
+
+    torch.manual_seed(0)
+    pad = int(12 * FS)
+    t = np.arange(WINDOW + 2 * pad) / FS
+    x = torch.tensor(np.tile(np.sin(2 * np.pi * (54 / 60) * t), (256, BINS, 1)), dtype=torch.float32)
+    out, label = crop_and_stretch(x, torch.full((256,), 54.0), stretch=True, balanced=True)
+    assert label.min() >= BALANCED_BPM[0] - 1e-3 and label.max() <= 54 * 1.4 + 1e-3
+    assert (label > 66).float().mean() > 0.2  # well above the 0.9-1.1x range
+    peaks = spectral_input(out).mean(1).argmax(-1) + SPEC_MIN
+    assert torch.all(torch.abs(peaks.float() - label) <= 1.0)
+
+
 def test_coverage_at_mae_takes_the_most_confident_windows_first() -> None:
     from train_sleep_heart_rate import coverage_at_mae
 

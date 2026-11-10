@@ -65,6 +65,11 @@ FS = 20.0
 WINDOW = int(60 * FS)
 PAD = int(6 * FS)  # extra samples on each side for the time stretch
 STRETCH = (0.9, 1.1)
+# ``-bal`` variants: each training window is resampled so that its heart rate is drawn evenly from BALANCED_BPM
+# (within BALANCED_FACTOR of the true rate and what the padding allows), not 0.9-1.1x around the sleep rates of
+# 50-60 bpm -- so the network does not learn that the heart rate is nearly always ~55 (which flattens the peaks).
+BALANCED_BPM = (40.0, 90.0)
+BALANCED_FACTOR = (0.7, 1.4)
 TRAIN_STEP_S = 10.0
 LABEL_SIGMA = 2.0
 # Radar recordings made with the strap on (same Mac, same clock).  The 20:16 session is left out: its strap pieces
@@ -81,7 +86,7 @@ VARIANTS = ("time", "spectral", "time-nostretch", "spectral-nostretch")
 # of bins -- the 7 of the A121 and the single channel of a continuous-wave radar.  ``shared-pre`` first learns on the
 # 24 GHz radar windows with ECG heart rate of 30 people (``tools/build_radar_ecg_windows.py``), then fine-tunes on the
 # nights; ``shared-zeroshot`` is that pretrained network on the nights as it is.
-PRETRAIN_VARIANTS = ("shared", "shared-pre", "shared-zeroshot")
+PRETRAIN_VARIANTS = ("shared", "shared-pre", "shared-zeroshot", "shared-bal", "shared-pre-bal")
 PRETRAIN_WINDOWS = ROOT / "data" / "processed" / "radar_ecg" / "schellenberger_windows.npz"
 
 
@@ -199,11 +204,26 @@ def _band_mask(n: int, low_hz: float, high_hz: float, device: torch.device | Non
     return ((freqs >= low_hz) & (freqs <= high_hz)).float()
 
 
-def crop_and_stretch(x: torch.Tensor, label: torch.Tensor, stretch: bool) -> tuple[torch.Tensor, torch.Tensor]:
-    """[b, BINS, WINDOW + 2 PAD] -> [b, BINS, WINDOW]; with ``stretch`` a random 0.9-1.1x resampling, label scaled."""
+def balanced_factors(label: torch.Tensor, length: int) -> torch.Tensor:
+    """Resampling factors that move each label to a heart rate drawn evenly from :data:`BALANCED_BPM`, within
+    :data:`BALANCED_FACTOR` and the padding (a factor f reads f x WINDOW samples)."""
+
+    top = min(BALANCED_FACTOR[1], (length - 2) / (WINDOW - 1))
+    lo = torch.clamp(label * BALANCED_FACTOR[0], min=BALANCED_BPM[0])
+    hi = torch.clamp(label * top, max=BALANCED_BPM[1])
+    target = lo + torch.rand(len(label)) * (hi - lo).clamp(min=0)
+    return (target / label.clamp(min=1.0)).clamp(BALANCED_FACTOR[0], top)
+
+
+def crop_and_stretch(x: torch.Tensor, label: torch.Tensor, stretch: bool, balanced: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
+    """[b, BINS, n] -> [b, BINS, WINDOW] around the centre; with ``stretch`` a random 0.9-1.1x resampling (with
+    ``balanced`` the factor of :func:`balanced_factors`), label scaled."""
 
     b = x.shape[0]
-    factor = torch.empty(b).uniform_(*STRETCH) if stretch else torch.ones(b)
+    if balanced:
+        factor = balanced_factors(label, x.shape[-1])
+    else:
+        factor = torch.empty(b).uniform_(*STRETCH) if stretch else torch.ones(b)
     centre = (x.shape[-1] - 1) / 2.0
     offsets = (torch.arange(WINDOW) - (WINDOW - 1) / 2.0)[None, :] * factor[:, None] + centre  # [b, WINDOW]
     lo = offsets.floor().long().clamp(0, x.shape[-1] - 2)
@@ -319,7 +339,8 @@ def predict(model: nn.Module, x: np.ndarray, device: torch.device, batch: int = 
 
 
 def train_model(arch: str, stretch: bool, train: Windows, val: Windows, seed: int, device: torch.device,
-                epochs: int = 60, patience: int = 12, init: dict[str, torch.Tensor] | None = None, lr: float = 1e-3) -> tuple[nn.Module, dict[str, Any]]:
+                epochs: int = 60, patience: int = 12, init: dict[str, torch.Tensor] | None = None, lr: float = 1e-3,
+                balanced: bool = False) -> tuple[nn.Module, dict[str, Any]]:
     torch.manual_seed(seed)
     np.random.seed(seed)
     model = make_model(arch)
@@ -334,7 +355,7 @@ def train_model(arch: str, stretch: bool, train: Windows, val: Windows, seed: in
         order = torch.randperm(len(x_all))
         for i in range(0, len(order), 64):
             idx = order[i : i + 64]
-            xb, yb = crop_and_stretch(x_all[idx], y_all[idx], stretch)
+            xb, yb = crop_and_stretch(x_all[idx], y_all[idx], stretch, balanced)
             xb = xb * torch.empty(len(idx), 1, 1).uniform_(0.5, 2.0)  # echo strength and depth vary between nights
             loss = -(soft_targets(yb).to(device) * torch.log_softmax(model(xb.to(device)).float(), dim=1)).sum(1).mean()
             opt.zero_grad()
@@ -437,7 +458,8 @@ def run(seeds: list[int], variants: list[str], device: torch.device, summary_onl
             strap.append((Windows(w.x[keep], w.label[keep], w.centre_ms[keep], w.end_s[keep], stem), hr))
     print(f"strap: {sum(len(s[0].label) for s in strap)} windows", flush=True)
     results: dict[str, Any] = {"nights": names, "folds": {}, "strap": {}}
-    pretrained = pretrained_states(seeds, device) if any(v in ("shared-pre", "shared-zeroshot") for v in variants) else {}
+    predictions: dict[str, np.ndarray] = {}
+    pretrained = pretrained_states(seeds, device) if any(v.startswith(("shared-pre", "shared-zeroshot")) for v in variants) else {}
     for test_name in names:
         train_names = [n for n in names if n != test_name]
         train, val = split_train_val([data[n][0] for n in train_names])
@@ -450,17 +472,19 @@ def run(seeds: list[int], variants: list[str], device: torch.device, summary_onl
                                              **trend_scores(test.end_s[covered], pipeline[covered], test.label[covered])},
                                 "median": {"mae": float(np.mean(np.abs(median_train - test.label)))}}
         for variant in variants:
-            arch, stretch = variant.split("-")[0], not variant.endswith("nostretch")
+            arch, stretch, balanced = variant.split("-")[0], not variant.endswith("nostretch"), variant.endswith("-bal")
             per_seed = []
             for seed in seeds:
                 if variant == "shared-zeroshot":
                     model = make_model("shared"); model.load_state_dict(pretrained[seed]); model = model.to(device)
                     info = {"best_val_mae": float(np.mean(np.abs(predict(model, val.x, device)[0] - val.label))), "epochs": 0}
-                elif variant == "shared-pre":
-                    model, info = train_model("shared", True, train, val, seed, device, epochs=30, patience=8, init=pretrained[seed], lr=3e-4)
+                elif variant.startswith("shared-pre"):
+                    model, info = train_model("shared", True, train, val, seed, device, epochs=30, patience=8, init=pretrained[seed], lr=3e-4,
+                                              balanced=balanced)
                 else:
-                    model, info = train_model(arch, stretch, train, val, seed, device)
+                    model, info = train_model(arch, stretch, train, val, seed, device, balanced=balanced)
                 bpm, conf = predict(model, test.x, device)
+                predictions[f"{test_name}|{variant}|{seed}|bpm"], predictions[f"{test_name}|{variant}|{seed}|conf"] = bpm, conf
                 row = {**coverage_scores(bpm, conf, test.label, float(covered.mean())),
                        "coverage_at_pipeline_mae": coverage_at_mae(bpm, conf, test.label, fold["pipeline"]["mae"]),
                        **trend_scores(test.end_s, bpm, test.label), "best_val_mae": info["best_val_mae"], "epochs": info["epochs"]}
@@ -472,11 +496,13 @@ def run(seeds: list[int], variants: list[str], device: torch.device, summary_onl
                       f"at {100 * covered.mean():.0f}%), matched {row['mae_matched']:.2f}, val {info['best_val_mae']:.2f}", flush=True)
             fold[variant] = {key: float(np.mean([r[key] for r in per_seed])) for key in per_seed[0] if isinstance(per_seed[0][key], float)}
         results["folds"][test_name] = fold
+        predictions[f"{test_name}|label"], predictions[f"{test_name}|end_s"], predictions[f"{test_name}|pipeline"] = test.label, test.end_s, pipeline
     for k, (windows, hr) in enumerate(strap):
         ok = np.isfinite(hr)
         results["strap"][f"strap{k}"] = {"session": windows.source, "windows": int(len(windows.label)),
                                          "strap_median_bpm": float(np.median(windows.label)), "pipeline_coverage": float(ok.mean()),
                                          "pipeline_mae": float(np.mean(np.abs(hr[ok] - windows.label[ok]))) if ok.any() else math.nan}
+    results["predictions"] = predictions
     return results
 
 
@@ -526,6 +552,7 @@ def markdown(results: dict[str, Any], variants: list[str]) -> str:
 
 
 def main() -> int:
+    global PAD
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--seeds", default="0,1,2")
     parser.add_argument("--variants", default=",".join(VARIANTS))
@@ -533,7 +560,10 @@ def main() -> int:
     parser.add_argument("--summary-only", action="store_true")
     parser.add_argument("--tag", default="", help="suffix of summary.json / summary.md, e.g. _pretrain")
     parser.add_argument("--final", action="store_true", help="train and save the final shared / shared-pre models on all nights")
+    parser.add_argument("--pad-s", type=float, default=PAD / FS, help="padding of the night windows on each side (s); "
+                        "12 lets the -bal variants raise the heart rate 1.4x")
     args = parser.parse_args()
+    PAD = int(round(args.pad_s * FS))
     if args.final:
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         train_final([int(s) for s in args.seeds.split(",") if s], torch.device(args.device))
@@ -545,6 +575,7 @@ def main() -> int:
         results = json.loads((OUT_DIR / f"summary{args.tag}.json").read_text())
     else:
         results = run(seeds, variants, torch.device(args.device), False)
+        np.savez_compressed(OUT_DIR / f"predictions{args.tag}.npz", **results.pop("predictions"))
         (OUT_DIR / f"summary{args.tag}.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     table = markdown(results, variants)
     (OUT_DIR / f"summary{args.tag}.md").write_text(table, encoding="utf-8")
