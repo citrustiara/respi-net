@@ -265,3 +265,20 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
   of the sleep nights the networks were fine-tuned on (the output stays in that range), and the automatic bin choice
   often lands far from the person (e.g. 2.1 m for someone at 1 m) in the short recordings.  Not pursued further.
 - **Reproduce:** `tools/train_sleep_heart_rate.py --final`, `tools/hr_60ghz_test.py`.
+
+## 2026-11-10 -- Stages from single signals on the author's nights, against Garmin
+
+- **Method:** as the open-data ablation, the BiGRU trained on the own nights only, every labelled night held out once
+  (7), 3 seeds; reference: Garmin's stages.
+- **Result (kappa):** time of night only 0.195; heart 0.010; breathing 0.040; breathing-network features 0.114;
+  movement 0.092; heart + movement 0.058; breathing + movement 0.066; heart + breathing + movement 0.129; + network
+  features 0.105; all + time 0.144.
+- **Per-night stage minutes (7 nights):** epoch agreement is poor, but the night totals follow the watch better --
+  e.g. the heart-only model: light sleep r 0.93 (MAE 17 min), deep r 0.73 (MAE 23 min); breathing + movement: light
+  r 0.94, deep r 0.45, REM r 0.57.  With 7 nights these correlations are rough.
+- **Reading:** on the own nights the time of night agrees with the watch better than any radar signal, the opposite of
+  the open sets with PSG/EEG, where every signal beats the time of night clearly.  Either Garmin's stages lean heavily
+  on the time of night, or 7 nights are too few to learn the radar-to-Garmin mapping (the open-data models do not carry
+  over to Garmin either).  Of the radar signals the breathing-network features carry the most (0.114 alone).  For a
+  sleep report (minutes per stage) the radar models come closer to the watch than epoch by epoch.
+- **Reproduce:** `tools/sleep_stage_sequence.py --ablation own`.
