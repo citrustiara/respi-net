@@ -87,3 +87,19 @@ def test_lag_and_hold_counting_of_the_external_test() -> None:
     p = np.zeros_like(y); p[int(6 * FS) : int(14 * FS)] = HOLD
     assert holds_found(y, p) == (1, 1)
     assert holds_found(y, np.zeros_like(y)) == (1, 0)
+
+
+def test_apnea_detector_finds_a_breathing_stop_and_scores_it() -> None:
+    from apnea_feasibility import detect_events, envelope, inject, match
+
+    fs = 20.0
+    t = np.arange(int(1200 * fs)) / fs
+    rng = np.random.default_rng(1)
+    chest = 4.0 * np.sin(2 * np.pi * 0.25 * t) + 0.05 * rng.standard_normal(len(t))
+    quiet = detect_events(envelope(chest, fs))
+    assert quiet == []  # steady breathing: no event
+    held = inject(chest, fs, 600.0, 20.0, 0.0)  # 20 s of no breathing
+    events = detect_events(envelope(held, fs))
+    found, true = match(events, [{"start": 600.0, "end": 620.0}])
+    assert found.all() and true.all()
+    assert events[0]["kind"] == "apnea" and 15 <= events[0]["end"] - events[0]["start"] <= 30

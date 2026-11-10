@@ -77,7 +77,7 @@ def lag_samples(radar: np.ndarray, reference: np.ndarray, max_s: float = 1.5) ->
 
 
 def radar_polarity(chest: np.ndarray) -> int:
-    scores = score_displacement(chest[:, None], FS)
+    scores = score_displacement(chest[:, None], FS, chest_sign=1.0)  # the trace is already chest motion, not A121 phase
     return int(scores.polarity()[0])
 
 
@@ -149,10 +149,19 @@ def score(ys: list[np.ndarray], ps: list[np.ndarray]) -> dict[str, Any]:
     skip = int(SKIP_S * FS)
     y = np.concatenate([a[skip:] for a in ys]); p = np.concatenate([b[skip:] for b in ps])
     s = score_phases(y, p)
-    width = int(40 * FS)
-    yw = np.stack([a[skip : skip + width] for a in ys if len(a) >= skip + width])
-    pw = np.stack([b[skip : skip + width] for a, b in zip(ys, ps) if len(a) >= skip + width])
-    boundary = pooled_boundaries(yw, pw, np.zeros(len(yw)), FS)
+    # boundaries per recording (lengths differ), counts pooled
+    reference = matched = false = 0
+    error_sum, minutes = 0.0, 0.0
+    for a, b in zip(ys, ps):
+        if len(a) - skip < int(10 * FS):
+            continue
+        bnd = pooled_boundaries(a[None, skip:], b[None, skip:], np.zeros(1), FS)
+        reference += bnd["reference_boundaries"]; matched += bnd["matched"]; false += bnd["false_boundaries"]
+        if bnd["matched"]:
+            error_sum += bnd["mean_abs_error_s"] * bnd["matched"]
+        minutes += (len(a) - skip - 1) / FS / 60.0
+    boundary = {"mean_abs_error_s": error_sum / matched if matched else math.nan,
+                "false_per_minute": false / minutes if minutes else math.nan}
     holds = [holds_found(a[skip:], b[skip:]) for a, b in zip(ys, ps)]
     return {"accuracy": s.accuracy, "macro_f1": s.macro_f1, "f1": {k: v["f1"] for k, v in s.per_class.items() if v["support"]},
             "boundary_error_s": boundary["mean_abs_error_s"], "false_per_min": boundary["false_per_minute"],

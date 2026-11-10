@@ -196,3 +196,51 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
   published consumer-device figures before claiming where it stands.
 - **Reproduce:** `tools/sleep_stage_sequence.py --ablation walch|bidsleep|sleepbrl`; tables in
   `runs/sleep_stage_sequence/ablation_*.md`.
+
+## 2026-11-10 -- External test of the breathing-phase network (other people, another radar)
+
+- **Data:** Schellenberger et al. 2020 (135 recordings, 30 people lying, 24 GHz CW radar; reference thoracic
+  impedance, inhale = up) and Shi et al. 2020 (208 recordings with the radar at the chest, 11 people; reference nasal
+  temperature airflow, turned over).  Labels: the deterministic detector (offline) on the reference, as the belt
+  labels of the author's data.  Radar polarity decided from the radar alone by the shape of the breath: agrees with
+  the reference in 99% / 81% of the decided recordings; radar-reference lag -0.1 / -0.2 s.
+- **Method:** the chosen network unchanged (TCN pretrained + fine-tuned, 3 seeds, echo channel 0) over each whole
+  recording, Viterbi; scored after the first 20 s; the detector on the radar offline and causal.
+- **Result (all recordings; live comparison = network vs causal detector):**
+
+  | set | network acc / macro-F1 / false boundaries per min | causal detector | offline detector | holds >= 5 s found (net / causal / offline) |
+  |---|---|---|---|---|
+  | Schellenberger | **72.8% / 0.643 / 6.4** | 67.1% / 0.612 / 17.4 | 82.3% / 0.797 / 2.3 | 315 / 439 / 610 of 703 |
+  | Shi | **65.4% / 0.517 / 8.6** | 58.0% / 0.498 / 24.8 | 67.6% / 0.616 / 6.6 | 7 / 16 / 30 of 52 |
+
+- **Reading:** the network, trained on one person sitting in front of the A121, carries over to 41 other people and a
+  different radar: it beats the real-time detector there too, with 2.7-2.9x fewer false boundaries, though below its
+  81.9% on the author's own test.  Its weakness is the same as at home -- holds (F1 0.17-0.40): it misses most breath
+  holds that the detector finds.  As in the thesis, the offline detector looks best partly because the labels come
+  from the same detector (here on the reference sensor).
+- **Bug on the way:** the polarity test was given chest motion while it expects A121 phase (it multiplies by the A121
+  sign): every radar trace came out upside down (agreement 1%, lag stuck at the search limit).  Fixed by passing
+  ``chest_sign=1``.
+- **Reproduce:** `tools/breath_external_test.py`; `runs/breath_external/summary.md` has every scenario.
+
+## 2026-11-10 -- Apnea feasibility
+
+- **Detector:** breathing-band amplitude every second (8 s spread) over the 90th percentile of the surrounding 5 min;
+  an event is a drop below 0.6 for >= 10 s (gaps < 3 s bridged), apnea-like below 0.2.  Threshold and baseline
+  quantile chosen on the first 5 UCDDB subjects, scored on the other 20.
+- **A, voluntary breath holds on a 24 GHz radar (Schellenberger apnea scenario, 24 recordings, holds found by the
+  same detector on the thoracic impedance):** sensitivity 0.87, precision 0.88 (62 holds).  A radar sees breathing stop.
+- **B, clinical events on a thoracic effort belt (UCDDB, 20 held-out adults with suspected apnea, 2 363 annotated
+  events):** sensitivity 0.79 overall -- central apneas 0.87, mixed 0.93, obstructive 0.79; hypopneas central 0.81,
+  mixed 0.95, obstructive 0.72; precision 0.53; estimated vs annotated AHI r 0.85, MAE 10.3/h, AHI >= 15 classified
+  alike in 70%.  Chest motion alone carries most clinical events, obstructive hypopneas least -- as expected.
+- **C, false alarms on the author's 10 A121 nights (healthy, no reference):** 17-30 events per hour of sleep (median
+  23), 3-11 apnea-like.  The radar's breathing amplitude in sleep varies far more than a belt's; the belt-tuned
+  threshold is far too sensitive for it.  Following Acconeer's target every 30 s instead of a fixed hourly gate makes
+  it worse (phase jumps at each gate change).
+- **C2, synthetic events in those nights:** 288 injected, 60% found (apnea 68%, hypopnea to 30% / 50% / 70%: 61% / 56%
+  / 36%; 10 s events 23%, 15-40 s 64-78%).
+- **Reading:** the path is plausible -- a radar sees breathing stop (A) and a chest-motion signal carries most clinical
+  events (B) -- but on the A121 sleep recordings the detector is not usable as it is: a radar-specific operating point
+  needs real apnea events recorded with the radar, which this work does not have.
+- **Reproduce:** `tools/apnea_feasibility.py` (`runs/apnea/summary.json`).

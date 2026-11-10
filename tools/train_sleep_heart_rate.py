@@ -480,6 +480,27 @@ def run(seeds: list[int], variants: list[str], device: torch.device, summary_onl
     return results
 
 
+def train_final(seeds: list[int], device: torch.device) -> None:
+    """``shared`` and ``shared-pre`` trained on all watch nights (validation: the end of each night), saved as
+    ``runs/sleep_heart_rate/final_<variant>_s<seed>.pt`` for tests on other data."""
+
+    nights = [n for n in NIGHTS if n.garmin is not None and (NIGHT_DIR / f"{n.stem}.npz").exists()]
+    windows = []
+    for night in nights:
+        w, _ = night_data(night, TRAIN_STEP_S)
+        if len(w.label):
+            windows.append(w)
+    train, val = split_train_val(windows)
+    pretrained = pretrained_states(seeds, device)
+    for seed in seeds:
+        for variant in ("shared", "shared-pre"):
+            init = pretrained[seed] if variant == "shared-pre" else None
+            model, info = train_model("shared", True, train, val, seed, device, epochs=30 if init else 60, patience=8 if init else 12,
+                                      init=init, lr=3e-4 if init else 1e-3)
+            torch.save(model.state_dict(), OUT_DIR / f"final_{variant}_s{seed}.pt")
+            print(f"final {variant} seed {seed}: val MAE {info['best_val_mae']:.2f}", flush=True)
+
+
 def markdown(results: dict[str, Any], variants: list[str]) -> str:
     folds = results["folds"]
     lines = ["| test night | windows | pipeline coverage % | pipeline MAE | median MAE | " + " | ".join(f"{v} MAE / matched / cov@pipe" for v in variants) + " |",
@@ -511,7 +532,12 @@ def main() -> int:
     parser.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
     parser.add_argument("--summary-only", action="store_true")
     parser.add_argument("--tag", default="", help="suffix of summary.json / summary.md, e.g. _pretrain")
+    parser.add_argument("--final", action="store_true", help="train and save the final shared / shared-pre models on all nights")
     args = parser.parse_args()
+    if args.final:
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+        train_final([int(s) for s in args.seeds.split(",") if s], torch.device(args.device))
+        return 0
     seeds = [int(s) for s in args.seeds.split(",") if s]
     variants = [v for v in args.variants.split(",") if v]
     OUT_DIR.mkdir(parents=True, exist_ok=True)
