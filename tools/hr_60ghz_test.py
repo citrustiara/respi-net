@@ -5,8 +5,8 @@ Barvik and Hruby (Zenodo 23762780, CC BY 4.0): raw DCA1000 captures of people se
 it or sideways, breathing paced, with a SOMNOtouch pulse rate at 4 Hz.  Used: the single-person seated recordings
 with a single transmitter (chirp configurations A, B, E; 20 recordings, 3 people's worth of data, mostly one).
 
-Each capture is decoded (16-bit complex samples, two LVDS lanes: I0 I1 Q0 Q1 ...), range-FFT'd per chirp, averaged
-over the chirps of a frame and the 4 receivers, and down-sampled to 20 Hz.  The bin that breathes most between 0.4
+Each capture is decoded (16-bit complex samples, two LVDS lanes: I0 I1 Q0 Q1 ...), range-FFT'd per chirp, the first receiver
+averaged over the chirps of a frame, and down-sampled to 20 Hz.  The bin that breathes most between 0.4
 and 2.6 m and its 6 neighbours give displacement (unwrapped phase x wavelength / 4 pi) -- the input the network
 takes from the A121.  Windows of 60 s every 10 s (edges padded for the network's stretch margin); label: the median
 pulse rate over the window.
@@ -50,7 +50,10 @@ RX = 4
 
 
 def decode(raw: np.ndarray, samples: int, chirps: int) -> np.ndarray:
-    """[frames, bins] range profile (complex), averaged over chirps and receivers."""
+    """[frames, bins] range profile (complex) of the first receiver, averaged over the chirps of a frame.
+
+    The receivers see the chest with different path phases: averaging them coherently partly cancels the cardiac
+    motion (spectral-peak error 16 bpm with all four, 8 with one on S1-R32)."""
 
     lanes = np.zeros(len(raw) // 2, complex)
     lanes[0::2] = raw[0::4] + 1j * raw[2::4]
@@ -59,7 +62,7 @@ def decode(raw: np.ndarray, samples: int, chirps: int) -> np.ndarray:
     frames = len(lanes) // per_frame
     cube = lanes[: frames * per_frame].reshape(frames, chirps, RX, samples)
     profile = np.fft.fft((cube - cube.mean(-1, keepdims=True)) * np.hanning(samples), axis=-1)
-    return profile.mean(axis=(1, 2))
+    return profile[:, :, 0].mean(axis=1)
 
 
 def recording_windows(row: pd.Series) -> tuple[np.ndarray, np.ndarray, list[float]]:
@@ -94,7 +97,9 @@ def pulse_series() -> pd.DataFrame:
                 text = archive.read(member).decode("latin-1").splitlines()
                 date = next(l for l in text if l.startswith("Start Time")).split(":", 1)[1].strip().split()[0]
                 rows = [l.split(";") for l in text[text.index("Data:") + 1 :] if ";" in l]
-                times = pd.to_datetime([f"{date} {t.strip().replace(',', '.')}" for t, _ in rows], format="%d.%m.%Y %H:%M:%S.%f")
+                # set 1 rows hold the time of day, set 2 rows the date and time
+                stamps = [t.strip().replace(",", ".") for t, _ in rows]
+                times = pd.to_datetime([x if " " in x else f"{date} {x}" for x in stamps], format="%d.%m.%Y %H:%M:%S.%f")
                 frames.append(pd.DataFrame({"time": times, "pulse": [float(v) for _, v in rows]}))
     out = pd.concat(frames).sort_values("time")
     return out[out["pulse"] > 0]

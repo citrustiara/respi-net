@@ -251,3 +251,17 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
   events (B) -- but on the A121 sleep recordings the detector is not usable as it is: a radar-specific operating point
   needs real apnea events recorded with the radar, which this work does not have.
 - **Reproduce:** `tools/apnea_feasibility.py` (`runs/apnea/summary.json`).
+
+## 2026-11-10 -- Heart-rate network on a 60 GHz FMCW radar (inconclusive)
+
+- **Data:** Barvik and Hruby (Zenodo 23762780): TI IWR6843AOP raw captures, seated people 1-2 m from the radar, paced
+  breathing, finger-PPG pulse rate; the single-person seated recordings of chirp configurations A, B, E -- 77 windows
+  of 60 s, almost all from one person, pulse ~81 bpm.
+- **Method:** DCA1000 decoding (two LVDS lanes), range FFT, first receiver averaged over a frame's chirps (averaging
+  the 4 receivers coherently partly cancels the cardiac motion: spectral-peak error 16 vs 8 bpm on one recording),
+  20 Hz, the bin that breathes most and 6 neighbours; the final shared networks trained on all watch nights.
+- **Result:** networks MAE 25-28 bpm, all of it bias (they output ~55 bpm); the plain spectral peak 24 bpm.
+- **Reading:** not a test of the sleep network.  The recordings are awake and seated at ~81 bpm, above the 45-70 bpm
+  of the sleep nights the networks were fine-tuned on (the output stays in that range), and the automatic bin choice
+  often lands far from the person (e.g. 2.1 m for someone at 1 m) in the short recordings.  Not pursued further.
+- **Reproduce:** `tools/train_sleep_heart_rate.py --final`, `tools/hr_60ghz_test.py`.
