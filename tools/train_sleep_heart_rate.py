@@ -75,8 +75,14 @@ STRAP_SESSIONS = (
     "a121_sleep_radar-belt-hr-alt-2026-11-07_2026-11-07_19-26-08",
 )
 STRAP_MIN_OK_SHARE = 0.5  # a strap piece counts only when at least half of its readings pass the quality check
-ARCHS = ("time", "spectral")
+ARCHS = ("time", "spectral", "shared")
 VARIANTS = ("time", "spectral", "time-nostretch", "spectral-nostretch")
+# ``shared``: the time network applied to every bin with the same weights and pooled over bins, so it takes any number
+# of bins -- the 7 of the A121 and the single channel of a continuous-wave radar.  ``shared-pre`` first learns on the
+# 24 GHz radar windows with ECG heart rate of 30 people (``tools/build_radar_ecg_windows.py``), then fine-tunes on the
+# nights; ``shared-zeroshot`` is that pretrained network on the nights as it is.
+PRETRAIN_VARIANTS = ("shared", "shared-pre", "shared-zeroshot")
+PRETRAIN_WINDOWS = ROOT / "data" / "processed" / "radar_ecg" / "schellenberger_windows.npz"
 
 
 # ------------------------------------------------------------------- data
@@ -264,8 +270,27 @@ class SpectralNet(nn.Module):
         return logits[:, HR_MIN - SPEC_MIN : HR_MAX - SPEC_MIN + 1]
 
 
+class SharedTimeNet(nn.Module):
+    """One encoder for every bin (1 input channel), mean and max over the bins, then the heart-rate head."""
+
+    def __init__(self, width: int = 48):
+        super().__init__()
+        layers, channels = [], 1
+        for dilation in (1, 2, 4, 8):
+            layers += [nn.Conv1d(channels, width, 7, padding=3 * dilation, dilation=dilation), nn.BatchNorm1d(width), nn.ReLU(), nn.MaxPool1d(2)]
+            channels = width
+        self.body = nn.Sequential(*layers)
+        self.head = nn.Linear(4 * width, CLASSES)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, bins, n = x.shape
+        h = self.body(time_input(x).reshape(b * bins, 1, n))
+        per_bin = torch.cat([h.mean(-1), h.amax(-1)], dim=1).reshape(b, bins, -1)
+        return self.head(torch.cat([per_bin.mean(1), per_bin.amax(1)], dim=1))
+
+
 def make_model(arch: str) -> nn.Module:
-    return TimeNet() if arch == "time" else SpectralNet()
+    return {"time": TimeNet, "spectral": SpectralNet, "shared": SharedTimeNet}[arch]()
 
 
 def soft_targets(label: torch.Tensor) -> torch.Tensor:
@@ -294,11 +319,14 @@ def predict(model: nn.Module, x: np.ndarray, device: torch.device, batch: int = 
 
 
 def train_model(arch: str, stretch: bool, train: Windows, val: Windows, seed: int, device: torch.device,
-                epochs: int = 60, patience: int = 12) -> tuple[nn.Module, dict[str, Any]]:
+                epochs: int = 60, patience: int = 12, init: dict[str, torch.Tensor] | None = None, lr: float = 1e-3) -> tuple[nn.Module, dict[str, Any]]:
     torch.manual_seed(seed)
     np.random.seed(seed)
-    model = make_model(arch).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
+    model = make_model(arch)
+    if init is not None:
+        model.load_state_dict(init)
+    model = model.to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)
     x_all, y_all = torch.from_numpy(train.x), torch.from_numpy(train.label.astype(np.float32))
     best, best_state, since, history = math.inf, None, 0, []
     for epoch in range(epochs):
@@ -368,6 +396,24 @@ def split_train_val(nights: list[Windows], val_share: float = 0.2) -> tuple[Wind
     return join(0, "train"), join(1, "val")
 
 
+def pretrained_states(seeds: list[int], device: torch.device) -> dict[int, dict[str, torch.Tensor]]:
+    """The shared network learned on the 24 GHz radar + ECG windows; 5 of the 30 people validate."""
+
+    data = np.load(PRETRAIN_WINDOWS)
+    x, y, subject = data["x"], data["label"].astype(float), data["subject"]
+    people = sorted(set(subject))
+    val_people = set(people[-5:])
+    val_mask = np.isin(subject, list(val_people))
+    train = Windows(x[~val_mask], y[~val_mask], np.zeros(0), np.zeros(0), "pretrain")
+    val = Windows(x[val_mask], y[val_mask], np.zeros(0), np.zeros(0), "pretrain-val")
+    states = {}
+    for seed in seeds:
+        model, info = train_model("shared", True, train, val, seed, device, epochs=40, patience=8)
+        print(f"pretrain seed {seed}: val MAE {info['best_val_mae']:.2f} bpm after {info['epochs']} epochs", flush=True)
+        states[seed] = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+    return states
+
+
 def run(seeds: list[int], variants: list[str], device: torch.device, summary_only: bool) -> dict[str, Any]:
     nights = [n for n in NIGHTS if n.garmin is not None and (NIGHT_DIR / f"{n.stem}.npz").exists()]
     data = {}
@@ -391,6 +437,7 @@ def run(seeds: list[int], variants: list[str], device: torch.device, summary_onl
             strap.append((Windows(w.x[keep], w.label[keep], w.centre_ms[keep], w.end_s[keep], stem), hr))
     print(f"strap: {sum(len(s[0].label) for s in strap)} windows", flush=True)
     results: dict[str, Any] = {"nights": names, "folds": {}, "strap": {}}
+    pretrained = pretrained_states(seeds, device) if any(v in ("shared-pre", "shared-zeroshot") for v in variants) else {}
     for test_name in names:
         train_names = [n for n in names if n != test_name]
         train, val = split_train_val([data[n][0] for n in train_names])
@@ -406,7 +453,13 @@ def run(seeds: list[int], variants: list[str], device: torch.device, summary_onl
             arch, stretch = variant.split("-")[0], not variant.endswith("nostretch")
             per_seed = []
             for seed in seeds:
-                model, info = train_model(arch, stretch, train, val, seed, device)
+                if variant == "shared-zeroshot":
+                    model = make_model("shared"); model.load_state_dict(pretrained[seed]); model = model.to(device)
+                    info = {"best_val_mae": float(np.mean(np.abs(predict(model, val.x, device)[0] - val.label))), "epochs": 0}
+                elif variant == "shared-pre":
+                    model, info = train_model("shared", True, train, val, seed, device, epochs=30, patience=8, init=pretrained[seed], lr=3e-4)
+                else:
+                    model, info = train_model(arch, stretch, train, val, seed, device)
                 bpm, conf = predict(model, test.x, device)
                 row = {**coverage_scores(bpm, conf, test.label, float(covered.mean())),
                        "coverage_at_pipeline_mae": coverage_at_mae(bpm, conf, test.label, fold["pipeline"]["mae"]),
@@ -457,17 +510,18 @@ def main() -> int:
     parser.add_argument("--variants", default=",".join(VARIANTS))
     parser.add_argument("--device", default="mps" if torch.backends.mps.is_available() else "cpu")
     parser.add_argument("--summary-only", action="store_true")
+    parser.add_argument("--tag", default="", help="suffix of summary.json / summary.md, e.g. _pretrain")
     args = parser.parse_args()
     seeds = [int(s) for s in args.seeds.split(",") if s]
     variants = [v for v in args.variants.split(",") if v]
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     if args.summary_only:
-        results = json.loads((OUT_DIR / "summary.json").read_text())
+        results = json.loads((OUT_DIR / f"summary{args.tag}.json").read_text())
     else:
         results = run(seeds, variants, torch.device(args.device), False)
-        (OUT_DIR / "summary.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+        (OUT_DIR / f"summary{args.tag}.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     table = markdown(results, variants)
-    (OUT_DIR / "summary.md").write_text(table, encoding="utf-8")
+    (OUT_DIR / f"summary{args.tag}.md").write_text(table, encoding="utf-8")
     print(table)
     return 0
 

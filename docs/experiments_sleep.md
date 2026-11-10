@@ -116,22 +116,83 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
 - Band-passed impedance `tfm_z0` and the radar's displacement: same breathing rate, correlation 0.83-0.96 on three
   recordings (resting, apnea) -> usable as an independent breathing reference on radar for 30 people.
 
-## 2026-11-09 -- Whole-night stage model (in progress)
+## 2026-11-09 -- Whole-night stage model
 
 - **Method:** bidirectional GRU over the 30 s epochs (common schema of `tools/build_open_sleep_epochs.py`: heart,
   breathing, movement scaled per night, masks for missing modalities), random 2-4 h crops, modality dropout, classes
   weighted.  Evaluations: SLEEPBRL radar vs PSG (4 folds, with/without Walch); own nights vs Garmin (scratch,
   zero-shot, fine-tuned).
-- **First result:** SLEEPBRL radar (breathing + movement) vs PSG: kappa 0.46-0.49, agreement 61-62%; adding Walch
-  changes little.  Own nights pending.
+- **SLEEPBRL radar (breathing + movement) vs PSG:** kappa 0.470 +- 0.006 (radar nights only), 0.480 +- 0.005 with
+  Walch; agreement 62%; F1 awake 0.72, light 0.57, deep 0.59, REM 0.60.  Radar alone stages sleep moderately against
+  a real reference.
+- **Own nights vs Garmin (7 nights, each held out):** from scratch kappa 0.139 +- 0.029 (best so far: logistic
+  0.054, time of night 0.111); fine-tuned from open data 0.131; open data only (zero-shot) -0.055.
+- **Reading:** a model that stages radar nights against PSG does *not* agree with the watch on the own nights --
+  either the transfer from the 4 GHz radar and wrist data to the A121 nights fails, or the watch's stages differ from
+  PSG-style staging (both are estimates; without PSG on the own nights the two cannot be told apart).  Learning on
+  the own nights with Garmin labels gives the best agreement with Garmin, as expected.
+- **Not checked yet:** stage shares and timing of the zero-shot predictions on the own nights.
 - **Reproduce:** `tools/build_open_sleep_epochs.py`, `tools/sleep_stage_sequence.py`.
 
-## 2026-11-09 -- Heart-rate network with radar + ECG pretraining (in progress)
+## 2026-11-09 -- Heart-rate network with radar + ECG pretraining
 
 - **Data:** 7 731 windows of 60 s from Schellenberger (30 people, ECG heart rate 49-87 bpm); the plain spectral peak
   already gives 3.2 bpm MAE at rest -- the heart shows clearly.
 - **Method:** one encoder shared by all bins, pooled over bins (takes 1 CW channel or 7 A121 bins); pretrain on 25
   people (5 validate), then fine-tune on the nights; also zero-shot.
-- **First fold (night 8 June, pipeline 3.67 bpm):** pretrain + fine-tune 3.3-3.5 bpm, zero-shot 3.0-4.3 bpm.
+- **Pretraining:** validation MAE 1.0-1.2 bpm on the 5 held-out people.
+- **Result on the 5 watch nights (each held out, 3 seeds; pipeline 3.85 bpm on its 65% of windows, 10-minute
+  medians 2.76 bpm, r 0.51):**
+
+  | variant | MAE all windows | MAE at the pipeline's coverage | windows at the pipeline's MAE | 10-min MAE | 10-min r | strap 19:26 |
+  |---|---|---|---|---|---|---|
+  | shared encoder, own nights only | 3.70 | 2.94 | 89% | 2.76 | 0.65 | 1.4 |
+  | shared encoder, pretrained + fine-tuned | **3.50** | **2.62** | **99%** | **2.38** | **0.71** | 1.5 |
+  | pretrained only (zero-shot) | 6.20 | 4.50 | 59% | 4.62 | 0.30 | 2.5 |
+
+- **Reading:** the shared-encoder network now beats the pipeline -- lower error on *all* windows than the pipeline on
+  the 65% it accepts, and a better trend over the night.  Most of the gain comes from the architecture (one encoder
+  for every bin, pooled; the earlier 7-channel network: 4.22 bpm); pretraining adds a little on average and most on
+  the hardest night (1.6 m: 3.60 vs 4.68 bpm).  Validation MAE (end of the training nights) slightly prefers the
+  network without pretraining (3.69 vs 3.85), so the honest pick by validation is a near tie.  Zero-shot transfer
+  from the 24 GHz radar fails: fine-tuning on A121 data is needed.
 - **Reproduce:** `tools/build_radar_ecg_windows.py`, `tools/train_sleep_heart_rate.py --variants
   shared,shared-pre,shared-zeroshot --tag _pretrain`.
+
+## 2026-11-10 -- The breathing-phase network on the nights
+
+- **Method:** the chosen phase network (TCN pretrained + fine-tuned, 3 seeds averaged) on every 60 s epoch window of
+  the 10 nights, input formed as in training (3 bins around the target, 2 Hz low-pass, causal 30 s normalisation
+  over 90 s), Viterbi path; features from the last 40 s.
+- **Does it find breathing in sleep?** Its breathing rate (inhale onsets per minute) vs Acconeer's: bias +0.6/min,
+  MAE 1.74, r 0.32 (7 489 still epochs); vs Garmin: MAE 2.02, r 0.15 (Acconeer's rate vs Garmin: MAE 1.3-2.0).  Inhale
+  share 0.50 on average; pauses rare (median 0, mean 3.4% of time).  So it does track breathing at night, about as
+  well as the existing rate estimate -- trained on sitting daytime data only.
+- **Reproduce:** `tools/breath_phases_at_night.py`.  Its features enter the stage model as group "net".
+
+## 2026-11-10 -- Stages from heart, breathing or movement alone, and together (open data, true references)
+
+- **Question (supervisor):** how much of the sleep stage does each signal carry -- heart rate, breathing, movement --
+  and all of them together?
+- **Method:** the whole-night BiGRU with only the chosen feature groups (others zeroed; time of night a separate
+  group), 1000 steps, 3 seeds; 4 folds over the nights of each set; kappa pooled over the held-out nights, and per
+  night the minutes of each stage against the reference (correlation over nights, mean absolute difference).
+- **Result (kappa):**
+
+  | signals | Walch (watch, PSG, 31 nights) | Bidsleep (watch, Dreem EEG, 253 nights) | SLEEPBRL (4 GHz radar, PSG, 32 nights) |
+  |---|---|---|---|
+  | time of night only | 0.136 | 0.230 | 0.119 |
+  | heart rate | 0.373 | 0.384 | -- |
+  | breathing | -- | -- | **0.475** |
+  | movement | 0.226 | 0.335 | 0.308 |
+  | heart + movement / breathing + movement | 0.418 | 0.423 | 0.443 |
+  | the same + time of night | 0.470 | 0.447 | 0.476 |
+
+- **Reading:** each signal alone stages sleep clearly better than the time of night; the radar's breathing alone
+  (rate, depth, regularity, interval variation from the chest) matches what heart rate and movement from a watch give
+  together; movement adds to the watch's heart rate but nothing to the radar's breathing (the breathing features
+  already show restlessness).  Per-night stage minutes: REM and light sleep follow the reference best (r 0.6-0.8),
+  deep sleep worst (r 0.1-0.3).  Agreement with the true reference is moderate (kappa 0.42-0.48); compare with
+  published consumer-device figures before claiming where it stands.
+- **Reproduce:** `tools/sleep_stage_sequence.py --ablation walch|bidsleep|sleepbrl`; tables in
+  `runs/sleep_stage_sequence/ablation_*.md`.
