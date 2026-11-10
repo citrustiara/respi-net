@@ -131,7 +131,14 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
   either the transfer from the 4 GHz radar and wrist data to the A121 nights fails, or the watch's stages differ from
   PSG-style staging (both are estimates; without PSG on the own nights the two cannot be told apart).  Learning on
   the own nights with Garmin labels gives the best agreement with Garmin, as expected.
-- **Not checked yet:** stage shares and timing of the zero-shot predictions on the own nights.
+- **With Bidsleep in the pretraining (walch + sleepbrl + bidsleep, ~316 nights):** own vs Garmin scratch 0.148,
+  zero-shot -0.084, fine-tuned 0.139 -- more open data does not bring the model closer to the watch.
+- **What the zero-shot model says about the own nights:** a plausible night structure -- deep sleep more in the first
+  half (33% vs 25%), REM more in the second (19% vs 28%) -- but too much deep sleep (29% of the night; Garmin 11%,
+  adults typically 15-25%) and too little light sleep (32%; Garmin 57%).  The A121's sleeping breathing apparently
+  looks "deeper" (more regular) than the 4 GHz radar's or the wrist's signals, and the inverse-frequency class weights
+  push predictions toward the rare classes; both are candidates, not shown.
+- **Reproduce:** `tools/sleep_stage_sequence.py --open walch,sleepbrl,bidsleep --parts own --tag _with_bidsleep`.
 - **Reproduce:** `tools/build_open_sleep_epochs.py`, `tools/sleep_stage_sequence.py`.
 
 ## 2026-11-09 -- Heart-rate network with radar + ECG pretraining
