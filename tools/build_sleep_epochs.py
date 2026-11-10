@@ -70,6 +70,7 @@ NIGHTS = (
     Night("2026-10-11", "a121_sleep_noc-2026-10-11_2026-10-11_03-47-35", None, "October"),
     Night("2026-10-12", "a121_sleep_noc-2026-10-12_2026-10-12_03-31-31", None, "October"),
     Night("2026-10-13", "a121_sleep_noc-2026-10-13_2026-10-13_03-45-56", None, "October"),
+    Night("2026-11-10", "a121_sleep_noc-suunto-2026-11-10_2026-11-10_04-03-05", "garmin_2026-11-10", "November, 0.5-1.8 m"),
 )
 BASE_FEATURES = ("hr_bpm", "rr_bpm", "breath_amp_mm", "breath_regularity", "breath_interval_cv", "breath_depth_cv",
                  "motion_energy", "movement_fraction", "no_presence_fraction", "radar_rmssd_ms", "radar_sdnn_ms")

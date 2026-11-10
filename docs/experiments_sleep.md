@@ -4,10 +4,10 @@ One entry per experiment of the sleep part (heart rate, breathing, movement, sta
 tried, on what data, the numbers, and what follows from it -- negative results too.  Newest last.  Results live in
 `runs/` (not in git); the commands below rebuild them.  The work queue is in `PLAN_NEURAL_NETWORK.md` (local).
 
-Data used throughout: 10 A121 nights of the author (S01) -- 7 in June 2026 with Garmin Fenix 7 exports (heart and
+Data used throughout: 11 A121 nights of the author (S01) -- 7 in June 2026 with Garmin Fenix 7 exports (heart and
 breathing rate on 5 of them, sleep stages on all 7), 3 in October without the watch (it overwrote them before
 syncing); the thesis numbers the June nights 1-5 (08, 09, 13, 15, 16 June), plus a short pilot (10 June) and a
-failed-geometry night at 1.6 m (11 June).  Chest-strap (Suunto) sessions of 2026-11-07 with the father (S02).
+failed-geometry night at 1.6 m (11 June); 10 November with the watch (stages and heart rate).  Chest-strap (Suunto) sessions of 2026-11-07 with the father (S02).
 
 ---
 
@@ -282,3 +282,51 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
   over to Garmin either).  Of the radar signals the breathing-network features carry the most (0.114 alone).  For a
   sleep report (minutes per stage) the radar models come closer to the watch than epoch by epoch.
 - **Reproduce:** `tools/sleep_stage_sequence.py --ablation own`.
+
+## 2026-11-10 -- Night 10 November: radar + watch (+ strap, unusable)
+
+- **Recording:** A121 0.5-1.8 m (3 cm bins), 5.6 h; Garmin export with stages (sleep 05:26-09:38) and heart rate;
+  Suunto strap on all night.  The strap's readings are noise (median 111 bpm, RR intervals 270-610 ms, 2% pass its
+  check) while the watch shows 58 and the radar ~55: no strap reference.  Night added to `NIGHTS` (8 watch nights).
+- **Gated pipeline:** heart rate on 67% of windows, MAE 4.85 bpm against the watch, r 0.04 -- worse than June.  The
+  breathing-based range choice does not help (median 54.9).
+- **Distance scan** (final networks trained on the June nights only, so this night is held out; 620 still windows):
+  the closer the better, monotonically -- 0.50 m (first bin): MAE 3.26, 10-min r 0.45, breathing share 0.82;
+  0.59 m 3.32; the Acconeer target (0.53-0.7 m) 3.35 (r 0.39); 0.80 m 4.29; 0.9-1.7 m 5.3-7.0 with r ~0.  The echo is also
+  strongest in the first bin: the chest was most likely nearer than 0.5 m.  A constant at the night's watch median
+  would score 3.51 (the heart rate varied little this night), so the network is only a little better than a perfect
+  constant on MAE, but it follows the slow changes.  Choosing the bin per window by breathing (3.42, 10-min r 0.48) or by network
+  confidence (4.20) is no better than the Acconeer target.  Next night: 0.2-1.2 m.
+- **Reproduce:** `tools/hr_distance_scan.py --night 2026-11-10` (`runs/hr_distance_scan/`).
+
+## 2026-11-10 -- Do the radar heart rates follow the watch's peaks?
+
+- **Method:** 10-minute medians; a peak = the watch above its night median by more than one SD; slope of the
+  estimate on the watch (1 = full swing).  Final network (in-sample on June, held out on 10 Nov) and the pipeline.
+- **Result:** on every night the peaks are flattened: network slope 0.44-0.84 on June (in-sample!), 0.36 on
+  10 Nov; error in the peaks -2.6 to -4.5 bpm (10 Nov -6.1), +0.1 to +1.3 outside them.  The pipeline flattens more
+  (slope 0.07-0.42, -3 to -11 bpm in the peaks) and loses coverage there.  The peaks carry more movement (still windows:
+  0.04-0.07 vs 0.03-0.05; all epochs 1.5-2.5x), the watch calls them light sleep, almost never REM: short arousals
+  with movement, where the chest signal is worst.  Without the radar+ECG pretraining the held-out night is flatter
+  still (slope 0.25, -7.0 bpm in the peaks): the wider heart-rate range of the external set helps a little.
+- **Reading:** a general property, not the distance -- the distance only makes 10 Nov worse.  Causes: movement at the
+  peaks, and the fine-tuning labels sitting at 50-60 bpm, which pull the network to the typical value.  Part of the
+  watch's peaks may be wrist-sensor error during movement; without a working strap this cannot be told.
+- **Reproduce:** `tools/hr_peak_tracking.py --variant shared-pre|shared` (`runs/hr_peak_tracking/`).
+
+## 2026-11-10 -- Rerun with the 10 November night (8 watch nights)
+
+- **Heart-rate network** (6 nights with watch heart rate, each held out, 3 seeds): shared 3.65 / shared-pre 3.65 bpm
+  on all windows vs the pipeline 4.04 on 66%; 10-min r 0.65 / 0.69 (pipeline 0.44).  10 Nov held out: network 3.6
+  vs pipeline 5.0 at 70%.  Pretraining still a near tie on MAE, better on the trend.
+  `tools/train_sleep_heart_rate.py --variants shared,shared-pre --tag _with_nov10`.
+- **Per-epoch stages** (logistic regression, 8 nights): time 0.127, heuristic 0.081, breathing 0.035, heart 0.033,
+  movement 0.030, all 0.044, all+time 0.053 -- unchanged picture.  `tools/sleep_stage_crossval.py`.
+- **Whole-night BiGRU, own nights** (8 nights held out in turn): time 0.204; heart 0.028; breathing 0.121; network
+  features 0.108; movement 0.142; heart+breathing+movement 0.141; + network features 0.157; all + time 0.193.  With
+  the eighth night breathing (0.04 -> 0.12) and movement (0.09 -> 0.14) rise and all signals together reach the time
+  of night, but none beats it; night totals: light r 0.94-0.96 for most combinations.  With 8 nights the numbers move
+  by ~0.05-0.1 per added night.  `tools/sleep_stage_sequence.py --ablation own --tag _with_nov10`.
+- **For the thesis:** the open sets with PSG remain the main evidence that the signals carry stage information
+  (SLEEPBRL: radar breathing 0.475); the own nights vs Garmin are an agreement check with a consumer device, not a
+  validation.
