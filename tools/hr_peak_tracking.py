@@ -5,7 +5,7 @@ A peak: the watch's 10-minute heart rate more than one standard deviation above 
 much of the watch's swing the estimate keeps (slope of the estimate on the watch), the mean error inside and outside
 the peaks, the pipeline's coverage there, the share of movement and the watch's stage during the peaks.  Estimates:
 the final network (``--variant shared-pre`` or ``shared``; in-sample on the June nights it was trained on, held out
-on 10 November) and the gated night pipeline (not trained).
+on the November nights) and the gated night pipeline (not trained).
 
     uv run --extra ml python tools/hr_peak_tracking.py --variant shared-pre
 """
@@ -61,7 +61,7 @@ def main() -> int:
         moving = ep["movement_fraction"].reindex(windows.end_s).to_numpy()
         watch, net10, pipe10 = ten_minutes(windows.label), ten_minutes(net), ten_minutes(pipe)
         peak = watch > np.nanmedian(watch) + np.nanstd(watch)
-        rows.append({"night": night.name, "trained_on": night.name != "2026-11-10", "windows": len(watch),
+        rows.append({"night": night.name, "trained_on": night.name.startswith("2026-06"), "windows": len(watch),
                      "network_slope": slope(net10, watch), "pipeline_slope": slope(pipe10, watch),
                      "network_error_peak": np.nanmean(net10[peak] - watch[peak]), "network_error_rest": np.nanmean(net10[~peak] - watch[~peak]),
                      "pipeline_error_peak": np.nanmean(pipe10[peak] - watch[peak]),

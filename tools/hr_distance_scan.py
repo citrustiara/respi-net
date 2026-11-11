@@ -8,7 +8,7 @@ spectral peak (42-120 bpm) of the centre bin and the share of breathing (0.1-0.6
 Per-window choices are scored too: the Acconeer target (as the pipeline and the network's training), the bin with
 the most breathing, the bin where the network is most confident.
 
-The final networks were trained on the June watch nights: on those nights the scan is in-sample, on 10 November not.
+The final networks were trained on the June watch nights: on those nights the scan is in-sample, on the November nights not.
 
     uv run --extra ml python tools/hr_distance_scan.py --night 2026-11-10
 """

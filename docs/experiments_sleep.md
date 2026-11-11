@@ -4,10 +4,10 @@ One entry per experiment of the sleep part (heart rate, breathing, movement, sta
 tried, on what data, the numbers, and what follows from it -- negative results too.  Newest last.  Results live in
 `runs/` (not in git); the commands below rebuild them.  The work queue is in `PLAN_NEURAL_NETWORK.md` (local).
 
-Data used throughout: 11 A121 nights of the author (S01) -- 7 in June 2026 with Garmin Fenix 7 exports (heart and
+Data used throughout: 12 A121 nights of the author (S01) -- 7 in June 2026 with Garmin Fenix 7 exports (heart and
 breathing rate on 5 of them, sleep stages on all 7), 3 in October without the watch (it overwrote them before
 syncing); the thesis numbers the June nights 1-5 (08, 09, 13, 15, 16 June), plus a short pilot (10 June) and a
-failed-geometry night at 1.6 m (11 June); 10 November with the watch (stages and heart rate).  Chest-strap (Suunto) sessions of 2026-11-07 with the father (S02).
+failed-geometry night at 1.6 m (11 June); 10 and 11 November with the watch (stages and heart rate).  Chest-strap (Suunto) sessions of 2026-11-07 with the father (S02).
 
 ---
 
@@ -354,3 +354,40 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
   The thesis keeps ``shared-pre``; the peaks are reported as a limitation of the radar signal during movement.
 - **Reproduce:** `tools/train_sleep_heart_rate.py --variants shared-pre,shared-pre-bal --seeds 0 --pad-s 12 --tag
   _balanced_s0`, then `tools/hr_flattening_compare.py --tag _balanced_s0`.
+
+## 2026-11-11 -- Night 11 November: radar 0.2-1.2 m + watch, no strap (nothing trained)
+
+- **Recording:** 11.25 h (01:30-12:45), range 0.20-1.20 m in 51 points (step 8, 2 cm), Garmin sleep 03:01-12:45
+  (1071 labelled epochs, the longest watch night: light 47%, REM 27%, deep 18%, awake 8%).  No chest strap.  The
+  Acconeer target sat at 0.46-0.64 m (10-90%), the strongest reflection often at 0.35-0.40 m -- below the 0.5 m start of
+  10 November, which supports the guess that the chest was then nearer than the recorded range.
+- **Night pipeline vs watch** (gated, no training; 10 November for comparison):
+
+  | night | range choice | HR coverage | HR MAE | HR r | HR r 10 min | RR MAE | RR r 10 min |
+  |---|---|---|---|---|---|---|---|
+  | 10 Nov (0.5-1.8 m) | Acconeer target | 67% | 4.85 | 0.04 | 0.10 | 2.07 | -0.15 |
+  | 10 Nov | most breathing | 62% | 4.47 | 0.11 | 0.44 | 2.07 | -0.15 |
+  | 11 Nov (0.2-1.2 m) | Acconeer target | 78% | 4.38 | 0.40 | 0.63 | 1.44 | 0.62 |
+  | 11 Nov | most breathing | 79% | 4.12 | 0.42 | 0.69 | 1.44 | 0.60 |
+
+- **Heart-rate network by distance** (`runs/hr_distance_scan/2026-11-11.md`; final ``shared-pre`` models trained on the
+  June nights only, so this night is a held-out test; 1248 still windows, watch median 55.8): a clear optimum at
+  **0.34-0.42 m** (MAE 3.22-3.29, window r 0.64, r 10 min 0.76), also where the breathing share peaks (0.91-0.94);
+  falling off on both sides (0.26 m: 4.39; 0.70 m: 4.45; 1.0 m: 5.79).  Per-window choices: Acconeer target 3.50 / r
+  0.75, most breathing 3.38 / 0.76, most confident 3.45 / 0.77; the night's constant watch median 4.84.  The best
+  held-out heart-rate night so far (10 November: 3.35 / r 0.39 at best).
+- **Peaks** (`tools/hr_peak_tracking.py`): slope of the network on the watch 0.51 (June nights, in-sample: 0.44-0.84),
+  error in the watch's peaks -4.4 bpm, elsewhere +0.5; the pipeline covers the peaks as well as the rest (83%).  The two
+  clearly missed rises (05:00-05:45, watch ~68 vs radar ~58; ~10:00, 60 vs 52) fall in REM by the watch, with no
+  more movement than the rest of the night (movement share 0.04 vs 0.03) and the breathing rate matching the watch.  So
+  on this night the under-read peaks are not explained by movement; whether the radar misses a real REM rise or the
+  wrist reading is off there cannot be settled without the strap.
+- **Plot:** `outputs/plots/a121_sleep/nov11_hr_vs_watch.png` (10-min medians: watch, pipeline, network at the Acconeer
+  target and at a fixed 0.38 m).
+- **Not yet done:** the night is in `NIGHTS` and the epoch tables, but no model was retrained (stage ablations and the
+  heart-rate network still on the earlier nights).
+- **Reproduce:** `tools/extract_a121_night.py` and `tools/analyze_a121_sleep_vitals_gated.py` (with and without
+  `--range-selection breathing --output-suffix _breathing`) on
+  `data/raw/a121/a121_sleep_noc-2026-11-12_2026-11-11_01-30-46.csv`; `tools/build_sleep_epochs.py`,
+  `tools/breath_phases_at_night.py`, `tools/build_open_sleep_epochs.py --sources own`;
+  `tools/hr_distance_scan.py --night 2026-11-11`; `tools/hr_peak_tracking.py --variant shared-pre`.
