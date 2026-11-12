@@ -28,7 +28,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from build_sleep_epochs import NIGHTS
+from build_sleep_epochs import ALL_NIGHTS
 from train_sleep_heart_rate import (A121_CHEST_SIGN, BINS, FS, NIGHT_DIR, OUT_DIR, PAD, PHASE_TO_MM, WINDOW, garmin_labels,
                                     make_model, predict, regular_frame_times_ms, still_mask)
 
@@ -53,7 +53,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--night", default="2026-11-10")
     args = parser.parse_args()
-    night = next(n for n in NIGHTS if n.name == args.night)
+    night = next(n for n in ALL_NIGHTS if n.name == args.night)
     trend = pd.read_csv(NIGHT_DIR / f"{night.stem}_gated_sleep_vitals.csv")
     with np.load(NIGHT_DIR / f"{night.stem}.npz") as raw:
         stamps, dist, iq, target = raw["timestamp_ms"], raw["distances_m"], raw["iq"], raw["acconeer_target_m"]

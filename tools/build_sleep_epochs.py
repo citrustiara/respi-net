@@ -59,7 +59,7 @@ class Night:
     setup: str
 
 
-NIGHTS = (
+ALL_NIGHTS = (
     Night("2026-06-08", "a121_sleep_sleep-night-1_1-real_2026-06-08_02-50-10", "garmin_2026-06-08", "edge, plano-convex"),
     Night("2026-06-09", "a121_sleep_sleep-night-2-real_2026-06-09_02-18-14", "garmin_2026-06-09", "edge, FZP"),
     Night("2026-06-10", "a121_sleep_sleep-night-3-real-flatcover_2026-06-10_02-35-45", "garmin_2026-06-10", "flat cover, pilot"),
@@ -72,7 +72,14 @@ NIGHTS = (
     Night("2026-10-13", "a121_sleep_noc-2026-10-13_2026-10-13_03-45-56", None, "October"),
     Night("2026-11-10", "a121_sleep_noc-suunto-2026-11-10_2026-11-10_04-03-05", "garmin_2026-11-10", "November, 0.5-1.8 m"),
     Night("2026-11-11", "a121_sleep_noc-2026-11-12_2026-11-11_01-30-46", "garmin_2026-11-11", "November, 0.2-1.2 m"),
+    Night("2026-11-12", "a121_sleep_noc-zegarek-2026-11-12_2026-11-12_02-40-55", "garmin_2026-11-12", "November, 0.2-1.2 m"),
 )
+# Recorded but left out of every analysis (the night stays in ALL_NIGHTS for inspection, e.g. hr_distance_scan.py).
+EXCLUDED = {
+    "2026-11-10": "chest nearer than the recorded range: 0.5-1.8 m recorded, the chest at ~0.35-0.45 m (the 11 November "
+                  "optimum with the same bed and radar; the night's best heart-rate bin was the range's nearest one)",
+}
+NIGHTS = tuple(n for n in ALL_NIGHTS if n.name not in EXCLUDED)
 BASE_FEATURES = ("hr_bpm", "rr_bpm", "breath_amp_mm", "breath_regularity", "breath_interval_cv", "breath_depth_cv",
                  "motion_energy", "movement_fraction", "no_presence_fraction", "radar_rmssd_ms", "radar_sdnn_ms")
 # The watch's own signals, to see which of them its sleep stages follow: heart rate and breathing rate every minute,
