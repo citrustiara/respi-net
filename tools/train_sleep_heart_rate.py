@@ -435,8 +435,9 @@ def pretrained_states(seeds: list[int], device: torch.device) -> dict[int, dict[
     return states
 
 
-def run(seeds: list[int], variants: list[str], device: torch.device, summary_only: bool) -> dict[str, Any]:
-    nights = [n for n in NIGHTS if n.garmin is not None and (NIGHT_DIR / f"{n.stem}.npz").exists()]
+def run(seeds: list[int], variants: list[str], device: torch.device, summary_only: bool,
+        exclude: tuple[str, ...] = ()) -> dict[str, Any]:
+    nights = [n for n in NIGHTS if n.garmin is not None and (NIGHT_DIR / f"{n.stem}.npz").exists() and n.name not in exclude]
     data = {}
     for night in nights:
         train_w, _ = night_data(night, TRAIN_STEP_S)
@@ -562,6 +563,7 @@ def main() -> int:
     parser.add_argument("--final", action="store_true", help="train and save the final shared / shared-pre models on all nights")
     parser.add_argument("--pad-s", type=float, default=PAD / FS, help="padding of the night windows on each side (s); "
                         "12 lets the -bal variants raise the heart rate 1.4x")
+    parser.add_argument("--exclude", default="", help="watch nights left out of training and testing, e.g. 2026-11-10")
     args = parser.parse_args()
     PAD = int(round(args.pad_s * FS))
     if args.final:
@@ -574,7 +576,7 @@ def main() -> int:
     if args.summary_only:
         results = json.loads((OUT_DIR / f"summary{args.tag}.json").read_text())
     else:
-        results = run(seeds, variants, torch.device(args.device), False)
+        results = run(seeds, variants, torch.device(args.device), False, tuple(n for n in args.exclude.split(",") if n))
         np.savez_compressed(OUT_DIR / f"predictions{args.tag}.npz", **results.pop("predictions"))
         (OUT_DIR / f"summary{args.tag}.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     table = markdown(results, variants)

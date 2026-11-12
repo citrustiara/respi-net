@@ -391,3 +391,40 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
   `data/raw/a121/a121_sleep_noc-2026-11-12_2026-11-11_01-30-46.csv`; `tools/build_sleep_epochs.py`,
   `tools/breath_phases_at_night.py`, `tools/build_open_sleep_epochs.py --sources own`;
   `tools/hr_distance_scan.py --night 2026-11-11`; `tools/hr_peak_tracking.py --variant shared-pre`.
+
+## 2026-11-12 -- Rerun with the 11 November night (9 watch nights), and without 10 November
+
+- **Per-epoch stages** (logistic regression, 9 nights): time 0.082, heuristic 0.091, breathing 0.034, heart 0.055,
+  movement 0.050, all 0.041, all+time 0.066 (8 nights: time 0.127).  `tools/sleep_stage_crossval.py`.
+- **Whole-night BiGRU, own nights** (9 nights held out in turn, 3 seeds; kappa, then night-total minute r for
+  awake/light/deep/REM):
+
+  | signals | kappa | accuracy % | minutes r |
+  |---|---|---|---|
+  | time of night | 0.178 | 40 | 0.56 / 0.29 / 0.19 / 0.77 |
+  | heart | -0.001 | 34 | 0.04 / 0.67 / -0.05 / 0.94 |
+  | breathing | 0.161 | 46 | 0.74 / 0.80 / 0.40 / 0.64 |
+  | network features | 0.111 | 43 | 0.65 / 0.77 / 0.16 / 0.50 |
+  | movement | 0.111 | 42 | 0.23 / 0.77 / 0.11 / 0.57 |
+  | heart+breathing+movement | 0.159 | 48 | 0.11 / 0.95 / 0.38 / 0.69 |
+  | + network features | 0.158 | 49 | 0.14 / 0.94 / 0.41 / 0.35 |
+  | all + time | **0.188** | **50** | 0.41 / 0.96 / 0.31 / 0.29 |
+
+  Breathing alone now nearly reaches the time of night (0.161 vs 0.178; 8 nights: 0.121 vs 0.204) and follows the
+  night totals better (awake r 0.74, light 0.80, deep 0.40 vs 0.56 / 0.29 / 0.19); all signals with the time of night
+  are the best for the first time, by a margin smaller than the seed spread (±0.03).  Heart rate alone carries no
+  stage information against the watch.  `tools/sleep_stage_sequence.py --ablation own --tag _with_nov11`.
+- **Heart-rate network, 7 watch nights** (each held out, 3 seeds): shared 3.74 / shared-pre 3.51 bpm vs the pipeline
+  4.08 at 68%; r 10 min 0.62 / 0.71 (pipeline 0.47).  11 November held out (seeds averaged): shared-pre 3.75, r 0.66 --
+  worse than the June-only final models on the same night (3.50, r 0.75).  `--tag _with_nov11`.
+- **The same without 10 November** (`--exclude 2026-11-10 --tag _without_nov10`; 6 nights, plus the zero-shot
+  network): shared 3.63 / shared-pre 3.58 / zero-shot 6.13 vs the pipeline 3.93 at 68%; r 10 min 0.68 / 0.69 / 0.29
+  (pipeline 0.53).  11 November held out, seeds averaged: shared-pre **3.50, r 0.75** (the June-only training set, the
+  same as the final models), shared 3.59 / 0.75, zero-shot 5.49 / 0.21.  So the 10 November night in training costs
+  11 November 0.25 bpm and 0.09 of r.  It is not uniformly harmful: on the June nights it helps the 1.6 m night
+  (11 June 3.77 with it, 4.27 without) and is neutral elsewhere (08, 09, 10, 13 June: 3.24/3.40, 3.80/3.86,
+  2.75/2.74, 3.69/3.55 with/without) -- the night with the chest at the edge of the range resembles a distant
+  geometry.  The zero-shot network fails on the new night as on the June ones.
+- **Decision pending:** 10 November recorded 0.5-1.8 m while the chest was at ~0.35-0.45 m (the 11 November optimum;
+  the 10 November best bin was the range's nearest one), i.e. the chest lay outside the recorded range -- a physical
+  reason to drop it as a test night; as a training night the effect is mixed (above).
