@@ -473,6 +473,45 @@ stage models to radar: Krauss et al. 2026 (MESA pretraining, MCC 0.25 -> 0.47 on
 - **Two nights at 0.2-1.2 m agree:** the best heart-rate distance is 0.30-0.42 m both times, where the breathing share
   peaks too -- nearer than the Acconeer target (0.5-0.6 m), which still costs only ~0.2-0.3 bpm.
 - **Plot:** `outputs/plots/a121_sleep/nov12_hr_vs_watch.png`.
-- **Not yet done:** in `NIGHTS` and the epoch tables; stages and the heart-rate network not rerun with it.
+- **Since:** in `NIGHTS`; stages and the heart-rate network rerun with it (next entry).
 - **Reproduce:** as 11 November, on `data/raw/a121/a121_sleep_noc-zegarek-2026-11-12_2026-11-12_02-40-55.csv` with
   `garmin_2026-11-12`; `tools/hr_distance_scan.py --night 2026-11-12`.
+
+## 2026-11-13 -- Rerun with the 12 November night (9 stage nights, 7 heart-rate nights)
+
+- **Setup:** 12 November in `NIGHTS` (10 November still excluded).  Stage ablation run in parallel single-thread
+  processes (`--workers 4`), backing off to one at a time while the machine was busy (a VM held ~7.5 cores for most of
+  the night); identical results to the sequential runner.  The heart-rate run waited for a free machine.  The June-only
+  final heart-rate models are untouched (no `--final`).
+- **Per-epoch stages** (9 nights; 8 nights without 12 November in brackets): time 0.092 (0.114), heuristic 0.087
+  (0.092), breathing 0.054 (0.039), heart 0.085 (0.042), movement 0.061 (0.059), all 0.095 (0.075), all+time **0.105**
+  (0.067).
+- **Whole-night BiGRU, own nights** (9 nights held out in turn, 3 seeds; 8 nights in brackets):
+
+  | signals | kappa | ± seeds | accuracy % | minutes r (awake/light/deep/REM) |
+  |---|---|---|---|---|
+  | time of night | 0.122 (0.141) | 0.040 | 33 | 0.31 / -0.07 / -0.04 / 0.50 |
+  | heart | 0.032 (0.026) | 0.016 | 38 | 0.38 / 0.83 / -0.10 / 0.51 |
+  | breathing | **0.162** (0.152) | 0.023 | 46 | 0.37 / 0.92 / 0.44 / 0.46 |
+  | network features | 0.093 (0.070) | 0.025 | 41 | 0.62 / 0.45 / 0.25 / 0.25 |
+  | movement | 0.110 (0.148) | 0.014 | 40 | -0.28 / 0.66 / 0.18 / 0.55 |
+  | breathing+movement | 0.159 | 0.039 | 47 | -0.24 / 0.94 / 0.29 / 0.62 |
+  | heart+breathing+movement | 0.161 (0.165) | 0.053 | 47 | -0.41 / 0.91 / 0.23 / 0.49 |
+  | + network features | 0.160 (0.151) | 0.034 | 48 | 0.23 / 0.72 / 0.17 / 0.30 |
+  | all + time | **0.202** (0.170) | 0.025 | 51 | 0.23 / 0.95 / 0.29 / 0.37 |
+
+  Breathing alone and every radar combination with it stay above the time of night (0.16 vs 0.12, now ~1-2 seed
+  spreads); radar plus time is the best so far (0.20).  Light-sleep minutes follow the watch closely (r 0.91-0.95),
+  deep and REM minutes weakly.  Movement fell (0.148 -> 0.110): 12 November had little movement.
+- **Heart rate, leave-one-night-out** (7 nights, 3 seeds; `--variants shared,shared-pre --tag _with_nov12`):
+  per-seed mean MAE shared 3.34, shared-pre 3.37, pipeline 3.79 at 71% coverage, training median 4.67.  Seed-averaged
+  (`tools/hr_flattening_compare.py`): shared-pre MAE **3.18**, r 10 min 0.73, slope on the watch 0.50, error in the
+  watch's peaks -3.46 bpm; pipeline 3.79 / 0.52.
+- **Does the extra night help the other nights?**  On the same 6 nights as the `_without_nov10` run (seed-averaged):
+  shared-pre 3.41 -> **3.27**, shared 3.46 -> 3.28, r 10 min 0.72 -> 0.72-0.74; 11 November 3.50 -> 3.45.  One more
+  November night in training lowers the error on the others by ~0.15 bpm.
+- **12 November held out** (trained on the other 6): shared-pre 2.68 seed-averaged, r 10 min 0.77, error in peaks -0.45;
+  the June-only finals at the Acconeer target gave 2.74 / 0.76, so adding 11 November to training barely changes it.
+- **Reproduce:** `tools/sleep_stage_crossval.py`; `tools/sleep_stage_sequence.py --ablation own --workers 4 --tag
+  _with_nov12`; `tools/train_sleep_heart_rate.py --variants shared,shared-pre --tag _with_nov12`;
+  `tools/hr_flattening_compare.py --tag _with_nov12`.  Log `runs/logs/rerun_with_nov12.log`.
