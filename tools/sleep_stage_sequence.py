@@ -236,12 +236,14 @@ def main() -> int:
     parser.add_argument("--parts", default="sleepbrl,own")
     parser.add_argument("--ablation", choices=("walch", "bidsleep", "sleepbrl", "own"), help="signal subsets on one dataset instead")
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=1, help="ablation: trainings in parallel, one thread each "
+                        "(one at a time while the machine is busy with something else); keep below the core count")
     parser.add_argument("--tag", default="", help="suffix of summary.json / summary.md")
     args = parser.parse_args()
     torch.set_num_threads(args.threads)
     seeds = [int(s) for s in args.seeds.split(",") if s]
     if args.ablation:
-        ablation_main(args.ablation, seeds)
+        ablation_main(args.ablation, seeds, args.tag, args.workers)
         return 0
     sources = {s: load(s) for s in {*args.open.split(","), "walch", "sleepbrl", "own"} if (DATA_DIR / f"{s}.csv").exists()}
     open_nights = [n for s in args.open.split(",") if s in sources for n in sources[s]]
@@ -297,7 +299,50 @@ def stage_minutes(y: np.ndarray) -> np.ndarray:
     return np.bincount(y[y >= 0], minlength=len(STAGES)) / 2.0
 
 
-def run_ablation(dataset: str, nights: list[Night], seeds: list[int], folds: int = 4, steps: int = 1000) -> dict[str, Any]:
+
+def _init_worker() -> None:
+    torch.set_num_threads(1)
+
+
+def _fit_and_predict(tr: list[Night], va: list[Night], test: list[Night], seed: int, steps: int) -> list[tuple[np.ndarray, np.ndarray]]:
+    """One fold of one seed: train, then (truth, prediction) on the labelled epochs of each test night."""
+    model = train(tr, va, seed, steps=steps)
+    return [(n.y[n.y >= 0], predict(model, n)[n.y >= 0]) for n in test]
+
+
+def run_tasks(fn, tasks: list[tuple], workers: int) -> list[Any]:
+    """``fn(*task)`` for every task, in order of the tasks.  With ``workers`` > 1 in that many single-thread processes,
+    dropping to one at a time while the machine is busy with something else (``machine_load.machine_busy``)."""
+    if workers <= 1:
+        return [fn(*task) for task in tasks]
+    import multiprocessing as mp
+    from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+    from machine_load import machine_busy
+
+    results: dict[int, Any] = {}
+    queue = list(enumerate(tasks))
+    pending: dict[Any, int] = {}
+    throttled = False
+    with ProcessPoolExecutor(max_workers=workers, mp_context=mp.get_context("spawn"), initializer=_init_worker) as pool:
+        while queue or pending:
+            busy = machine_busy(len(pending))
+            if busy != throttled:
+                throttled = busy
+                print("machine busy: one training at a time" if busy else f"machine free: {workers} trainings at a time", flush=True)
+            limit = 1 if busy else workers
+            while queue and len(pending) < limit:
+                i, task = queue.pop(0)
+                pending[pool.submit(fn, *task)] = i
+            finished, _ = wait(list(pending), timeout=30, return_when=FIRST_COMPLETED)
+            for future in finished:
+                results[pending.pop(future)] = future.result()
+            if finished:
+                print(f"  {len(results)}/{len(tasks)} trainings done", flush=True)
+    return [results[i] for i in range(len(tasks))]
+
+
+def run_ablation(dataset: str, nights: list[Night], seeds: list[int], folds: int = 4, steps: int = 1000,
+                 workers: int = 1) -> dict[str, Any]:
     """Each subset: leave-one-night-out (own) or ``folds`` folds (open sets), pooled kappa, and per-night stage
     minutes against the reference (correlation over nights and mean absolute difference, per stage)."""
 
@@ -308,21 +353,26 @@ def run_ablation(dataset: str, nights: list[Night], seeds: list[int], folds: int
         order = np.random.default_rng(0).permutation(len(nights))
         fold_of = {nights[i].name: k % folds for k, i in enumerate(order)}
     out: dict[str, Any] = {}
+    folds_k = sorted(set(fold_of.values()))
+    tasks, keys = [], []
     for subset in ABLATIONS[dataset]:
         data = masked(nights, subset)
-        per_seed, minutes = [], []
         for seed in seeds:
-            pairs, mins = [], []
-            for k in sorted(set(fold_of.values())):
+            for k in folds_k:
                 test = [n for n in data if fold_of[n.name] == k]
                 rest = [n for n in data if fold_of[n.name] != k]
                 tr, va = _split_val(rest, max(1 / len(rest), 0.15), seed)
-                model = train(tr, va, seed, steps=steps)
-                for n in test:
-                    keep = n.y >= 0
-                    pred = predict(model, n)[keep]
-                    pairs.append((n.y[keep], pred))
-                    mins.append((stage_minutes(n.y[keep]), stage_minutes(pred)))
+                tasks.append((tr, va, test, seed, steps))
+                keys.append((subset, seed, k))
+    done = dict(zip(keys, run_tasks(_fit_and_predict, tasks, workers)))
+    for subset in ABLATIONS[dataset]:
+        per_seed, minutes = [], []
+        for seed in seeds:
+            pairs, mins = [], []
+            for k in folds_k:
+                for truth, pred in done[(subset, seed, k)]:
+                    pairs.append((truth, pred))
+                    mins.append((stage_minutes(truth), stage_minutes(pred)))
             per_seed.append(pooled(pairs))
             minutes.append(mins)
         ref = np.array([[m[0] for m in mins] for mins in minutes]).mean(0)  # nights x stages
@@ -348,12 +398,12 @@ def ablation_markdown(dataset: str, result: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def ablation_main(dataset: str, seeds: list[int]) -> None:
-    result = run_ablation(dataset, load(dataset), seeds)
+def ablation_main(dataset: str, seeds: list[int], tag: str = "", workers: int = 1) -> None:
+    result = run_ablation(dataset, load(dataset), seeds, workers=workers)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUT_DIR / f"ablation_{dataset}.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    (OUT_DIR / f"ablation_{dataset}{tag}.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     table = ablation_markdown(dataset, result)
-    (OUT_DIR / f"ablation_{dataset}.md").write_text(table, encoding="utf-8")
+    (OUT_DIR / f"ablation_{dataset}{tag}.md").write_text(table, encoding="utf-8")
     print(table)
 
 
